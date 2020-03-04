@@ -5,12 +5,14 @@ using Logging, Reexport
 
 import Genie
 @reexport using Observables
+const Synced = Observables.Observable
+
+export Synced, SyncedModel
 
 #===#
 
 const JS_APP_VAR_NAME = "__app"
 const JS_SCRIPT_NAME = "__app.js"
-const MOUNT_ELEM = "#app"
 
 #===#
 
@@ -18,36 +20,14 @@ abstract type SyncedModel end
 
 #===#
 
-function elem(app::M)::String where {M<:SyncedModel}
-  MOUNT_ELEM
-end
-
-#===#
-
-function render(app::M)::Dict{Symbol,Any} where {M<:SyncedModel}
-  result = Dict{String,Any}()
-
-  for field in fieldnames(typeof(app))
-    result[string(field)] = render(getfield(app, field))
-  end
-
-  Dict(:el => elem(app), :data => result)
-end
-
-function render(val::T)::T where {T}
-  val
-end
-
-function render(o::Observables.Observable{T})::T where {T}
-  o[]
-end
+include("Renderer.jl")
 
 #===#
 
 function update!(app::M, field::Symbol, newval::T, oldval::T)::M where {T,M<:SyncedModel}
   v = getfield(app, field)
 
-  if isa(v, Observables.Observable)
+  if isa(v, Synced)
     v[] = newval
   else
     setfield!(app, field, newval)
@@ -68,7 +48,7 @@ function Genie.Router.channel(app::M; channel::String = Genie.config.webchannels
       field = Symbol(payload["field"])
       val = getfield(app, field)
 
-      valtype = isa(val, Observable) ? typeof(val[]) : typeof(val)
+      valtype = isa(val, Synced) ? typeof(val[]) : typeof(val)
 
       newval = parse(valtype, payload["newval"])
       oldval = parse(valtype, string(payload["oldval"]))
@@ -86,25 +66,7 @@ end
 
 function Genie.Router.route(app::M; name::String = JS_APP_VAR_NAME, endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::Genie.Router.Route where {M<:SyncedModel}
   r = Genie.Router.route("/$endpoint") do
-    output = """
-      var $name = new Vue($(Genie.Renderer.Json.JSONParser.json(app |> render)))
-    """
-
-    for field in fieldnames(typeof(app))
-      output *= """
-        $name.\\\$watch('$field', function(newVal, oldVal) {
-                      Genie.WebChannels.sendMessageTo('$channel', 'watchers', {'payload': {'field':'$field', 'newval': newVal, 'oldval': oldVal}});
-                    });
-      """
-    end
-
-    output *= """
-    window.parse_payload = function(payload) {
-
-    };
-    """
-
-    output |> Genie.Renderer.Js.js
+    Stipple.Renderer.vue_integration(app, name = name, endpoint = endpoint, channel = channel) |> Genie.Renderer.Js.js
   end
 end
 
@@ -121,17 +83,8 @@ function Base.push!(app::M, vals::Pair{Symbol,T}; channel::String = Genie.config
   Genie.WebChannels.broadcast(channel, Genie.Renderer.Json.JSONParser.json(Dict("key" => vals[1], "value" => vals[2])))
 end
 
-function Base.push!(app::M, vals::Pair{Symbol,Observable{T}}) where {T,M<:SyncedModel}
+function Base.push!(app::M, vals::Pair{Symbol,Synced{T}}) where {T,M<:SyncedModel}
   push!(app, vals[1] => vals[2][])
-end
-
-#===#
-
-function deps() :: String
-  """
-  <script src="/js/stipple/vue.js"></script>
-  <script src="$JS_SCRIPT_NAME?rand=$(Genie.Configuration.isdev() ? rand() : 0)"></script>
-  """
 end
 
 end
