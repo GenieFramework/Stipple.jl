@@ -4,6 +4,7 @@ authors = ["Adrian <e@essenciary.com>"]
 version = "0.1.0"
 
 [deps]
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Genie = "c43c736e-a2d1-11e8-161f-af95117fbd1e"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 Observables = "510215fc-4207-5dde-b226-833fc4488ee2"

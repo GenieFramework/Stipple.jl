@@ -62,6 +62,7 @@ using Stipple
 
 include(joinpath("elements", "stylesheet.jl"))
 include(joinpath("elements", "theme.jl"))
+include(joinpath("elements", "table.jl"))
 
 end
 
