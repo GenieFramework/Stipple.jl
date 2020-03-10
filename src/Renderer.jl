@@ -60,6 +60,7 @@ module Html
 import Genie
 using Stipple
 
+include(joinpath("elements", "page.jl"))
 include(joinpath("elements", "stylesheet.jl"))
 include(joinpath("elements", "theme.jl"))
 include(joinpath("elements", "table.jl"))

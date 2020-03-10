@@ -1,49 +1,28 @@
 import DataFrames
 
-function table(df::DataFrames.DataFrame)
-  output = """
-  <table class="table">
+function table(df::DataFrames.DataFrame; args...) :: String
+  grh = Genie.Renderer.Html
 
-  </table>
-  """
-end
-
-function thead()
-  output = """
-  <thead>
-
-  </thead>
-  """
-end
-
-function tr()
-  output = """
-  <tr>
-
-  </tr>
-  """
-end
-
-function th()
-  output = """
-  <th>
-
-  </th>
-  """
-end
-
-function tbody()
-  output = """
-  <tbody>
-
-  </tbody>
-  """
-end
-
-function td()
-  output = """
-  <td>
-
-  </td>
-  """
+  grh.table(class="table"; args...) do
+    grh.thead() do
+      grh.tr() do
+        grh.collection(names(df)) do item
+          grh.th(scope="col") do
+            item |> string
+          end
+        end
+      end
+    end *
+    grh.tbody() do
+      grh.collection(eachrow(df) |> collect) do row
+        grh.tr() do
+          grh.collection(Array(row)) do item
+            grh.td() do
+              item |> string
+            end
+          end
+        end
+      end
+    end
+  end
 end
