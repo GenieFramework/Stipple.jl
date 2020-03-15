@@ -1,1 +1,0 @@
-const page = (fluid::Bool = false, args...; kwargs...) -> Genie.Renderer.Html.div(class="container$(fluid ? "-fluid" : "")", args...; kwargs...)
