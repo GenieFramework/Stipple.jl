@@ -40,6 +40,10 @@ end
 
 #===#
 
+Base.parse(::Type{String}, v::String) = v
+Base.parse(::Type{Int}, v::Int) = v
+Base.parse(::Type{Float64}, v::Float64) = v
+
 function Genie.Router.channel(app::M; channel::String = Genie.config.webchannels_default_route)::Genie.Router.Channel where {M<:ReactiveModel}
   Genie.Router.channel("/$channel/watchers") do
     try
@@ -52,8 +56,8 @@ function Genie.Router.channel(app::M; channel::String = Genie.config.webchannels
 
       valtype = isa(val, Reactive) ? typeof(val[]) : typeof(val)
 
-      newval = parse(valtype, string(payload["newval"]))
-      oldval = parse(valtype, string(payload["oldval"]))
+      newval = parse(valtype, payload["newval"])
+      oldval = parse(valtype, payload["oldval"])
 
       update!(app, field, newval, oldval)
 
@@ -66,13 +70,11 @@ function Genie.Router.channel(app::M; channel::String = Genie.config.webchannels
 end
 
 function Genie.Router.route(app::M; name::String = JS_APP_VAR_NAME, endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::Genie.Router.Route where {M<:ReactiveModel}
-  r = Genie.Router.route("/$endpoint") do
-    Stipple.Elements.vue_integration(app, name = name, endpoint = endpoint, channel = channel) |> Genie.Renderer.Js.js
-  end
-
   Genie.WebChannels.unsubscribe_disconnected_clients()
 
-  r
+  Genie.Router.route("/$endpoint") do
+    Stipple.Elements.vue_integration(app, name = name, endpoint = endpoint, channel = channel) |> Genie.Renderer.Js.js
+  end
 end
 
 function init(app::M; name::String = JS_APP_VAR_NAME, endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}

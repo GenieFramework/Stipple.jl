@@ -56,10 +56,18 @@ function deps() :: String
   string(
     Genie.Assets.channels_support(),
     Genie.Renderer.Html.script(src="/js/stipple/vue.js"),
-    Genie.Renderer.Html.script(src="$(Stipple.JS_SCRIPT_NAME)?v=$(Genie.Configuration.isdev() ? rand() : 1)")
+    Genie.Renderer.Html.script(src="/$(Stipple.JS_SCRIPT_NAME)?v=$(Genie.Configuration.isdev() ? rand() : 1)")
   )
 end
 
+
+#===#
+
+macro R(binding)
+  "$(string(binding))"
+end
+
+#===#
 
 include(joinpath("elements", "stylesheet.jl"))
 include(joinpath("elements", "table.jl"))

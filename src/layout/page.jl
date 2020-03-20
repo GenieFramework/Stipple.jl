@@ -10,10 +10,9 @@ function footer(args...; kwargs...)
   Genie.Renderer.Html.div(class="row", args...; kwargs...)
 end
 
-function row(args...; kwargs...)
+function container(args...; kwargs...)
   Genie.Renderer.Html.div(class="row", args...; kwargs...)
 end
-const container = row
 
 function cell(args...; size::Int = 12, kwargs...)
   Genie.Renderer.Html.div(class="col-$size", args...; kwargs...)
