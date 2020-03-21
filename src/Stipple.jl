@@ -12,12 +12,12 @@ export R, Reactive, ReactiveModel
 
 #===#
 
-const JS_APP_VAR_NAME = "__stipple_app"
-const JS_SCRIPT_NAME = "__stipple_app.js"
+abstract type ReactiveModel end
 
 #===#
 
-abstract type ReactiveModel end
+const JS_APP_VAR_NAME = "__stipple_app"
+const JS_SCRIPT_NAME = "__stipple_app.js"
 
 #===#
 
@@ -44,7 +44,10 @@ Base.parse(::Type{String}, v::String) = v
 Base.parse(::Type{Int}, v::Int) = v
 Base.parse(::Type{Float64}, v::Float64) = v
 
-function Genie.Router.channel(app::M; channel::String = Genie.config.webchannels_default_route)::Genie.Router.Channel where {M<:ReactiveModel}
+
+function init(model::Type{M}, ui::Function; name::String = JS_APP_VAR_NAME, endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
+  app = model()
+
   Genie.Router.channel("/$channel/watchers") do
     try
       payload = Genie.Router.@params(:payload)["payload"]
@@ -67,26 +70,20 @@ function Genie.Router.channel(app::M; channel::String = Genie.config.webchannels
       "ERROR : 500 - $ex"
     end
   end
-end
-
-function Genie.Router.route(app::M; name::String = JS_APP_VAR_NAME, endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::Genie.Router.Route where {M<:ReactiveModel}
-  Genie.WebChannels.unsubscribe_disconnected_clients()
 
   Genie.Router.route("/$endpoint") do
-    Stipple.Elements.vue_integration(app, name = name, endpoint = endpoint, channel = channel) |> Genie.Renderer.Js.js
+    Genie.WebChannels.unsubscribe_disconnected_clients()
+    Stipple.Elements.vue_integration(model, name = name, endpoint = endpoint, channel = channel) |> Genie.Renderer.Js.js
   end
+
+  Genie.Router.route("/") do
+    Genie.Renderer.Html.html(ui() |> Stipple.Layout.layout)
+  end
+
+  setup(app)
 end
 
-function init(app::M; name::String = JS_APP_VAR_NAME, endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
-  Genie.Router.channel(app, channel = channel)
-  Genie.Router.route(app, name = name, endpoint = endpoint, channel = channel)
-
-  attach_default_handlers(app)
-
-  app
-end
-
-function attach_default_handlers(model::M)::Nothing where {M<:ReactiveModel}
+function setup(model::M)::M where {M<:ReactiveModel}
   for f in fieldnames(typeof(model))
     isa(getproperty(model, f), Reactive) || continue
 
@@ -95,7 +92,7 @@ function attach_default_handlers(model::M)::Nothing where {M<:ReactiveModel}
     end
   end
 
-  nothing
+  model
 end
 
 #===#

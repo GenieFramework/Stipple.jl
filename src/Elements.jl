@@ -34,10 +34,10 @@ end
 
 #===#
 
-function vue_integration(app::M; name::String = Stipple.JS_APP_VAR_NAME, endpoint::String = Stipple.JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::String where {M<:ReactiveModel}
-  output = "var $name = new Vue($(Genie.Renderer.Json.JSONParser.json(app |> render)));"
+function vue_integration(model::Type{M}; name::String = Stipple.JS_APP_VAR_NAME, endpoint::String = Stipple.JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::String where {M<:ReactiveModel}
+  output = "var $name = new Vue($(Genie.Renderer.Json.JSONParser.json(model() |> render)));"
 
-  for field in fieldnames(typeof(app))
+  for field in fieldnames(model)
     output *= string(name, raw".\$watch('", field, "', function(newVal, oldVal){
       Genie.WebChannels.sendMessageTo('$channel', 'watchers', {'payload': {'field':'$field', 'newval': newVal, 'oldval': oldVal}});
     });")
@@ -60,11 +60,26 @@ function deps() :: String
   )
 end
 
-
 #===#
 
-macro R(binding)
-  "$(string(binding))"
+macro iif(expr)
+  "v-if='$expr'"
+end
+
+macro elsiif(expr)
+  "v-else-if='$expr'"
+end
+
+macro els(expr)
+  "v-else='$expr'"
+end
+
+macro text(expr)
+  "v-text='$expr'"
+end
+
+macro react(expr)
+  "v-model='$expr'"
 end
 
 #===#
