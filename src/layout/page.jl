@@ -19,7 +19,7 @@ function cell(args...; size::Int = 12, kwargs...)
 end
 
 function sidebar(args...; size::Int = 3, kwargs...)
-  Genie.Renderer.Html.div(class="col-$size", args...; kwargs...)
+  Genie.Renderer.Html.div(class="col-$size sidebar", args...; kwargs...)
 end
 
 function content(args...; size::Int = 9, kwargs...)
