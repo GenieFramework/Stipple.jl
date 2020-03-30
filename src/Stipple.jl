@@ -45,7 +45,7 @@ Base.parse(::Type{Int}, v::Int) = v
 Base.parse(::Type{Float64}, v::Float64) = v
 
 
-function init(model::Type{M}, ui::Function; name::String = JS_APP_VAR_NAME, endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
+function init(model::Type{M}, ui::String; name::String = JS_APP_VAR_NAME, endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
   app = model()
 
   Genie.Router.channel("/$channel/watchers") do
@@ -77,10 +77,14 @@ function init(model::Type{M}, ui::Function; name::String = JS_APP_VAR_NAME, endp
   end
 
   Genie.Router.route("/") do
-    Genie.Renderer.Html.html(ui() |> Stipple.Layout.layout)
+    Genie.Renderer.Html.html(ui)
   end
 
   setup(app)
+end
+
+function init(model::Type{M}, ui::Function; name::String = JS_APP_VAR_NAME, endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
+  init(model, Stipple.Layout.layout(ui()); name = name, endpoint = endpoint, channel = channel)
 end
 
 function setup(model::M)::M where {M<:ReactiveModel}

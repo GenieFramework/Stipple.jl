@@ -5,15 +5,19 @@ import Genie
 using Stipple
 
 
-function layout(output::Vector)
+function layout(output::String) :: String
   Genie.Renderer.Html.doc(
     Genie.Renderer.Html.html(() -> begin
       Genie.Renderer.Html.head() do
         Genie.Renderer.Html.meta(name="viewport", content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui")
       end *
-      Genie.Renderer.Html.body(join(output, '\n'))
+      Genie.Renderer.Html.body(output)
     end)
   )
+end
+
+function layout(output::Vector) :: String
+  join(output, '\n') |> layout
 end
 
 
