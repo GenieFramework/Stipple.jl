@@ -53,9 +53,16 @@ function deps() :: String
       :javascript) |> Genie.Renderer.respond
   end
 
+  Genie.Router.route("/js/stipple/quasar.umd.min.js") do
+    Genie.Renderer.WebRenderable(
+      read(joinpath(@__DIR__, "..", "files", "js", "quasar.umd.min.js"), String),
+      :javascript) |> Genie.Renderer.respond
+  end
+
   string(
     Genie.Assets.channels_support(),
     Genie.Renderer.Html.script(src="/js/stipple/vue.js"),
+    Genie.Renderer.Html.script(src="/js/stipple/quasar.umd.min.js"),
     Genie.Renderer.Html.script(src="/$(Stipple.JS_SCRIPT_NAME)?v=$(Genie.Configuration.isdev() ? rand() : 1)")
   )
 end

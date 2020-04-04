@@ -23,6 +23,7 @@ const JS_SCRIPT_NAME = "__stipple_app.js"
 
 include("Elements.jl")
 include("Layout.jl")
+include("Components.jl")
 
 #===#
 
@@ -45,7 +46,8 @@ Base.parse(::Type{Int}, v::Int) = v
 Base.parse(::Type{Float64}, v::Float64) = v
 
 
-function init(model::Type{M}, ui::String; name::String = JS_APP_VAR_NAME, endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
+function init(model::Type{M}, ui::Union{String,Vector} = ""; name::String = JS_APP_VAR_NAME, endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
+  Genie.config.websockets_server = true
   app = model()
 
   Genie.Router.channel("/$channel/watchers") do
@@ -76,16 +78,13 @@ function init(model::Type{M}, ui::String; name::String = JS_APP_VAR_NAME, endpoi
     Stipple.Elements.vue_integration(model, name = name, endpoint = endpoint, channel = channel) |> Genie.Renderer.Js.js
   end
 
-  Genie.Router.route("/") do
-    Genie.Renderer.Html.html(ui)
-  end
+  # Genie.Router.route("/") do
+  #   Genie.Renderer.Html.html(Stipple.Layout.layout(join(ui)))
+  # end
 
   setup(app)
 end
 
-function init(model::Type{M}, ui::Function; name::String = JS_APP_VAR_NAME, endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
-  init(model, Stipple.Layout.layout(ui()); name = name, endpoint = endpoint, channel = channel)
-end
 
 function setup(model::M)::M where {M<:ReactiveModel}
   for f in fieldnames(typeof(model))
