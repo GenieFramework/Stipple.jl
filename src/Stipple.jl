@@ -21,6 +21,11 @@ const JS_SCRIPT_NAME = "__stipple_app.js"
 
 #===#
 
+function render end
+
+#===#
+
+include("Typography.jl")
 include("Elements.jl")
 include("Layout.jl")
 include("Components.jl")
@@ -28,13 +33,17 @@ include("Components.jl")
 #===#
 
 function update!(app::M, field::Symbol, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-  v = getfield(app, field)
+  update!(app, getfield(app, field), newval, oldval)
+end
 
-  if isa(v, Reactive)
-    v[] = newval
-  else
-    setfield!(app, field, newval)
-  end
+function update!(app::M, field::Reactive, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
+  field[] = newval
+
+  app
+end
+
+function update!(app::M, field::Any, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
+  setfield!(app, field, newval)
 
   app
 end
@@ -78,10 +87,6 @@ function init(model::Type{M}, ui::Union{String,Vector} = ""; name::String = JS_A
     Stipple.Elements.vue_integration(model, name = name, endpoint = endpoint, channel = channel) |> Genie.Renderer.Js.js
   end
 
-  # Genie.Router.route("/") do
-  #   Genie.Renderer.Html.html(Stipple.Layout.layout(join(ui)))
-  # end
-
   setup(app)
 end
 
@@ -107,5 +112,27 @@ end
 function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}}) where {T,M<:ReactiveModel}
   push!(app, vals[1] => vals[2][])
 end
+
+#===#
+
+function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
+  result = Dict{String,Any}()
+
+  for field in fieldnames(typeof(app))
+    result[string(field)] = Stipple.render(getfield(app, field), field)
+  end
+
+  Dict(:el => Elements.elem(app), :data => result)
+end
+
+function Stipple.render(val::T, fieldname::Symbol) where {T}
+  val
+end
+
+function Stipple.render(o::Reactive{T}, fieldname::Symbol) where {T}
+  Stipple.render(o[], fieldname)
+end
+
+#===#
 
 end

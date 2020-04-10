@@ -1,5 +1,7 @@
 module Components
 
-include("components/table.jl")
+include("components/quasar/Quasar.jl")
+
+using .Quasar
 
 end

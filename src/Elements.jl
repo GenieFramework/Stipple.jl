@@ -14,28 +14,11 @@ end
 
 #===#
 
-function render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
-  result = Dict{String,Any}()
-
-  for field in fieldnames(typeof(app))
-    result[string(field)] = render(getfield(app, field))
-  end
-
-  Dict(:el => elem(app), :data => result)
-end
-
-function render(val::T)::T where {T}
-  val
-end
-
-function render(o::Reactive{T})::T where {T}
-  o[]
-end
-
-#===#
-
 function vue_integration(model::Type{M}; name::String = Stipple.JS_APP_VAR_NAME, endpoint::String = Stipple.JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::String where {M<:ReactiveModel}
-  output = "var $name = new Vue($(Genie.Renderer.Json.JSONParser.json(model() |> render)));"
+  vue_app = replace(Genie.Renderer.Json.JSONParser.json(model() |> Stipple.render), "\"{" => " {")
+  vue_app = replace(vue_app, "}\"" => "} ")
+
+  output = "var $name = new Vue($vue_app);"
 
   for field in fieldnames(model)
     output *= string(name, raw".\$watch('", field, "', function(newVal, oldVal){
@@ -45,6 +28,8 @@ function vue_integration(model::Type{M}; name::String = Stipple.JS_APP_VAR_NAME,
 
   output *= "window.parse_payload = function(payload){ window.$(Stipple.JS_APP_VAR_NAME)[payload.key] = payload.value; };"
 end
+
+#===#
 
 function deps() :: String
   Genie.Router.route("/js/stipple/vue.js") do
@@ -70,23 +55,27 @@ end
 #===#
 
 macro iif(expr)
-  "v-if='$expr'"
+  "v-if='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
 end
 
 macro elsiif(expr)
-  "v-else-if='$expr'"
+  "v-else-if='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
 end
 
 macro els(expr)
-  "v-else='$expr'"
+  "v-else='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
 end
 
 macro text(expr)
-  "v-text='$expr'"
+  "v-text='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
 end
 
 macro react(expr)
-  "v-model='$expr'"
+  "v-model='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+end
+
+macro data(expr)
+  :(Symbol($expr))
 end
 
 #===#
