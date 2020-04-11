@@ -14,19 +14,19 @@ end
 
 #===#
 
-function vue_integration(model::Type{M}; name::String = Stipple.JS_APP_VAR_NAME, endpoint::String = Stipple.JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::String where {M<:ReactiveModel}
-  vue_app = replace(Genie.Renderer.Json.JSONParser.json(model() |> Stipple.render), "\"{" => " {")
+function vue_integration(modeltype::Type{M}; vue_app_name::String = Stipple.JS_APP_VAR_NAME, endpoint::String = Stipple.JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::String where {M<:ReactiveModel}
+  model = modeltype()
+
+  vue_app = replace(Genie.Renderer.Json.JSONParser.json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
 
-  output = "var $name = new Vue($vue_app);"
+  output = "var $vue_app_name = new Vue($vue_app);\n\n"
 
-  for field in fieldnames(model)
-    output *= string(name, raw".\$watch('", field, "', function(newVal, oldVal){
-      Genie.WebChannels.sendMessageTo('$channel', 'watchers', {'payload': {'field':'$field', 'newval': newVal, 'oldval': oldVal}});
-    });")
+  for field in fieldnames(modeltype)
+    output *= Stipple.watch(vue_app_name, getfield(model, field), field, channel, model)
   end
 
-  output *= "window.parse_payload = function(payload){ window.$(Stipple.JS_APP_VAR_NAME)[payload.key] = payload.value; };"
+  output *= "\n\nwindow.parse_payload = function(payload){ window.$(Stipple.JS_APP_VAR_NAME)[payload.key] = payload.value; };"
 end
 
 #===#

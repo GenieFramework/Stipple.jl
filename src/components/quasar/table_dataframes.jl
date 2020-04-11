@@ -3,8 +3,9 @@ import JSON
 import Stipple
 import Genie
 import Genie.Renderer.Html: HTMLString, void_element
+using Stipple
 
-Genie.Renderer.Html.register_void_element("q_____table", context = @__MODULE__)
+Genie.Renderer.Html.register_void_element("q!!table", context = @__MODULE__)
 
 const ID = "__id"
 
@@ -44,10 +45,16 @@ end
 
 function table(fieldname::Symbol; rowkey::String = ID, title::String = "", datakey::String = "data_$fieldname", columnskey::String = "columns_$fieldname", args...)
   Genie.Renderer.Html.div(class="q-pa-md") do
-    q_____table(title=title; args..., NamedTuple{(Symbol(":data"),Symbol(":columns"),Symbol("row-key"))}(("$fieldname.$datakey","$fieldname.$columnskey",rowkey))...)
+    q!!table(title=title; args..., NamedTuple{(Symbol(":data"),Symbol(":columns"),Symbol("row-key"))}(("$fieldname.$datakey","$fieldname.$columnskey",rowkey))...)
   end
 end
 
 function Stipple.render(t::DataFrames.DataFrame, fieldname::Symbol)
   JSON.json(data(t, fieldname))
+end
+
+function Stipple.watch(vue_app_name::String, fieldtype::R{DataFrames.DataFrame}, fieldname::Symbol, channel::String, model::M)::String where {M<:Stipple.ReactiveModel}
+  string(vue_app_name, raw".\$watch('", fieldname, "', function(newVal, oldVal){
+    console.log('Table updated');
+  });\n\n")
 end
