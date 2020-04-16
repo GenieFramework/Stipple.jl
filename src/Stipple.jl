@@ -64,10 +64,9 @@ end
 
 #===#
 
-Base.parse(::Type{String}, v::String) = v
-Base.parse(::Type{Int}, v::Int) = v
-Base.parse(::Type{Float64}, v::Float64) = v
-
+function Base.parse(::Type{T}, v::T) where {T}
+  v::T
+end
 
 function init(model::Type{M}, ui::Union{String,Vector} = ""; vue_app_name::String = JS_APP_VAR_NAME, endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
   Genie.config.websockets_server = true
@@ -84,8 +83,19 @@ function init(model::Type{M}, ui::Union{String,Vector} = ""; vue_app_name::Strin
 
       valtype = isa(val, Reactive) ? typeof(val[]) : typeof(val)
 
-      newval = parse(valtype, payload["newval"])
-      oldval = parse(valtype, payload["oldval"])
+      newval = payload["newval"]
+      try
+        newval = parse(valtype, payload["newval"])
+      catch ex
+        @error ex
+      end
+
+      oldval = payload["oldval"]
+      try
+        oldval = parse(valtype, payload["oldval"])
+      catch ex
+        @error ex
+      end
 
       update!(app, field, newval, oldval)
 

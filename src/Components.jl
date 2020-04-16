@@ -1,7 +1,7 @@
 module Components
 
-include("components/quasar/Quasar.jl")
+using Revise
 
-using .Quasar
+include("components/quasar/Quasar.jl")
 
 end
