@@ -130,7 +130,7 @@ end
 #===#
 
 function Base.push!(app::M, vals::Pair{Symbol,T}; channel::String = Genie.config.webchannels_default_route) where {T,M<:ReactiveModel}
-  Genie.WebChannels.broadcast(channel, Genie.Renderer.Json.JSONParser.json(Dict("key" => vals[1], "value" => vals[2])))
+  Genie.WebChannels.broadcast(channel, Genie.Renderer.Json.JSONParser.json(Dict("key" => vals[1], "value" => Stipple.render(vals[2]))))
 end
 
 function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}}) where {T,M<:ReactiveModel}
@@ -139,7 +139,7 @@ end
 
 #===#
 
-function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
+function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dict{Symbol,Any} where {M<:ReactiveModel}
   result = Dict{String,Any}()
 
   for field in fieldnames(typeof(app))
@@ -149,11 +149,11 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
   Dict(:el => Elements.elem(app), :data => result)
 end
 
-function Stipple.render(val::T, fieldname::Symbol) where {T}
+function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) where {T}
   val
 end
 
-function Stipple.render(o::Reactive{T}, fieldname::Symbol) where {T}
+function Stipple.render(o::Reactive{T}, fieldname::Union{Symbol,Nothing} = nothing) where {T}
   Stipple.render(o[], fieldname)
 end
 

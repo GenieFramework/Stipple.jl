@@ -128,12 +128,12 @@ end
 
 #===#
 
-function Stipple.render(t::T, fieldname::Symbol)::String where {T<:DataTable}
-  JSON.json(data(t, fieldname))
+function Stipple.render(t::T, fieldname::Union{Symbol,Nothing} = nothing) where {T<:DataTable}
+  data(t, fieldname)
 end
 
-function Stipple.render(dtp::DataTablePagination, fieldname::Symbol) :: String
-  JSON.json(Dict(dtp))
+function Stipple.render(dtp::DataTablePagination, fieldname::Union{Symbol,Nothing} = nothing)
+  Dict(:sortBy => dtp.sort_by, :descending => dtp.descending, :page => dtp.page, :rowsPerPage => dtp.rows_per_page)
 end
 
 #===#
@@ -155,18 +155,6 @@ function Base.parse(::Type{DataTablePagination}, d::Dict{String,Any})
   dtp.rows_per_page = get!(d, "rowsPerPage", 10)
 
   dtp
-end
-
-#===#
-
-function Dict(dtp::DataTablePagination)
-  Dict(:sortBy => dtp.sort_by, :descending => dtp.descending, :page => dtp.page, :rowsPerPage => dtp.rows_per_page)
-end
-
-#===#
-
-function Base.push!(app::M, vals::Pair{Symbol,DataTablePagination}; channel::String = Genie.config.webchannels_default_route) where {M<:ReactiveModel}
-  Genie.WebChannels.broadcast(channel, Genie.Renderer.Json.JSONParser.json(Dict("key" => vals[1], "value" => Dict(vals[2]))))
 end
 
 end
