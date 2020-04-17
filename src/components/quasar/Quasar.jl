@@ -2,6 +2,6 @@ module Quasar
 
 using Revise
 
-include("table_dataframes.jl")
+include("Table.jl")
 
 end
