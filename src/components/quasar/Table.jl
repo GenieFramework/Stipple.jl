@@ -100,7 +100,8 @@ end
 
 function table(fieldname::Symbol;
                 rowkey::String = ID, title::String = "",
-                datakey::String = "data_$fieldname", columnskey::String = "columns_$fieldname",
+                datakey::String = "data_$fieldname",
+                columnskey::String = "columns_$fieldname",
                 selected::Union{Symbol,Nothing} = nothing,
                 hideheader::Bool = false,
                 hidebottom::Bool = false,
@@ -150,6 +151,21 @@ function table(fieldname::Symbol;
 
   if dark
     k = (k..., Symbol("dark"))
+    push!(v, "")
+  end
+
+  if flat
+    k = (k..., Symbol("flat"))
+    push!(v, "")
+  end
+
+  if bordered
+    k = (k..., Symbol("bordered"))
+    push!(v, "")
+  end
+
+  if dense
+    k = (k..., Symbol("dense"))
     push!(v, "")
   end
 
