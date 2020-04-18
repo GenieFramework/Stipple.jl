@@ -2,14 +2,13 @@ module Table
 
 using Revise
 
-import DataFrames
-import JSON
-import Stipple
+import DataFrames, JSON
 import Genie
-import Genie.Renderer.Html: HTMLString, void_element
+import Genie.Renderer.Html: HTMLString, normal_element, void_element
+
 using Stipple
 
-Genie.Renderer.Html.register_void_element("q!!table", context = @__MODULE__)
+Genie.Renderer.Html.register_void_element("q__table", context = @__MODULE__)
 
 const ID = "__id"
 
@@ -101,6 +100,12 @@ function table(fieldname::Symbol;
                 selected::Union{Symbol,Nothing} = nothing,
                 hideheader::Bool = false,
                 hidebottom::Bool = false,
+                pagination::Union{Symbol,Nothing} = nothing,
+                dark::Bool = false,
+                bordered::Bool = false,
+                separator::Union{String,Symbol} = :cell,
+                dense::Bool = false,
+                flat::Bool = false,
                 args...) :: String
 
   k = (Symbol(":data"), Symbol(":columns"), Symbol("row-key"))
@@ -121,8 +126,13 @@ function table(fieldname::Symbol;
     push!(v, true)
   end
 
+  if pagination !== nothing
+    k = (k..., Symbol("pagination!sync!"))
+    push!(v, pagination)
+  end
+
   Genie.Renderer.Html.div(class="q-pa-md") do
-    q!!table(title=title; args..., NamedTuple{k}(v)...)
+    q__table(title=title; args..., NamedTuple{k}(v)...)
   end
 end
 
