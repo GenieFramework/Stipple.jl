@@ -8,7 +8,7 @@ import Genie.Renderer.Html: HTMLString, normal_element, void_element
 
 using Stipple
 
-Genie.Renderer.Html.register_void_element("q__table", context = @__MODULE__)
+Genie.Renderer.Html.register_normal_element("q__table", context = @__MODULE__)
 
 const ID = "__id"
 
@@ -25,6 +25,10 @@ end
 
 function Column(name::String)
   Column(name = name)
+end
+
+function Base.Symbol(v::Vector{Column}) :: Vector{Symbol}
+  [Symbol(c.name) for c in v]
 end
 
 Base.@kwdef mutable struct DataTablePagination
@@ -106,6 +110,9 @@ function table(fieldname::Symbol;
                 separator::Union{String,Symbol} = :cell,
                 dense::Bool = false,
                 flat::Bool = false,
+                filter::Bool = false,
+                loading::Union{Symbol,Bool} = false,
+                grid::Bool = false,
                 args...) :: String
 
   k = (Symbol(":data"), Symbol(":columns"), Symbol("row-key"))
@@ -131,8 +138,34 @@ function table(fieldname::Symbol;
     push!(v, pagination)
   end
 
+  if (isa(loading, Bool) && loading) || (isa(loading, Symbol))
+    k = (k..., (isa(loading, Symbol) ? Symbol("loading!") : Symbol("loading")))
+    push!(v, loading)
+  end
+
+  if grid
+    k = (k..., Symbol("grid"))
+    push!(v, "")
+  end
+
+  if dark
+    k = (k..., Symbol("dark"))
+    push!(v, "")
+  end
+
   Genie.Renderer.Html.div(class="q-pa-md") do
-    q__table(title=title; args..., NamedTuple{k}(v)...)
+    q__table(title=title; args..., NamedTuple{k}(v)...) do
+      [
+        filter ? """
+        <template v-slot:top-right>
+          <q-input borderless dense debounce="300" v-model="filter" placeholder="Search">
+            <template v-slot:append>
+              <q-icon name="search" />
+            </template>
+          </q-input>
+        </template>""" : ""
+      ]
+    end
   end
 end
 
