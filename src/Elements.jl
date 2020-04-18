@@ -14,15 +14,13 @@ end
 
 #===#
 
-function vue_integration(modeltype::Type{M}; vue_app_name::String = Stipple.JS_APP_VAR_NAME, endpoint::String = Stipple.JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::String where {M<:ReactiveModel}
-  model = modeltype()
-
+function vue_integration(model::M; vue_app_name::String = Stipple.JS_APP_VAR_NAME, endpoint::String = Stipple.JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::String where {M<:ReactiveModel}
   vue_app = replace(Genie.Renderer.Json.JSONParser.json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
 
   output = "var $vue_app_name = new Vue($vue_app);\n\n"
 
-  for field in fieldnames(modeltype)
+  for field in fieldnames(typeof(model))
     output *= Stipple.watch(vue_app_name, getfield(model, field), field, channel, model)
   end
 

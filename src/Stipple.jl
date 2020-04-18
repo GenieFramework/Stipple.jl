@@ -27,6 +27,28 @@ function watch end
 
 #===#
 
+function Observables.setindex!(observable::Observable, val, keys...)
+  count = 1
+  observable.val = val
+
+  for f in Observables.listeners(observable)
+    in(count, keys) && continue
+
+    if notify(f)
+      if f isa InternalFunction
+        f(val)
+      else
+        Base.invokelatest(f, val)
+      end
+    end
+
+    count += 1
+  end
+
+end
+
+#===#
+
 include("Typography.jl")
 include("Elements.jl")
 include("Layout.jl")
@@ -39,7 +61,7 @@ function update!(model::M, field::Symbol, newval::T, oldval::T)::M where {T,M<:R
 end
 
 function update!(model::M, field::Reactive, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-  field[] = newval
+  field[1] = newval
 
   model
 end
@@ -68,9 +90,8 @@ function Base.parse(::Type{T}, v::T) where {T}
   v::T
 end
 
-function init(model::Type{M}, ui::Union{String,Vector} = ""; vue_app_name::String = JS_APP_VAR_NAME, endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
+function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = JS_APP_VAR_NAME, endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
   Genie.config.websockets_server = true
-  app = model()
 
   Genie.Router.channel("/$channel/watchers") do
     try
@@ -79,7 +100,7 @@ function init(model::Type{M}, ui::Union{String,Vector} = ""; vue_app_name::Strin
       payload["newval"] == payload["oldval"] && return nothing
 
       field = Symbol(payload["field"])
-      val = getfield(app, field)
+      val = getfield(model, field)
 
       valtype = isa(val, Reactive) ? typeof(val[]) : typeof(val)
 
@@ -97,7 +118,7 @@ function init(model::Type{M}, ui::Union{String,Vector} = ""; vue_app_name::Strin
         @error ex
       end
 
-      update!(app, field, newval, oldval)
+      update!(model, field, newval, oldval)
 
       "OK"
     catch ex
@@ -111,7 +132,7 @@ function init(model::Type{M}, ui::Union{String,Vector} = ""; vue_app_name::Strin
     Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, endpoint = endpoint, channel = channel) |> Genie.Renderer.Js.js
   end
 
-  setup(app)
+  setup(model)
 end
 
 
