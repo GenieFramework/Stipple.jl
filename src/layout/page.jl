@@ -1,4 +1,4 @@
-function page(args...; fluid::Bool = false, elemid::String = Stipple.Elements.MOUNT_ELEM, kwargs...)
+function page(elemid, args...; fluid::Bool = false, kwargs...)
   Genie.Renderer.Html.div(id=elemid, class="container$(fluid ? "-fluid" : "")", args...; kwargs...)
 end
 

@@ -6,15 +6,17 @@ using Stipple
 
 #===#
 
-const MOUNT_ELEM = "__stipple_app_elem"
+function root(app::M)::String where {M<:ReactiveModel}
+  Genie.Generator.validname(typeof(app) |> string)
+end
 
 function elem(app::M)::String where {M<:ReactiveModel}
-  "#$MOUNT_ELEM"
+  "#$(root(app))"
 end
 
 #===#
 
-function vue_integration(model::M; vue_app_name::String = Stipple.JS_APP_VAR_NAME, endpoint::String = Stipple.JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::String where {M<:ReactiveModel}
+function vue_integration(model::M; vue_app_name::String, endpoint::String, channel::String)::String where {M<:ReactiveModel}
   vue_app = replace(Genie.Renderer.Json.JSONParser.json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
 
@@ -24,30 +26,7 @@ function vue_integration(model::M; vue_app_name::String = Stipple.JS_APP_VAR_NAM
     output *= Stipple.watch(vue_app_name, getfield(model, field), field, channel, model)
   end
 
-  output *= "\n\nwindow.parse_payload = function(payload){ window.$(Stipple.JS_APP_VAR_NAME)[payload.key] = payload.value; };"
-end
-
-#===#
-
-function deps() :: String
-  Genie.Router.route("/js/stipple/vue.js") do
-    Genie.Renderer.WebRenderable(
-      read(joinpath(@__DIR__, "..", "files", "js", "vue.js"), String),
-      :javascript) |> Genie.Renderer.respond
-  end
-
-  Genie.Router.route("/js/stipple/quasar.umd.min.js") do
-    Genie.Renderer.WebRenderable(
-      read(joinpath(@__DIR__, "..", "files", "js", "quasar.umd.min.js"), String),
-      :javascript) |> Genie.Renderer.respond
-  end
-
-  string(
-    Genie.Assets.channels_support(),
-    Genie.Renderer.Html.script(src="/js/stipple/vue.js"),
-    Genie.Renderer.Html.script(src="/js/stipple/quasar.umd.min.js"),
-    Genie.Renderer.Html.script(src="/$(Stipple.JS_SCRIPT_NAME)?v=$(Genie.Configuration.isdev() ? rand() : 1)")
-  )
+  output *= "\n\nwindow.parse_payload = function(payload){ window.$(vue_app_name)[payload.key] = payload.value; };"
 end
 
 #===#

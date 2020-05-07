@@ -11,7 +11,11 @@ function layout(output::String) :: String
       Genie.Renderer.Html.head() do
         Genie.Renderer.Html.meta(name="viewport", content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui")
       end *
-      Genie.Renderer.Html.body(output)
+      Genie.Renderer.Html.body(
+        theme() *
+        output *
+        Stipple.deps()
+      )
     end)
   )
 end

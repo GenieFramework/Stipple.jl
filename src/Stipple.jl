@@ -16,7 +16,6 @@ abstract type ReactiveModel end
 
 #===#
 
-const JS_APP_VAR_NAME = "__stipple_app"
 const JS_SCRIPT_NAME = "__stipple_app.js"
 
 #===#
@@ -24,6 +23,12 @@ const JS_SCRIPT_NAME = "__stipple_app.js"
 function render end
 function update! end
 function watch end
+
+#===#
+
+function components() :: Dict
+  Dict()
+end
 
 #===#
 
@@ -52,7 +57,6 @@ end
 include("Typography.jl")
 include("Elements.jl")
 include("Layout.jl")
-include("Components.jl")
 
 #===#
 
@@ -90,7 +94,7 @@ function Base.parse(::Type{T}, v::T) where {T}
   v::T
 end
 
-function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = JS_APP_VAR_NAME, endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
+function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model), endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
   Genie.config.websockets_server = true
 
   Genie.Router.channel("/$channel/watchers") do
@@ -167,7 +171,7 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
     result[string(field)] = Stipple.render(getfield(app, field), field)
   end
 
-  Dict(:el => Elements.elem(app), :data => result)
+  Dict(:el => Elements.elem(app), :data => result, :components => components(app))
 end
 
 function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) where {T}
@@ -179,5 +183,29 @@ function Stipple.render(o::Reactive{T}, fieldname::Union{Symbol,Nothing} = nothi
 end
 
 #===#
+
+const DEPS = Function[]
+
+function deps() :: String
+  Genie.Router.route("/js/stipple/vue.js") do
+    Genie.Renderer.WebRenderable(
+      read(joinpath(@__DIR__, "..", "files", "js", "vue.js"), String),
+      :javascript) |> Genie.Renderer.respond
+  end
+
+  string(
+    Genie.Assets.channels_support(),
+    Genie.Renderer.Html.script(src="/js/stipple/vue.js"),
+    join([f() for f in DEPS], "\n"),
+    Genie.Renderer.Html.script(src="/$(Stipple.JS_SCRIPT_NAME)?v=$(Genie.Configuration.isdev() ? rand() : 1)")
+  )
+end
+
+#===#
+
+function camelcase(s::String) :: String
+  replacements = [replace(s, r.match=>uppercase(r.match[2:end])) for r in eachmatch(r"_.", s) |> collect] |> unique
+  isempty(replacements) ? s : first(replacements)
+end
 
 end
