@@ -44,7 +44,8 @@ macro els(expr)
 end
 
 macro text(expr)
-  "v-text='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+  directive = occursin(" | ", string(expr)) ? ":text-content.prop" : "v-text"
+  "$(directive)='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
 end
 
 macro react(expr)

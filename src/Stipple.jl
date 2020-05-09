@@ -16,7 +16,7 @@ abstract type ReactiveModel end
 
 #===#
 
-const JS_SCRIPT_NAME = "__stipple_app.js"
+const JS_SCRIPT_NAME = "stipple.js"
 
 #===#
 
@@ -26,8 +26,11 @@ function watch end
 
 #===#
 
-function components() :: Dict
-  Dict()
+const COMPONENTS = Dict()
+
+function register_components(model::Type{M}, keysvals::Vector{Pair{K,V}}) where {M<:ReactiveModel, K, V}
+  haskey(COMPONENTS, model) || (COMPONENTS[model] = Pair{K,V}[])
+  push!(COMPONENTS[model], keysvals...)
 end
 
 #===#
@@ -164,6 +167,13 @@ end
 
 #===#
 
+function components(m::Type{M}) where {M<:ReactiveModel}
+  response = Dict(COMPONENTS[m]...) |> Genie.Renderer.Json.JSONParser.json
+  replace(response, "\""=>"")
+end
+
+#===#
+
 function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dict{Symbol,Any} where {M<:ReactiveModel}
   result = Dict{String,Any}()
 
@@ -171,7 +181,7 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
     result[string(field)] = Stipple.render(getfield(app, field), field)
   end
 
-  Dict(:el => Elements.elem(app), :data => result, :components => components(app))
+  Dict(:el => Elements.elem(app), :data => result, :components => components(typeof(app)))
 end
 
 function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) where {T}
@@ -193,10 +203,17 @@ function deps() :: String
       :javascript) |> Genie.Renderer.respond
   end
 
+  Genie.Router.route("/js/stipple/vue_filters.js") do
+    Genie.Renderer.WebRenderable(
+      read(joinpath(@__DIR__, "..", "files", "js", "vue_filters.js"), String),
+      :javascript) |> Genie.Renderer.respond
+  end
+
   string(
     Genie.Assets.channels_support(),
     Genie.Renderer.Html.script(src="/js/stipple/vue.js"),
     join([f() for f in DEPS], "\n"),
+    Genie.Renderer.Html.script(src="/js/stipple/vue_filters.js"),
     Genie.Renderer.Html.script(src="/$(Stipple.JS_SCRIPT_NAME)?v=$(Genie.Configuration.isdev() ? rand() : 1)")
   )
 end
