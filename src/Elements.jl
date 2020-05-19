@@ -4,6 +4,8 @@ using Revise
 import Genie
 using Stipple
 
+import Genie.Renderer.Html: HTMLString, normal_element
+
 #===#
 
 function root(app::M)::String where {M<:ReactiveModel}
@@ -60,5 +62,7 @@ end
 
 include(joinpath("elements", "stylesheet.jl"))
 include(joinpath("elements", "table.jl"))
+include(joinpath("elements", "badge.jl"))
+
 
 end
