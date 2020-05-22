@@ -10,8 +10,10 @@ function container(args...; kwargs...)
   Genie.Renderer.Html.div(class="row", args...; kwargs...)
 end
 
+const row = container
+
 function cell(args...; size::Int=0, kwargs...)
-  Genie.Renderer.Html.div(class="col-$(size > 0 ? size : "")", args...; kwargs...)
+  Genie.Renderer.Html.div(class="col-$(size > 0 ? size : "12")", args...; kwargs...)
 end
 
 function sidebar(args...; size::Int = 3, kwargs...)

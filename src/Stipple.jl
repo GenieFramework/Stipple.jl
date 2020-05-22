@@ -35,15 +35,18 @@ end
 
 #===#
 
-function Observables.setindex!(observable::Observable, val, keys...)
+function Observables.setindex!(observable::Observable, val, keys...; notify=(x)->true)
   count = 1
   observable.val = val
 
   for f in Observables.listeners(observable)
-    in(count, keys) && continue
+    if in(count, keys)
+      count += 1
+      continue
+    end
 
     if notify(f)
-      if f isa InternalFunction
+      if f isa Observables.InternalFunction
         f(val)
       else
         Base.invokelatest(f, val)
@@ -86,9 +89,9 @@ end
 #===#
 
 function watch(vue_app_name::String, fieldtype::Any, fieldname::Symbol, channel::String, model::M)::String where {M<:ReactiveModel}
-  string(vue_app_name, raw".\$watch('", fieldname, "', function(newVal, oldVal){
+  string(vue_app_name, raw".\$watch('", fieldname, "', _.debounce(function(newVal, oldVal){
     Genie.WebChannels.sendMessageTo('$channel', 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});
-  });\n\n")
+  }, 300));\n\n")
 end
 
 #===#
@@ -101,7 +104,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
   Genie.config.websockets_server = true
 
   Genie.Router.channel("/$channel/watchers") do
-    try
+    # try
       payload = Genie.Router.@params(:payload)["payload"]
 
       payload["newval"] == payload["oldval"] && return nothing
@@ -112,26 +115,25 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
       valtype = isa(val, Reactive) ? typeof(val[]) : typeof(val)
 
       newval = payload["newval"]
-      try
-        newval = parse(valtype, payload["newval"])
-      catch ex
-        @error ex
-      end
+      # try
+        newval = Base.parse(valtype, payload["newval"])
+      # catch ex
+      #   @error ex
+      # end
 
       oldval = payload["oldval"]
-      try
-        oldval = parse(valtype, payload["oldval"])
-      catch ex
-        @error ex
-      end
+      # try
+        oldval = Base.parse(valtype, payload["oldval"])
+      # catch ex
+      #   @error ex
+      # end
 
       update!(model, field, newval, oldval)
 
       "OK"
-    catch ex
-      @error ex
-      "ERROR : 500 - $ex"
-    end
+    # catch ex
+    #   @error ex
+    # end
   end
 
   Genie.Router.route("/$endpoint") do
@@ -209,8 +211,15 @@ function deps() :: String
       :javascript) |> Genie.Renderer.respond
   end
 
+  Genie.Router.route("/js/stipple/underscore-min.js") do
+    Genie.Renderer.WebRenderable(
+      read(joinpath(@__DIR__, "..", "files", "js", "underscore-min.js"), String),
+      :javascript) |> Genie.Renderer.respond
+  end
+
   string(
     Genie.Assets.channels_support(),
+    Genie.Renderer.Html.script(src="/js/stipple/underscore-min.js"),
     Genie.Renderer.Html.script(src="/js/stipple/vue.js"),
     join([f() for f in DEPS], "\n"),
     Genie.Renderer.Html.script(src="/js/stipple/vue_filters.js"),

@@ -62,7 +62,6 @@ end
 
 include(joinpath("elements", "stylesheet.jl"))
 include(joinpath("elements", "table.jl"))
-include(joinpath("elements", "badge.jl"))
 
 
 end
