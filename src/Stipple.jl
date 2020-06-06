@@ -80,7 +80,7 @@ function update!(model::M, field::Any, newval::T, oldval::T)::M where {T,M<:Reac
   try
     setfield!(model, field, newval)
   catch ex
-    @error ex
+    # @error ex
   end
 
   model
@@ -104,7 +104,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
   Genie.config.websockets_server = true
 
   Genie.Router.channel("/$channel/watchers") do
-    # try
+    try
       payload = Genie.Router.@params(:payload)["payload"]
 
       payload["newval"] == payload["oldval"] && return nothing
@@ -115,25 +115,27 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
       valtype = isa(val, Reactive) ? typeof(val[]) : typeof(val)
 
       newval = payload["newval"]
-      # try
+      try
         newval = Base.parse(valtype, payload["newval"])
-      # catch ex
-      #   @error ex
-      # end
+      catch ex
+        # @error ex
+        # @error valtype, payload["newval"]
+      end
 
       oldval = payload["oldval"]
-      # try
+      try
         oldval = Base.parse(valtype, payload["oldval"])
-      # catch ex
-      #   @error ex
-      # end
+      catch ex
+        # @error ex
+        # @error valtype, payload["newval"]
+      end
 
       update!(model, field, newval, oldval)
 
       "OK"
-    # catch ex
-    #   @error ex
-    # end
+    catch ex
+      # @error ex
+    end
   end
 
   Genie.Router.route("/$endpoint") do
@@ -170,6 +172,8 @@ end
 #===#
 
 function components(m::Type{M}) where {M<:ReactiveModel}
+  haskey(COMPONENTS, m) || return ""
+
   response = Dict(COMPONENTS[m]...) |> Genie.Renderer.Json.JSONParser.json
   replace(response, "\""=>"")
 end

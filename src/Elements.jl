@@ -6,6 +6,8 @@ using Stipple
 
 import Genie.Renderer.Html: HTMLString, normal_element
 
+export root, elem, @iif, @elsiif, @els, @text, @react, @data
+
 #===#
 
 function root(app::M)::String where {M<:ReactiveModel}

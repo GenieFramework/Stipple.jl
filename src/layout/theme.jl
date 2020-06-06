@@ -1,3 +1,6 @@
+
+export theme
+
 const THEMES = Function[]
 
 function theme() :: String

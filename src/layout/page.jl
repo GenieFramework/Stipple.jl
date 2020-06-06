@@ -1,9 +1,7 @@
+export page, container, row, cell, sidebar, content
+
 function page(elemid, args...; kwargs...)
   Genie.Renderer.Html.div(id=elemid, args...; kwargs...)
-end
-
-function footer(args...; kwargs...)
-  Genie.Renderer.Html.div(class="row", args...; kwargs...)
 end
 
 function container(args...; kwargs...)
