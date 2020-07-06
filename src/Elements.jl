@@ -14,6 +14,10 @@ function root(app::M)::String where {M<:ReactiveModel}
   Genie.Generator.validname(typeof(app) |> string)
 end
 
+function root(app::Type{M})::String where {M<:ReactiveModel}
+  Genie.Generator.validname(app |> string)
+end
+
 function elem(app::M)::String where {M<:ReactiveModel}
   "#$(root(app))"
 end

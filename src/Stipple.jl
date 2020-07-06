@@ -24,6 +24,10 @@ function render end
 function update! end
 function watch end
 
+function js_methods(m::Any)
+  ""
+end
+
 #===#
 
 const COMPONENTS = Dict()
@@ -98,6 +102,10 @@ end
 
 function Base.parse(::Type{T}, v::T) where {T}
   v::T
+end
+
+function init(model::Type{M}, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model), endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
+  init(model(), ui; vue_app_name = vue_app_name, endpoint = endpoint, channel = channel)
 end
 
 function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model), endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
@@ -187,7 +195,7 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
     result[string(field)] = Stipple.render(getfield(app, field), field)
   end
 
-  Dict(:el => Elements.elem(app), :data => result, :components => components(typeof(app)))
+  Dict(:el => Elements.elem(app), :data => result, :components => components(typeof(app)), :methods => "{ $(js_methods(app)) }")
 end
 
 function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) where {T}
@@ -227,7 +235,12 @@ function deps() :: String
     Genie.Renderer.Html.script(src="/js/stipple/vue.js"),
     join([f() for f in DEPS], "\n"),
     Genie.Renderer.Html.script(src="/js/stipple/vue_filters.js"),
-    Genie.Renderer.Html.script(src="/$(Stipple.JS_SCRIPT_NAME)?v=$(Genie.Configuration.isdev() ? rand() : 1)")
+
+    # if the model is not configured and we don't generate the stipple.js file, no point in requesting it
+    (in(Symbol("get_$(Stipple.JS_SCRIPT_NAME)"), Genie.Router.named_routes() |> keys |> collect) ?
+      Genie.Renderer.Html.script(src="/$(Stipple.JS_SCRIPT_NAME)?v=$(Genie.Configuration.isdev() ? rand() : 1)") :
+      ""
+    )
   )
 end
 
