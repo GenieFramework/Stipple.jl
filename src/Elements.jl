@@ -6,7 +6,7 @@ using Stipple
 
 import Genie.Renderer.Html: HTMLString, normal_element
 
-export root, elem, @iif, @elsiif, @els, @text, @react, @data
+export root, elem, @iif, @elsiif, @els, @text, @bind, @data
 
 #===#
 
@@ -56,7 +56,7 @@ macro text(expr)
   "$(directive)='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
 end
 
-macro react(expr)
+macro bind(expr)
   "v-model='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
 end
 
@@ -67,7 +67,5 @@ end
 #===#
 
 include(joinpath("elements", "stylesheet.jl"))
-include(joinpath("elements", "table.jl"))
-
 
 end

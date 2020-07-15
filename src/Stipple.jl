@@ -3,8 +3,9 @@ module Stipple
 using Revise
 using Logging, Reexport
 
-import Genie
+using Genie
 @reexport using Observables
+
 const Reactive = Observables.Observable
 const R = Reactive
 
@@ -17,6 +18,13 @@ abstract type ReactiveModel end
 #===#
 
 const JS_SCRIPT_NAME = "stipple.js"
+
+#===#
+
+#TODO: add scaffolding
+function newapp()
+  throw("TODO!")
+end
 
 #===#
 
@@ -67,6 +75,10 @@ end
 include("Typography.jl")
 include("Elements.jl")
 include("Layout.jl")
+
+@reexport using .Typography
+@reexport using .Elements
+@reexport using .Layout
 
 #===#
 
@@ -229,17 +241,26 @@ function deps() :: String
       :javascript) |> Genie.Renderer.respond
   end
 
+  Genie.Router.route("/js/stipple/stipplecore.js") do
+    Genie.Renderer.WebRenderable(
+      read(joinpath(@__DIR__, "..", "files", "js", "stipplecore.js"), String),
+      :javascript) |> Genie.Renderer.respond
+  end
+
   string(
     Genie.Assets.channels_support(),
     Genie.Renderer.Html.script(src="/js/stipple/underscore-min.js"),
     Genie.Renderer.Html.script(src="/js/stipple/vue.js"),
     join([f() for f in DEPS], "\n"),
+    Genie.Renderer.Html.script(src="/js/stipple/stipplecore.js"),
     Genie.Renderer.Html.script(src="/js/stipple/vue_filters.js"),
 
     # if the model is not configured and we don't generate the stipple.js file, no point in requesting it
     (in(Symbol("get_$(Stipple.JS_SCRIPT_NAME)"), Genie.Router.named_routes() |> keys |> collect) ?
-      Genie.Renderer.Html.script(src="/$(Stipple.JS_SCRIPT_NAME)?v=$(Genie.Configuration.isdev() ? rand() : 1)") :
-      ""
+      string(
+        Genie.Renderer.Html.script("Stipple.init({theme: 'stipple-blue'});"),
+        Genie.Renderer.Html.script(src="/$(Stipple.JS_SCRIPT_NAME)?v=$(Genie.Configuration.isdev() ? rand() : 1)")
+      ) : ""
     )
   )
 end
@@ -249,6 +270,14 @@ end
 function camelcase(s::String) :: String
   replacements = [replace(s, r.match=>uppercase(r.match[2:end])) for r in eachmatch(r"_.", s) |> collect] |> unique
   isempty(replacements) ? s : first(replacements)
+end
+
+function kwargs_merge(kwargs::Dict, property::Symbol, value::String) :: NamedTuple
+  value = "$value $(get!(kwargs, property, ""))" |> strip
+  kwargs = delete!(kwargs, property)
+  kwargs[property] = value
+
+  NamedTuple{collect(keys(kwargs)) |> Tuple}(collect(values(kwargs)))
 end
 
 end

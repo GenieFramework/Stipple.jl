@@ -1,23 +1,22 @@
-export page, container, row, cell, sidebar, content
+export page, row, cell
 
-function page(elemid, args...; kwargs...)
-  Genie.Renderer.Html.div(id=elemid, args...; kwargs...)
+function page(elemid, content::Union{String,Vector}; kwargs...)
+  content = if isa(content, Vector)
+    push!(pushfirst!(content, "<st-dashboard>"), "</st-dashboard>")
+  else
+    string("<st-dashboard>", content, "</st-dashboard>")
+  end
+  kwargs = Stipple.kwargs_merge(delete!(Dict(kwargs...), :id), :id, elemid)
+
+  Genie.Renderer.Html.div(content; kwargs...)
 end
 
-function container(args...; kwargs...)
-  Genie.Renderer.Html.div(class="row", args...; kwargs...)
+function row(args...; kwargs...)
+  kwargs = Stipple.kwargs_merge(Dict(kwargs...), :class, "row")
+  Genie.Renderer.Html.div(args...; kwargs...)
 end
-
-const row = container
 
 function cell(args...; size::Int=0, kwargs...)
-  Genie.Renderer.Html.div(class="col-$(size > 0 ? size : "12")", args...; kwargs...)
-end
-
-function sidebar(args...; size::Int = 3, kwargs...)
-  Genie.Renderer.Html.div(class="col-$size sidebar", args...; kwargs...)
-end
-
-function content(args...; size::Int = 9, kwargs...)
-  Genie.Renderer.Html.div(class="col-$size", args...; kwargs...)
+  kwargs = Stipple.kwargs_merge(Dict(kwargs...), :class, "col col-12 col-sm$(size > 0 ? "-$size" : "")")
+  Genie.Renderer.Html.div(args...; kwargs...)
 end
