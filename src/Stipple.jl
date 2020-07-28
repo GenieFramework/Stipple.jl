@@ -10,6 +10,7 @@ const Reactive = Observables.Observable
 const R = Reactive
 
 export R, Reactive, ReactiveModel
+export newapp
 
 #===#
 
@@ -18,13 +19,6 @@ abstract type ReactiveModel end
 #===#
 
 const JS_SCRIPT_NAME = "stipple.js"
-
-#===#
-
-#TODO: add scaffolding
-function newapp()
-  throw("TODO!")
-end
 
 #===#
 
@@ -75,10 +69,14 @@ end
 include("Typography.jl")
 include("Elements.jl")
 include("Layout.jl")
+include("Generator.jl")
 
 @reexport using .Typography
 @reexport using .Elements
 @reexport using .Layout
+using .Generator
+
+const newapp = Generator.newapp
 
 #===#
 
@@ -272,12 +270,16 @@ function camelcase(s::String) :: String
   isempty(replacements) ? s : first(replacements)
 end
 
-function kwargs_merge(kwargs::Dict, property::Symbol, value::String) :: NamedTuple
+function NamedTuple(kwargs::Dict) :: NamedTuple
+  NamedTuple{collect(keys(kwargs)) |> Tuple}(collect(values(kwargs)))
+end
+
+function NamedTuple(kwargs::Dict, property::Symbol, value::String) :: NamedTuple
   value = "$value $(get!(kwargs, property, ""))" |> strip
   kwargs = delete!(kwargs, property)
   kwargs[property] = value
 
-  NamedTuple{collect(keys(kwargs)) |> Tuple}(collect(values(kwargs)))
+  NamedTuple(kwargs)
 end
 
 end
