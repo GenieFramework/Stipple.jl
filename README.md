@@ -73,5 +73,21 @@ Also, on the webpage, we change the name in the input field and confirm that it 
 julia> model.name[] # will have the same value as what you have inputted on the web page
 ```
 
-You can see a quick demo here:
+You can see a quick video demo here:
 <https://www.dropbox.com/s/50t5bqd2zk4ehxo/basic_stipple_3.mp4?dl=0>
+
+## Demos
+
+### German Credits visualisation dashboard
+
+<img src="https://www.dropbox.com/s/gsaqbuxvbqfk049/Screenshot_German_Credits.png?dl=1" width=800>
+
+The full application is available at:
+<https://github.com/GenieFramework/Stipple-Demo-GermanCredits>
+
+### Iris Flowers dataset k-Means clustering dashboard
+
+<img src="https://www.dropbox.com/s/hkyahy8gmv4lae9/Screenshot_Iris_Data_K-Means_Clustering.png?dl=1" width=800>
+
+The full application is available at:
+<https://github.com/GenieFramework/Stipple-Demo-IrisClustering>
