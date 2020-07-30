@@ -9,7 +9,7 @@ using Genie
 const Reactive = Observables.Observable
 const R = Reactive
 
-export R, Reactive, ReactiveModel
+export R, Reactive, ReactiveModel, @R_str
 export newapp
 
 #===#
@@ -270,16 +270,20 @@ function camelcase(s::String) :: String
   isempty(replacements) ? s : first(replacements)
 end
 
-function NamedTuple(kwargs::Dict) :: NamedTuple
+function Core.NamedTuple(kwargs::Dict) :: NamedTuple
   NamedTuple{collect(keys(kwargs)) |> Tuple}(collect(values(kwargs)))
 end
 
-function NamedTuple(kwargs::Dict, property::Symbol, value::String) :: NamedTuple
+function Core.NamedTuple(kwargs::Dict, property::Symbol, value::String) :: NamedTuple
   value = "$value $(get!(kwargs, property, ""))" |> strip
   kwargs = delete!(kwargs, property)
   kwargs[property] = value
 
   NamedTuple(kwargs)
+end
+
+macro R_str(s)
+  :(Symbol($s))
 end
 
 end
