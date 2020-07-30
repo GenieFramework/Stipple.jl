@@ -77,6 +77,9 @@ julia> model.name[] # will have the same value as what you have inputted on the 
 You can see a quick video demo here:
 <https://www.dropbox.com/s/50t5bqd2zk4ehxo/basic_stipple_3.mp4?dl=0>
 
+The Stipple presentation from JuliaCon 2020 is available here (8 minutes): 
+<https://www.dropbox.com/s/6atyctgomsqwjki/stipple_exported.mp4?dl=0>
+
 ## Demos
 
 ### German Credits visualisation dashboard
