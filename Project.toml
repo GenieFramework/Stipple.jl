@@ -1,7 +1,7 @@
 name = "Stipple"
-uuid = "c3245d6e-4e41-4672-accb-64620d5e5a71"
+uuid = "4acbeb90-81a0-11ea-1966-bdaff8155998"
 authors = ["Adrian <e@essenciary.com>"]
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 FilePaths = "8fc22ac5-c921-52a6-82fd-178b2807b824"
