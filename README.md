@@ -17,7 +17,7 @@ The Stipple ecosystem also includes:
 
 Stipple can be added from the GitHub repo, via `Pkg`:
 ```julia
-pkg> add https://github.com/GenieFramework/Stipple.jl
+pkg> add Stipple
 ```
 
 ## Example
