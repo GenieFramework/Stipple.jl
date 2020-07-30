@@ -22,8 +22,9 @@ pkg> add Stipple
 
 ## Example
 
-Add `Genie` first:
+Add `Genie` and `Stipple` first:
 ```julia
+pkg> add Stipple
 pkg> add Genie
 ```
 
