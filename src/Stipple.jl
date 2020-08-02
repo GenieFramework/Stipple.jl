@@ -114,10 +114,6 @@ function Base.parse(::Type{T}, v::T) where {T}
   v::T
 end
 
-function init(model::Type{M}, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model), endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
-  init(model(), ui; vue_app_name = vue_app_name, endpoint = endpoint, channel = channel)
-end
-
 function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model), endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
   Genie.config.websockets_server = true
 
@@ -180,11 +176,11 @@ end
 #===#
 
 function Base.push!(app::M, vals::Pair{Symbol,T}; channel::String = Genie.config.webchannels_default_route) where {T,M<:ReactiveModel}
-  Genie.WebChannels.broadcast(channel, Genie.Renderer.Json.JSONParser.json(Dict("key" => vals[1], "value" => Stipple.render(vals[2], vals[1]))))
+  Genie.WebChannels.broadcast(channel, Genie.Renderer.Json.JSONParser.json(Dict("key" => julia_to_vue(vals[1]), "value" => Stipple.render(vals[2], vals[1]))))
 end
 
 function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}}) where {T,M<:ReactiveModel}
-  push!(app, vals[1] => vals[2][])
+  push!(app, Symbol(julia_to_vue(vals[1])) => vals[2][])
 end
 
 #===#
@@ -198,11 +194,33 @@ end
 
 #===#
 
+RENDERING_MAPPINGS = Dict{String,String}()
+mapping_keys() = collect(keys(RENDERING_MAPPINGS))
+
+function rendering_mappings(mappings = Dict{String,String})
+  merge!(RENDERING_MAPPINGS, mappings)
+end
+
+function julia_to_vue(field, mapping_keys = mapping_keys())
+  if in(string(field), mapping_keys)
+    parts = split(RENDERING_MAPPINGS[string(field)], "-")
+
+    if length(parts) > 1
+      extraparts = map((x) -> uppercasefirst(string(x)), parts[2:end])
+      string(parts[1], join(extraparts))
+    else
+      parts |> string
+    end
+  else
+    field |> string
+  end
+end
+
 function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dict{Symbol,Any} where {M<:ReactiveModel}
   result = Dict{String,Any}()
 
   for field in fieldnames(typeof(app))
-    result[string(field)] = Stipple.render(getfield(app, field), field)
+    result[julia_to_vue(field)] = Stipple.render(getfield(app, field), field)
   end
 
   Dict(:el => Elements.elem(app), :data => result, :components => components(typeof(app)), :methods => "{ $(js_methods(app)) }")
