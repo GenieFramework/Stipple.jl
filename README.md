@@ -49,7 +49,7 @@ function ui()
 
       p([
         "What is your name? "
-        input("", placeholder="Type your name", @bind(:name))
+        input("", placeholder="Type your name", Stipple.@bind(:name))
       ])
     ], title="Basic Stipple"
   ) |> html
