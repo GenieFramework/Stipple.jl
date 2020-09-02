@@ -1,6 +1,5 @@
 module Layout
 
-using Revise
 import Genie
 using Stipple
 

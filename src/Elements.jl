@@ -1,6 +1,5 @@
 module Elements
 
-using Revise
 import Genie
 using Stipple
 
