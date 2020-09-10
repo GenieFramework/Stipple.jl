@@ -1,6 +1,5 @@
 module Stipple
 
-using Revise
 using Logging, Reexport
 
 using Genie
