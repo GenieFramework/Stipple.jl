@@ -26,6 +26,7 @@ end
 function vue_integration(model::M; vue_app_name::String, endpoint::String, channel::String)::String where {M<:ReactiveModel}
   vue_app = replace(Genie.Renderer.Json.JSONParser.json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
+  vue_app = replace(vue_app, "\\\\" => "\\")
 
   output = "var $vue_app_name = new Vue($vue_app);\n\n"
 
