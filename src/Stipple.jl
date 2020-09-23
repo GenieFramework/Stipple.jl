@@ -288,7 +288,7 @@ function camelcase(s::String) :: String
 end
 
 function Core.NamedTuple(kwargs::Dict) :: NamedTuple
-  NamedTuple{collect(keys(kwargs)) |> Tuple}(collect(values(kwargs)))
+  NamedTuple{Tuple(keys(kwargs))}(collect(values(kwargs)))
 end
 
 function Core.NamedTuple(kwargs::Dict, property::Symbol, value::String) :: NamedTuple
