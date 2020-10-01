@@ -5,7 +5,7 @@ using Stipple
 
 import Genie.Renderer.Html: HTMLString, normal_element
 
-export root, elem, @iif, @elsiif, @els, @text, @bind, @data
+export root, elem, @iif, @elsiif, @els, @text, @bind, @data, @click, @on
 
 #===#
 
@@ -62,6 +62,14 @@ end
 
 macro data(expr)
   :(Symbol($expr))
+end
+
+macro click(expr)
+  "@click='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+end
+
+macro on(args, expr)
+  "v-on:$(string(args))='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
 end
 
 #===#

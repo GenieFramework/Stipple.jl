@@ -23,6 +23,7 @@ pkg> add Stipple
 ## Example
 
 Add `Genie` and `Stipple` first:
+
 ```julia
 pkg> add Stipple
 pkg> add Genie
@@ -37,7 +38,7 @@ Base.@kwdef mutable struct Name <: ReactiveModel
   name::R{String} = "World!"
 end
 
-model = Stipple.init(Name)
+model = Stipple.init(Name())
 
 function ui()
   page(
@@ -51,7 +52,7 @@ function ui()
         "What is your name? "
         input("", placeholder="Type your name", @bind(:name))
       ])
-    ], title="Basic Stipple"
+    ]
   ) |> html
 end
 
@@ -65,11 +66,13 @@ This will start a web app on port 8000 and we'll be able to access it in the bro
 Once the page is loaded, we'll be able to interact with the data and see how it's synced.
 
 We can update the name value from Julia, and see it reflected on the page, at the REPL:
+
 ```julia
 julia> model.name[] = "Adrian" # updating the property in Julia will update the values on the front
 ```
 
 Also, on the webpage, we change the name in the input field and confirm that it has been updated in Julia:
+
 ```julia
 julia> model.name[] # will have the same value as what you have inputted on the web page
 ```
@@ -77,8 +80,56 @@ julia> model.name[] # will have the same value as what you have inputted on the 
 You can see a quick video demo here:
 <https://www.dropbox.com/s/50t5bqd2zk4ehxo/basic_stipple_3.mp4?dl=0>
 
-The Stipple presentation from JuliaCon 2020 is available here (8 minutes): 
+The Stipple presentation from JuliaCon 2020 is available here (8 minutes):
 <https://www.dropbox.com/s/6atyctgomsqwjki/stipple_exported.mp4?dl=0>
+
+## Example 2
+
+This snippet illustrates how to build a UI where the button triggers a computation (function call) on the
+server side, using the input provided by the user, and outputting the result of the computation back to the user.
+
+```julia
+using Genie, Genie.Router, Genie.Renderer.Html, Stipple
+
+Base.@kwdef mutable struct Model <: ReactiveModel
+  process::R{Bool} = false
+  output::R{String} = ""
+  input::R{String} = ""
+end
+
+model = Stipple.init(Model())
+
+on(model.process) do _
+  if (model.process[])
+    model.output[] = model.input[] |> reverse
+    model.process[] = false
+  end
+end
+
+function ui()
+  page(
+    root(model), class="container", [
+      p([
+        "Input "
+        input("", @bind(:input), @on("keyup.enter", "process = true"))
+      ])
+
+      p([
+        button("Action!", @click("process = true"))
+      ])
+
+      p([
+        "Output: "
+        span("", @text(:output))
+      ])
+    ]
+  ) |> html
+end
+
+route("/", ui)
+
+up()
+```
 
 ## Demos
 
