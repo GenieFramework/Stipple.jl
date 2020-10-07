@@ -6,13 +6,13 @@ using Stipple
 export layout
 
 
-function layout(output::Union{String,Vector}; partial::Bool = false, title::String = "", class::String = "", style::String = "") :: String
+function layout(output::Union{String,Vector}; partial::Bool = false, title::String = "", class::String = "", style::String = "", channel::String = Genie.config.webchannels_default_route) :: String
   isa(output, Vector) && (output = join(output, '\n'))
 
   content = string(
     theme(),
     output,
-    Stipple.deps()
+    Stipple.deps(channel)
   )
 
   partial && return content
