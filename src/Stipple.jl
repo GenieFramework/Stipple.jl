@@ -143,8 +143,23 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
         # @error valtype, payload["newval"]
       end
 
+      value_changed = newval != (isa(val, Reactive) ? val[] : val)
       update!(model, field, newval, oldval)
 
+      # if update was necessary, broadcast to other clients
+      if value_changed
+        ws_client = Genie.Router.@params(:WS_CLIENT)
+        other_clients = setdiff(Genie.WebChannels.connected_clients(channel), [ws_client])
+
+        msg = Genie.Renderer.Json.JSONParser.json(Dict("key" => field, "value" => Stipple.render(newval, field)))
+        for client in other_clients
+          try
+            Genie.WebChannels.message(client, msg)
+          catch ex
+            @error "Error in broadcasting to other clients"
+          end
+        end
+      end
       "OK"
     catch ex
       # @error ex
