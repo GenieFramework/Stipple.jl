@@ -156,7 +156,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
           try
             Genie.WebChannels.message(client, msg)
           catch ex
-            @error "Error in broadcasting to other clients"
+            @error "Error $ex in broadcasting to $client"
           end
         end
       end
