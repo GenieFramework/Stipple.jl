@@ -156,16 +156,16 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, endpoint = endpoint, channel = channel) |> Genie.Renderer.Js.js
   end
 
-  setup(model)
+  setup(model, channel)
 end
 
 
-function setup(model::M)::M where {M<:ReactiveModel}
+function setup(model::M, channel = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
   for f in fieldnames(typeof(model))
     isa(getproperty(model, f), Reactive) || continue
 
     on(getproperty(model, f)) do v
-      push!(model, f => getfield(model, f))
+      push!(model, f => getfield(model, f), channel = channel)
     end
   end
 
@@ -237,7 +237,7 @@ end
 
 const DEPS = Function[]
 
-function deps() :: String
+function deps(channel::String = Genie.config.webchannels_default_route) :: String
   Genie.Router.route("/js/stipple/vue.js") do
     Genie.Renderer.WebRenderable(
       read(joinpath(@__DIR__, "..", "files", "js", "vue.js"), String),
@@ -263,7 +263,7 @@ function deps() :: String
   end
 
   string(
-    Genie.Assets.channels_support(),
+    Genie.Assets.channels_support(channel),
     Genie.Renderer.Html.script(src="/js/stipple/underscore-min.js"),
     Genie.Renderer.Html.script(src="/js/stipple/vue.js"),
     join([f() for f in DEPS], "\n"),
