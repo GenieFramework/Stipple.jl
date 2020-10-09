@@ -149,7 +149,8 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
       # if update was necessary, broadcast to other clients
       if value_changed
         ws_client = Genie.Router.@params(:WS_CLIENT)
-        other_clients = setdiff(Genie.WebChannels.connected_clients(channel), [ws_client])
+        c_clients = getfield.(Genie.WebChannels.connected_clients(channel), :client)
+        other_clients = setdiff(c_clients, [ws_client])
 
         msg = Genie.Renderer.Json.JSONParser.json(Dict("key" => field, "value" => Stipple.render(newval, field)))
         for client in other_clients
