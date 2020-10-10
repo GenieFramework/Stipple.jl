@@ -18,6 +18,7 @@ abstract type ReactiveModel end
 #===#
 
 const JS_SCRIPT_NAME = "stipple.js"
+MULTI_USER_MODE = false
 
 #===#
 
@@ -147,7 +148,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
       update!(model, field, newval, oldval)
 
       # if update was necessary, broadcast to other clients
-      if value_changed
+      if value_changed && MULTI_USER_MODE
         ws_client = Genie.Router.@params(:WS_CLIENT)
         c_clients = getfield.(Genie.WebChannels.connected_clients(channel), :client)
         other_clients = setdiff(c_clients, [ws_client])
@@ -317,6 +318,10 @@ end
 
 macro R_str(s)
   :(Symbol($s))
+end
+
+function set_multi_user_mode(value)
+  global MULTI_USER_MODE = value
 end
 
 end
