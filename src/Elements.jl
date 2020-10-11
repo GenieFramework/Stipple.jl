@@ -5,7 +5,7 @@ using Stipple
 
 import Genie.Renderer.Html: HTMLString, normal_element
 
-export root, elem, @iif, @elsiif, @els, @text, @bind, @data, @click, @on
+export root, elem, vm, @iif, @elsiif, @els, @text, @bind, @data, @click, @on
 
 #===#
 
@@ -21,9 +21,11 @@ function elem(app::M)::String where {M<:ReactiveModel}
   "#$(root(app))"
 end
 
+const vm = root
+
 #===#
 
-function vue_integration(model::M; vue_app_name::String, endpoint::String, channel::String)::String where {M<:ReactiveModel}
+function vue_integration(model::M; vue_app_name::String, endpoint::String, channel::String, debounce::Int)::String where {M<:ReactiveModel}
   vue_app = replace(Genie.Renderer.Json.JSONParser.json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
   vue_app = replace(vue_app, "\\\\" => "\\")
@@ -31,7 +33,7 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
   output = "var $vue_app_name = new Vue($vue_app);\n\n"
 
   for field in fieldnames(typeof(model))
-    output *= Stipple.watch(vue_app_name, getfield(model, field), field, channel, model)
+    output *= Stipple.watch(vue_app_name, getfield(model, field), field, channel, debounce, model)
   end
 
   output *= "\n\nwindow.parse_payload = function(payload){ window.$(vue_app_name)[payload.key] = payload.value; };"

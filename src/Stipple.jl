@@ -18,6 +18,7 @@ abstract type ReactiveModel end
 #===#
 
 const JS_SCRIPT_NAME = "stipple.js"
+const JS_DEBOUNCE_TIME = 300 #ms
 MULTI_USER_MODE = false
 
 #===#
@@ -76,6 +77,8 @@ include("Generator.jl")
 @reexport using .Layout
 using .Generator
 
+@reexport using Genie.Renderer.Html
+
 const newapp = Generator.newapp
 
 #===#
@@ -102,10 +105,10 @@ end
 
 #===#
 
-function watch(vue_app_name::String, fieldtype::Any, fieldname::Symbol, channel::String, model::M)::String where {M<:ReactiveModel}
+function watch(vue_app_name::String, fieldtype::Any, fieldname::Symbol, channel::String, debounce::Int, model::M)::String where {M<:ReactiveModel}
   string(vue_app_name, raw".\$watch('", fieldname, "', _.debounce(function(newVal, oldVal){
     Genie.WebChannels.sendMessageTo('$channel', 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});
-  }, 300));\n\n")
+  }, $debounce));\n\n")
 end
 
 #===#
@@ -114,7 +117,9 @@ function Base.parse(::Type{T}, v::T) where {T}
   v::T
 end
 
-function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model), endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
+function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model),
+              endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route,
+              debounce::Int = JS_DEBOUNCE_TIME)::M where {M<:ReactiveModel}
   Genie.config.websockets_server = true
 
   Genie.Router.channel("/$channel/watchers") do
@@ -131,17 +136,13 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
       newval = payload["newval"]
       try
         newval = Base.parse(valtype, payload["newval"])
-      catch ex
-        # @error ex
-        # @error valtype, payload["newval"]
+      catch _
       end
 
       oldval = payload["oldval"]
       try
         oldval = Base.parse(valtype, payload["oldval"])
-      catch ex
-        # @error ex
-        # @error valtype, payload["newval"]
+      catch _
       end
 
       value_changed = newval != (isa(val, Reactive) ? val[] : val)
@@ -163,14 +164,14 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
         end
       end
       "OK"
-    catch ex
-      # @error ex
+    catch _
     end
   end
 
   Genie.Router.route("/$endpoint") do
     Genie.WebChannels.unsubscribe_disconnected_clients()
-    Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, endpoint = endpoint, channel = channel) |> Genie.Renderer.Js.js
+    Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, endpoint = endpoint,
+                                    channel = channel, debounce = debounce) |> Genie.Renderer.Js.js
   end
 
   setup(model, channel)
