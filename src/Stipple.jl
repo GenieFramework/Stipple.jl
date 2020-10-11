@@ -2,8 +2,9 @@ module Stipple
 
 using Logging, Reexport
 
-using Genie
 @reexport using Observables
+@reexport using Genie
+@reexport using Genie.Renderer.Html
 
 const Reactive = Observables.Observable
 const R = Reactive
@@ -76,8 +77,6 @@ include("Generator.jl")
 @reexport using .Elements
 @reexport using .Layout
 using .Generator
-
-@reexport using Genie.Renderer.Html
 
 const newapp = Generator.newapp
 
