@@ -20,7 +20,13 @@ Stipple can be added from the GitHub repo, via `Pkg`:
 pkg> add Stipple
 ```
 
-## Example
+## Examples
+
+### Downloadable demos repo available at: https://github.com/GenieFramework/StippleDemos
+
+### Example 1
+
+---
 
 Add `Genie` and `Stipple` first:
 
@@ -83,7 +89,7 @@ You can see a quick video demo here:
 The Stipple presentation from JuliaCon 2020 is available here (8 minutes):
 <https://www.dropbox.com/s/6atyctgomsqwjki/stipple_exported.mp4?dl=0>
 
-## Example 2
+### Example 2
 
 This snippet illustrates how to build a UI where the button triggers a computation (function call) on the
 server side, using the input provided by the user, and outputting the result of the computation back to the user.
