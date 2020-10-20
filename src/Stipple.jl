@@ -103,8 +103,9 @@ end
 #===#
 
 function watch(vue_app_name::String, fieldtype::Any, fieldname::Symbol, channel::String, model::M)::String where {M<:ReactiveModel}
+  js_channel = channel == "" ? "window.Genie.Settings.webchannels_default_route" : "'$channel'"
   string(vue_app_name, raw".\$watch('", fieldname, "', _.debounce(function(newVal, oldVal){
-    Genie.WebChannels.sendMessageTo('$channel', 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});
+    Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});
   }, 300));\n\n")
 end
 
@@ -168,9 +169,10 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     end
   end
 
-  Genie.Router.route("/$endpoint") do
+  ep = channel == Genie.config.webchannels_default_route ? endpoint : "$channel/$endpoint"
+  Genie.Router.route("/$ep") do
     Genie.WebChannels.unsubscribe_disconnected_clients()
-    Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, endpoint = endpoint, channel = channel) |> Genie.Renderer.Js.js
+    Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, endpoint = ep, channel = "") |> Genie.Renderer.Js.js
   end
 
   setup(model, channel)
@@ -182,7 +184,7 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
     isa(getproperty(model, f), Reactive) || continue
 
     on(getproperty(model, f)) do v
-      push!(model, f => getfield(model, f), channel = channel)
+      push!(model, f => v, channel = channel)
     end
   end
 
@@ -279,6 +281,7 @@ function deps(channel::String = Genie.config.webchannels_default_route) :: Strin
       :javascript) |> Genie.Renderer.respond
   end
 
+  endpoint = channel == Genie.config.webchannels_default_route ? Stipple.JS_SCRIPT_NAME : "$(channel)/$(Stipple.JS_SCRIPT_NAME)"
   string(
     Genie.Assets.channels_support(channel),
     Genie.Renderer.Html.script(src="/js/stipple/underscore-min.js"),
@@ -288,10 +291,10 @@ function deps(channel::String = Genie.config.webchannels_default_route) :: Strin
     Genie.Renderer.Html.script(src="/js/stipple/vue_filters.js"),
 
     # if the model is not configured and we don't generate the stipple.js file, no point in requesting it
-    (in(Symbol("get_$(Stipple.JS_SCRIPT_NAME)"), Genie.Router.named_routes() |> keys |> collect) ?
+    (in(Symbol("get_$(replace(endpoint, "/" => "_"))"), Genie.Router.named_routes() |> keys |> collect) ?
       string(
         Genie.Renderer.Html.script("Stipple.init({theme: 'stipple-blue'});"),
-        Genie.Renderer.Html.script(src="/$(Stipple.JS_SCRIPT_NAME)?v=$(Genie.Configuration.isdev() ? rand() : 1)")
+        Genie.Renderer.Html.script(src="/$endpoint?v=$(Genie.Configuration.isdev() ? rand() : 1)")
       ) : ""
     )
   )
