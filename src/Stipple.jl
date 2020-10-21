@@ -131,18 +131,26 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
 
       newval = payload["newval"]
       try
-        newval = Base.parse(valtype, payload["newval"])
+        newval = convert(valtype, payload["newval"])
       catch ex
-        # @error ex
-        # @error valtype, payload["newval"]
+        try
+          newval = Base.parse(valtype, string(i))
+        catch ex2
+          # @error $ex2
+          # @error valtype, payload["newval"]
+        end
       end
 
       oldval = payload["oldval"]
       try
-        oldval = Base.parse(valtype, payload["oldval"])
+        oldval = convert(valtype, payload["oldval"])
       catch ex
-        # @error ex
-        # @error valtype, payload["newval"]
+        try
+          newval = Base.parse(valtype, string(i))
+        catch ex2
+          # @error $ex2
+          # @error valtype, payload["oldval"]
+        end
       end
 
       value_changed = newval != (isa(val, Reactive) ? val[] : val)
@@ -159,12 +167,16 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
           try
             Genie.WebChannels.message(client, msg)
           catch ex
-            @error "Error $ex in broadcasting to $client"
+            @info "before broadcast error"
+            Genie.WebChannels.pop_subscription(Genie.WebChannels.id(client), channel)
+            @info "before broadcast error, after `pop_subscription`"
+            @error "Error $ex in broadcasting to client (hash): $(hash(client))"
           end
         end
       end
       "OK"
     catch ex
+      @warn "catch"
       # @error ex
     end
   end
@@ -184,6 +196,7 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
     isa(getproperty(model, f), Reactive) || continue
 
     on(getproperty(model, f)) do v
+      @info "broadcast to $channel: $f => $v"
       push!(model, f => v, channel = channel)
     end
   end
