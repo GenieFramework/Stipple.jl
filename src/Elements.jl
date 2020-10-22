@@ -39,21 +39,27 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
   output *= """
 
     window.parse_payload = function(payload){
-        let ww = window.$(vue_app_name)._watchers
-        const watchers = ww.map((watcher) => ({ active: watcher.active, sync: watcher.sync }));
+      if (payload.key) {
+        let ww = [];
+        window.$(vue_app_name)._watchers.forEach( (w) => { if (w.expression == payload.key) { ww.push(w) } } );
+
+        const watchers = ww.map((watcher) => ({ cb: watcher.cb, sync: watcher.sync }));
 
         for (let index in ww) {
-          ww[index].active = false;
+          ww[index].cb = () => null;
           ww[index].sync = true
         }
 
         window.$(vue_app_name)[payload.key] = payload.value;
-        window.console.log("ws update: ", (payload instanceof Object) ? payload.key + ': ' + payload.value : "'" + payload + "'");
+        window.console.log("ws update: ", payload.key + ': ' + payload.value);
 
         for (let index in ww) {
-          ww[index].active = watchers[index].active;
+          ww[index].cb = watchers[index].cb;
           ww[index].sync = watchers[index].sync
         }
+      } else {
+        window.console.log("ws update: ", payload)
+      }
     }
     """
 end
