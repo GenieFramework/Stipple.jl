@@ -51,14 +51,14 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
         }
 
         window.$(vue_app_name)[payload.key] = payload.value;
-        window.console.log("ws update: ", payload.key + ': ' + payload.value);
+        window.console.log("server update: ", payload.key + ': ' + payload.value);
 
         for (let index in ww) {
           ww[index].cb = watchers[index].cb;
           ww[index].sync = watchers[index].sync
         }
       } else {
-        window.console.log("ws update: ", payload)
+        window.console.log("server says: ", payload)
       }
     }
     """
