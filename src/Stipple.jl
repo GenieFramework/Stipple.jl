@@ -2,8 +2,9 @@ module Stipple
 
 using Logging, Reexport
 
-using Genie
 @reexport using Observables
+@reexport using Genie
+@reexport using Genie.Renderer.Html
 
 const Reactive = Observables.Observable
 const R = Reactive
@@ -18,6 +19,7 @@ abstract type ReactiveModel end
 #===#
 
 const JS_SCRIPT_NAME = "stipple.js"
+const JS_DEBOUNCE_TIME = 300 #ms
 MULTI_USER_MODE = false
 
 #===#
@@ -102,12 +104,12 @@ end
 
 #===#
 
-function watch(vue_app_name::String, fieldtype::Any, fieldname::Symbol, channel::String, model::M)::String where {M<:ReactiveModel}
+function watch(vue_app_name::String, fieldtype::Any, fieldname::Symbol, channel::String, debounce::Int, model::M)::String where {M<:ReactiveModel}
   js_channel = channel == "" ? "window.Genie.Settings.webchannels_default_route" : "'$channel'"
   string(vue_app_name, raw".\$watch('", fieldname, "', _.debounce(function(newVal, oldVal){
     window.console.log('ws to server: $fieldname: ' + newval);
     Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});
-  }, 300));\n\n")
+  }, $debounce));\n\n")
 end
 
 #===#
@@ -116,7 +118,9 @@ function Base.parse(::Type{T}, v::T) where {T}
   v::T
 end
 
-function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model), endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
+function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model),
+              endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route,
+              debounce::Int = JS_DEBOUNCE_TIME)::M where {M<:ReactiveModel}
   Genie.config.websockets_server = true
 
   Genie.Router.channel("/$channel/watchers") do
@@ -180,15 +184,14 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
 
       @async update!(model, field, newval, oldval)
       "OK"
-    catch ex
-      # @error ex
+    catch _
     end
   end
 
   ep = channel == Genie.config.webchannels_default_route ? endpoint : "$channel/$endpoint"
   Genie.Router.route("/$ep") do
     Genie.WebChannels.unsubscribe_disconnected_clients()
-    Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, endpoint = ep, channel = "") |> Genie.Renderer.Js.js
+    Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, endpoint = ep, channel = "", debounce = debounce) |> Genie.Renderer.Js.js
   end
 
   setup(model, channel)
