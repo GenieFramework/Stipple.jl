@@ -163,7 +163,6 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
 
       # if update was necessary, broadcast to other clients
       if value_changed && MULTI_USER_MODE
-        @info "multi-user-mode!"
         ws_client = Genie.Router.@params(:WS_CLIENT)
         c_clients = getfield.(Genie.WebChannels.connected_clients(channel), :client)
         other_clients = setdiff(c_clients, [ws_client])
