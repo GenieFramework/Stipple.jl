@@ -105,6 +105,7 @@ end
 function watch(vue_app_name::String, fieldtype::Any, fieldname::Symbol, channel::String, model::M)::String where {M<:ReactiveModel}
   js_channel = channel == "" ? "window.Genie.Settings.webchannels_default_route" : "'$channel'"
   string(vue_app_name, raw".\$watch('", fieldname, "', _.debounce(function(newVal, oldVal){
+    window.console.log('ws to server: $fieldname: ' + newval);
     Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});
   }, 300));\n\n")
 end
@@ -125,9 +126,10 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
       payload["newval"] == payload["oldval"] && return nothing
 
       field = Symbol(payload["field"])
-      val = getfield(model, field)
+      rawval = getfield(model, field)
 
-      valtype = isa(val, Reactive) ? typeof(val[]) : typeof(val)
+      val = isa(rawval, Reactive) ? rawval[] : rawval
+      valtype = typeof(val)
 
       newval = payload["newval"]
       try
@@ -153,11 +155,11 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
         end
       end
 
-      value_changed = newval != (isa(val, Reactive) ? val[] : val)
-      update!(model, field, newval, oldval)
+      value_changed = newval != val
 
       # if update was necessary, broadcast to other clients
       if value_changed && MULTI_USER_MODE
+        @info "multi-user-mode!"
         ws_client = Genie.Router.@params(:WS_CLIENT)
         c_clients = getfield.(Genie.WebChannels.connected_clients(channel), :client)
         other_clients = setdiff(c_clients, [ws_client])
@@ -167,16 +169,18 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
           try
             Genie.WebChannels.message(client, msg)
           catch ex
-            @info "before broadcast error"
+            @info "Error $ex in broadcasting to client id $(repr(Genie.WebChannels.id(client)))."
+            @info "Removing client $(repr(Genie.WebChannels.id(client))) from subscriptions ..."
+            @info "Debug info: subscriptions before `pop_subscription`: $(Genie.WebChannels.SUBSCRIPTIONS)"
             Genie.WebChannels.pop_subscription(Genie.WebChannels.id(client), channel)
-            @info "before broadcast error, after `pop_subscription`"
-            @error "Error $ex in broadcasting to client (hash): $(hash(client))"
+            @info "Debug info: subscriptions after `pop_subscription`: $(Genie.WebChannels.SUBSCRIPTIONS)"
           end
         end
       end
+
+      @async update!(model, field, newval, oldval)
       "OK"
     catch ex
-      @warn "catch"
       # @error ex
     end
   end

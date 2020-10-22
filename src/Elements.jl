@@ -34,7 +34,26 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
     output *= Stipple.watch(vue_app_name, getfield(model, field), field, channel, model)
   end
 
-  output *= "\n\nwindow.parse_payload = function(payload){ window.$(vue_app_name)[payload.key] = payload.value; };"
+  output *= """
+
+    window.parse_payload = function(payload){
+        let ww = window.$(vue_app_name)._watchers
+        const watchers = ww.map((watcher) => ({ active: watcher.active, sync: watcher.sync }));
+
+        for (let index in ww) {
+          ww[index].active = false;
+          ww[index].sync = true
+        }
+
+        window.$(vue_app_name)[payload.key] = payload.value;
+        window.console.log("ws update: ", (payload instanceof Object) ? payload.key + ': ' + payload.value : "'" + payload + "'");
+
+        for (let index in ww) {
+          ww[index].active = watchers[index].active;
+          ww[index].sync = watchers[index].sync
+        }
+    }
+    """
 end
 
 #===#
