@@ -106,10 +106,18 @@ end
 
 function watch(vue_app_name::String, fieldtype::Any, fieldname::Symbol, channel::String, debounce::Int, model::M)::String where {M<:ReactiveModel}
   js_channel = channel == "" ? "window.Genie.Settings.webchannels_default_route" : "'$channel'"
-  string(vue_app_name, raw".\$watch(", "function () {return this.$fieldname}, _.debounce(function(newVal, oldVal){
+  output = """
+  $vue_app_name.\\\$watch(function () {return this.$fieldname}, _.debounce(function(newVal, oldVal){
     window.console.log('ws to server: $fieldname: ' + newVal);
     Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});
-  }, $debounce));\n\n")
+  }, $debounce));
+  """
+  # in production mode vue does not fill `this.expression` in the watcher, so we do it manually
+  if Genie.Configuration.isprod()
+    output *= "$vue_app_name._watchers[$vue_app_name._watchers.length - 1].expression = 'function () {return this.$fieldname}'"
+  end
+  output *= "\n\n"
+  return output
 end
 
 #===#

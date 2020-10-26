@@ -34,7 +34,7 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
     const watcherMixin = {
       methods: {
         \$withoutWatchers: function (cb, filter) {
-          var ww = (filter == null) ? this._watchers : []
+          let ww = (filter == null) ? this._watchers : []
           if (typeof(filter) == "string") {
             this._watchers.forEach((w) => { if (w.expression == filter) {ww.push(w)} } )
           } else { // if it is a true regex
