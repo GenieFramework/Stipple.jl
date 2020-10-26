@@ -202,7 +202,9 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
     isa(getproperty(model, f), Reactive) || continue
 
     on(getproperty(model, f)) do v
-      @info "broadcast to $channel: $f => $(repr(hh, context = :limit => true))"
+      vstr = repr(v, context = :limit => true)
+      vstr = length(vstr) <= 60 ? vstr : vstr[1:56] * " ..."
+      @info "broadcast to $channel: $f => $vstr"
       push!(model, f => v, channel = channel)
     end
   end
