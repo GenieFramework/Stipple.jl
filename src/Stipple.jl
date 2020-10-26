@@ -106,7 +106,7 @@ end
 
 function watch(vue_app_name::String, fieldtype::Any, fieldname::Symbol, channel::String, debounce::Int, model::M)::String where {M<:ReactiveModel}
   js_channel = channel == "" ? "window.Genie.Settings.webchannels_default_route" : "'$channel'"
-  string(vue_app_name, raw".\$watch('", fieldname, "', _.debounce(function(newVal, oldVal){
+  string(vue_app_name, raw".\$watch(", "function () {return this.$fieldname}, _.debounce(function(newVal, oldVal){
     window.console.log('ws to server: $fieldname: ' + newVal);
     Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});
   }, $debounce));\n\n")
@@ -202,7 +202,7 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
     isa(getproperty(model, f), Reactive) || continue
 
     on(getproperty(model, f)) do v
-      @info "broadcast to $channel: $f => $v"
+      @info "broadcast to $channel: $f => $(repr(hh, context = :limit => true))"
       push!(model, f => v, channel = channel)
     end
   end
@@ -260,7 +260,8 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
     result[julia_to_vue(field)] = Stipple.render(getfield(app, field), field)
   end
 
-  Dict(:el => Elements.elem(app), :data => result, :components => components(typeof(app)), :methods => "{ $(js_methods(app)) }")
+  Dict(:el => Elements.elem(app), :data => result, :components => components(typeof(app)),
+   :methods => "{ $(js_methods(app)) }", :mixins => Genie.Renderer.Json.JSONParser.JSONText("[watcherMixin]"))
 end
 
 function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) where {T}
