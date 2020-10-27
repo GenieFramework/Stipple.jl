@@ -1,3 +1,11 @@
+"""
+# Stipple
+Stipple is a reactive UI library for Julia. It provides a rich API for building rich web UIs with 2-way bindings between HTML UI elements and Julia.
+It requires minimum configuration, automatically setting up the WebSockets communication channels and automatically keeping the data in sync.
+
+Stipple allows creating powerful reactive web data dashboards using only Julia coding. It employs a declarative programming model, the framework
+taking care of the full data sync workflow.
+"""
 module Stipple
 
 using Logging, Reexport
@@ -39,6 +47,13 @@ const COMPONENTS = Dict()
 function register_components(model::Type{M}, keysvals::Vector{Pair{K,V}}) where {M<:ReactiveModel, K, V}
   haskey(COMPONENTS, model) || (COMPONENTS[model] = Pair{K,V}[])
   push!(COMPONENTS[model], keysvals...)
+end
+
+function components(m::Type{M}) where {M<:ReactiveModel}
+  haskey(COMPONENTS, m) || return ""
+
+  response = Dict(COMPONENTS[m]...) |> Genie.Renderer.Json.JSONParser.json
+  replace(response, "\""=>"")
 end
 
 #===#
@@ -182,7 +197,10 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
     isa(getproperty(model, f), Reactive) || continue
 
     on(getproperty(model, f)) do v
-      push!(model, f => getfield(model, f), channel = channel)
+      try
+        push!(model, f => getfield(model, f), channel = channel)
+      catch ex
+      end
     end
   end
 
@@ -197,15 +215,6 @@ end
 
 function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}}) where {T,M<:ReactiveModel}
   push!(app, Symbol(julia_to_vue(vals[1])) => vals[2][])
-end
-
-#===#
-
-function components(m::Type{M}) where {M<:ReactiveModel}
-  haskey(COMPONENTS, m) || return ""
-
-  response = Dict(COMPONENTS[m]...) |> Genie.Renderer.Json.JSONParser.json
-  replace(response, "\""=>"")
 end
 
 #===#
@@ -288,11 +297,14 @@ function deps(channel::String = Genie.config.webchannels_default_route) :: Strin
     Genie.Renderer.Html.script(src="/js/stipple/vue_filters.js"),
 
     # if the model is not configured and we don't generate the stipple.js file, no point in requesting it
-    (in(Symbol("get_$(Stipple.JS_SCRIPT_NAME)"), Genie.Router.named_routes() |> keys |> collect) ?
+    if in(Symbol("get_$(Stipple.JS_SCRIPT_NAME)"), Genie.Router.named_routes() |> keys |> collect)
       string(
         Genie.Renderer.Html.script("Stipple.init({theme: 'stipple-blue'});"),
         Genie.Renderer.Html.script(src="/$(Stipple.JS_SCRIPT_NAME)?v=$(Genie.Configuration.isdev() ? rand() : 1)")
-      ) : ""
+      )
+    else
+      @warn "The Reactive Model is not initialized - make sure you call Stipple.init(YourModel()) to initialize it".
+    end
     )
   )
 end
