@@ -111,7 +111,6 @@ function update!(model::M, field::Any, newval::T, oldval::T)::M where {T,M<:Reac
   try
     setfield!(model, field, newval)
   catch ex
-    # @error ex
   end
 
   model
