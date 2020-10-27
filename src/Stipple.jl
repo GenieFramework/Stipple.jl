@@ -297,15 +297,12 @@ function deps(channel::String = Genie.config.webchannels_default_route) :: Strin
     Genie.Renderer.Html.script(src="/js/stipple/vue_filters.js"),
 
     # if the model is not configured and we don't generate the stipple.js file, no point in requesting it
-    if in(Symbol("get_$(Stipple.JS_SCRIPT_NAME)"), Genie.Router.named_routes() |> keys |> collect)
+    in(Symbol("get_$(Stipple.JS_SCRIPT_NAME)"), Genie.Router.named_routes() |> keys |> collect) ?
       string(
         Genie.Renderer.Html.script("Stipple.init({theme: 'stipple-blue'});"),
         Genie.Renderer.Html.script(src="/$(Stipple.JS_SCRIPT_NAME)?v=$(Genie.Configuration.isdev() ? rand() : 1)")
-      )
-    else
-      @warn "The Reactive Model is not initialized - make sure you call Stipple.init(YourModel()) to initialize it".
-    end
-    )
+      ) :
+      @warn "The Reactive Model is not initialized - make sure you call Stipple.init(YourModel()) to initialize it"
   )
 end
 
