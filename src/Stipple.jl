@@ -105,9 +105,19 @@ end
 #===#
 
 function watch(vue_app_name::String, fieldtype::Any, fieldname::Symbol, channel::String, debounce::Int, model::M)::String where {M<:ReactiveModel}
-  string(vue_app_name, raw".\$watch('", fieldname, "', _.debounce(function(newVal, oldVal){
-    Genie.WebChannels.sendMessageTo('$channel', 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});
-  }, $debounce));\n\n")
+  js_channel = channel == "" ? "window.Genie.Settings.webchannels_default_route" : "'$channel'"
+  output = """
+  $vue_app_name.\\\$watch(function () {return this.$fieldname}, _.debounce(function(newVal, oldVal){
+    window.console.log('ws to server: $fieldname: ' + newVal);
+    Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});
+  }, $debounce));
+  """
+  # in production mode vue does not fill `this.expression` in the watcher, so we do it manually
+  if Genie.Configuration.isprod()
+    output *= "$vue_app_name._watchers[$vue_app_name._watchers.length - 1].expression = 'function () {return this.$fieldname}'"
+  end
+  output *= "\n\n"
+  return output
 end
 
 #===#
@@ -128,24 +138,36 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
       payload["newval"] == payload["oldval"] && return nothing
 
       field = Symbol(payload["field"])
-      val = getfield(model, field)
+      rawval = getfield(model, field)
 
-      valtype = isa(val, Reactive) ? typeof(val[]) : typeof(val)
+      val = isa(rawval, Reactive) ? rawval[] : rawval
+      valtype = typeof(val)
 
       newval = payload["newval"]
       try
-        newval = Base.parse(valtype, payload["newval"])
-      catch _
+        newval = convert(valtype, payload["newval"])
+      catch ex
+        try
+          newval = Base.parse(valtype, string(i))
+        catch ex2
+          # @error $ex2
+          # @error valtype, payload["newval"]
+        end
       end
 
       oldval = payload["oldval"]
       try
-        oldval = Base.parse(valtype, payload["oldval"])
-      catch _
+        oldval = convert(valtype, payload["oldval"])
+      catch ex
+        try
+          newval = Base.parse(valtype, string(i))
+        catch ex2
+          # @error $ex2
+          # @error valtype, payload["oldval"]
+        end
       end
 
-      value_changed = newval != (isa(val, Reactive) ? val[] : val)
-      update!(model, field, newval, oldval)
+      value_changed = newval != val
 
       # if update was necessary, broadcast to other clients
       if value_changed && MULTI_USER_MODE
@@ -158,19 +180,25 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
           try
             Genie.WebChannels.message(client, msg)
           catch ex
-            @error "Error $ex in broadcasting to $client"
+            @info "Error $ex in broadcasting to client id $(repr(Genie.WebChannels.id(client)))."
+            @info "Removing client $(repr(Genie.WebChannels.id(client))) from subscriptions ..."
+            @info "Debug info: subscriptions before `pop_subscription`: $(Genie.WebChannels.SUBSCRIPTIONS)"
+            Genie.WebChannels.pop_subscription(Genie.WebChannels.id(client), channel)
+            @info "Debug info: subscriptions after `pop_subscription`: $(Genie.WebChannels.SUBSCRIPTIONS)"
           end
         end
       end
+
+      @async update!(model, field, newval, oldval)
       "OK"
     catch _
     end
   end
 
-  Genie.Router.route("/$endpoint") do
+  ep = channel == Genie.config.webchannels_default_route ? endpoint : "$channel/$endpoint"
+  Genie.Router.route("/$ep") do
     Genie.WebChannels.unsubscribe_disconnected_clients()
-    Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, endpoint = endpoint,
-                                    channel = channel, debounce = debounce) |> Genie.Renderer.Js.js
+    Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, endpoint = ep, channel = "", debounce = debounce) |> Genie.Renderer.Js.js
   end
 
   setup(model, channel)
@@ -182,7 +210,10 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
     isa(getproperty(model, f), Reactive) || continue
 
     on(getproperty(model, f)) do v
-      push!(model, f => getfield(model, f), channel = channel)
+      vstr = repr(v, context = :limit => true)
+      vstr = length(vstr) <= 60 ? vstr : vstr[1:56] * " ..."
+      @info "broadcast to $channel: $f => $vstr"
+      push!(model, f => v, channel = channel)
     end
   end
 
@@ -239,7 +270,8 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
     result[julia_to_vue(field)] = Stipple.render(getfield(app, field), field)
   end
 
-  Dict(:el => Elements.elem(app), :data => result, :components => components(typeof(app)), :methods => "{ $(js_methods(app)) }")
+  Dict(:el => Elements.elem(app), :data => result, :components => components(typeof(app)),
+   :methods => "{ $(js_methods(app)) }", :mixins => Genie.Renderer.Json.JSONParser.JSONText("[watcherMixin]"))
 end
 
 function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) where {T}
@@ -255,9 +287,10 @@ end
 const DEPS = Function[]
 
 function deps(channel::String = Genie.config.webchannels_default_route) :: String
-  Genie.Router.route("/js/stipple/vue.js") do
+  vuejs = Genie.Configuration.isprod() ? "vue.min.js" : "vue.js"
+  Genie.Router.route("/js/stipple/$vuejs") do
     Genie.Renderer.WebRenderable(
-      read(joinpath(@__DIR__, "..", "files", "js", "vue.js"), String),
+      read(joinpath(@__DIR__, "..", "files", "js", vuejs), String),
       :javascript) |> Genie.Renderer.respond
   end
 
@@ -279,19 +312,20 @@ function deps(channel::String = Genie.config.webchannels_default_route) :: Strin
       :javascript) |> Genie.Renderer.respond
   end
 
+  endpoint = channel == Genie.config.webchannels_default_route ? Stipple.JS_SCRIPT_NAME : "$(channel)/$(Stipple.JS_SCRIPT_NAME)"
   string(
     Genie.Assets.channels_support(channel),
     Genie.Renderer.Html.script(src="/js/stipple/underscore-min.js"),
-    Genie.Renderer.Html.script(src="/js/stipple/vue.js"),
+    Genie.Renderer.Html.script(src="/js/stipple/$vuejs"),
     join([f() for f in DEPS], "\n"),
     Genie.Renderer.Html.script(src="/js/stipple/stipplecore.js"),
     Genie.Renderer.Html.script(src="/js/stipple/vue_filters.js"),
 
     # if the model is not configured and we don't generate the stipple.js file, no point in requesting it
-    (in(Symbol("get_$(Stipple.JS_SCRIPT_NAME)"), Genie.Router.named_routes() |> keys |> collect) ?
+    (in(Symbol("get_$(replace(endpoint, "/" => "_"))"), Genie.Router.named_routes() |> keys |> collect) ?
       string(
         Genie.Renderer.Html.script("Stipple.init({theme: 'stipple-blue'});"),
-        Genie.Renderer.Html.script(src="/$(Stipple.JS_SCRIPT_NAME)?v=$(Genie.Configuration.isdev() ? rand() : 1)")
+        Genie.Renderer.Html.script(src="/$endpoint?v=$(Genie.Configuration.isdev() ? rand() : 1)")
       ) : ""
     )
   )
