@@ -3,7 +3,7 @@ export page, row, cell
 function page(elemid, args...; partial::Bool = false, title::String = "", class::String = "", style::String = "",
                                 channel::String = Genie.config.webchannels_default_route , head_content::String = "", kwargs...)
   Stipple.Layout.layout(Genie.Renderer.Html.div(id=elemid, args...; kwargs...), partial=partial, title=title, class=class,
-                        style=style, head_content=head_content)
+                        style=style, head_content=head_content, channel=channel)
 end
 
 function row(args...; kwargs...)

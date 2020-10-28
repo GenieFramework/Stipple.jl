@@ -22,13 +22,19 @@ export newapp
 
 #===#
 
+function __init__()
+  Genie.config.websockets_server = true
+end
+
+#===#
+
 abstract type ReactiveModel end
 
 #===#
 
 const JS_SCRIPT_NAME = "stipple.js"
 const JS_DEBOUNCE_TIME = 300 #ms
-MULTI_USER_MODE = false
+# MULTI_USER_MODE = true
 
 #===#
 
@@ -108,10 +114,7 @@ function update!(model::M, field::Reactive, newval::T, oldval::T)::M where {T,M<
 end
 
 function update!(model::M, field::Any, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-  try
-    setfield!(model, field, newval)
-  catch ex
-  end
+  setfield!(model, field, newval)
 
   model
 end
@@ -133,56 +136,41 @@ end
 function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model),
               endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route,
               debounce::Int = JS_DEBOUNCE_TIME)::M where {M<:ReactiveModel}
-  Genie.config.websockets_server = true
+
+  Genie.Assets.channels_subscribe(channel)
 
   Genie.Router.channel("/$channel/watchers") do
-    try
-      payload = Genie.Router.@params(:payload)["payload"]
+    payload = Genie.Router.@params(:payload)["payload"]
+    client = Genie.Router.@params(:WS_CLIENT)
 
-      payload["newval"] == payload["oldval"] && return nothing
+    payload["newval"] == payload["oldval"] && return "OK"
 
-      field = Symbol(payload["field"])
-      val = getfield(model, field)
+    field = Symbol(payload["field"])
+    val = getfield(model, field)
 
-      valtype = isa(val, Reactive) ? typeof(val[]) : typeof(val)
+    valtype = isa(val, Reactive) ? typeof(val[]) : typeof(val)
 
-      newval = payload["newval"]
-      try
-        newval = Base.parse(valtype, payload["newval"])
-      catch _
-      end
-
-      oldval = payload["oldval"]
-      try
-        oldval = Base.parse(valtype, payload["oldval"])
-      catch _
-      end
-
-      value_changed = newval != (isa(val, Reactive) ? val[] : val)
-      update!(model, field, newval, oldval)
-
-      # if update was necessary, broadcast to other clients
-      if value_changed && MULTI_USER_MODE
-        ws_client = Genie.Router.@params(:WS_CLIENT)
-        c_clients = getfield.(Genie.WebChannels.connected_clients(channel), :client)
-        other_clients = setdiff(c_clients, [ws_client])
-
-        msg = Genie.Renderer.Json.JSONParser.json(Dict("key" => field, "value" => Stipple.render(newval, field)))
-        for client in other_clients
-          try
-            Genie.WebChannels.message(client, msg)
-          catch ex
-            @error "Error $ex in broadcasting to $client"
-          end
-        end
-      end
-      "OK"
-    catch _
+    newval = try
+      Base.parse(valtype, payload["newval"])
+    catch ex
+      @error ex
+      payload["newval"]
     end
+
+    oldval = try
+      Base.parse(valtype, payload["oldval"])
+    catch ex
+      @error ex
+      payload["oldval"]
+    end
+
+    update!(model, field, newval, oldval)
+    push!(model, field => newval, channel = channel, except = client)
+
+    "OK"
   end
 
   Genie.Router.route("/$endpoint") do
-    Genie.WebChannels.unsubscribe_disconnected_clients()
     Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, endpoint = endpoint,
                                     channel = channel, debounce = debounce) |> Genie.Renderer.Js.js
   end
@@ -196,10 +184,7 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
     isa(getproperty(model, f), Reactive) || continue
 
     on(getproperty(model, f)) do v
-      try
-        push!(model, f => getfield(model, f), channel = channel)
-      catch ex
-      end
+      push!(model, f => getfield(model, f), channel = channel)
     end
   end
 
@@ -208,12 +193,19 @@ end
 
 #===#
 
-function Base.push!(app::M, vals::Pair{Symbol,T}; channel::String = Genie.config.webchannels_default_route) where {T,M<:ReactiveModel}
-  Genie.WebChannels.broadcast(channel, Genie.Renderer.Json.JSONParser.json(Dict("key" => julia_to_vue(vals[1]), "value" => Stipple.render(vals[2], vals[1]))))
+function Base.push!(app::M, vals::Pair{Symbol,T};
+                    channel::String = Genie.config.webchannels_default_route,
+                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing} = nothing) where {T,M<:ReactiveModel}
+  Genie.WebChannels.broadcast(channel,
+                              Genie.Renderer.Json.JSONParser.json(Dict( "key" => julia_to_vue(vals[1]),
+                                                                        "value" => Stipple.render(vals[2], vals[1]))),
+                              except = except)
 end
 
-function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}}) where {T,M<:ReactiveModel}
-  push!(app, Symbol(julia_to_vue(vals[1])) => vals[2][])
+function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
+                    channel::String = Genie.config.webchannels_default_route,
+                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing} = nothing) where {T,M<:ReactiveModel}
+  push!(app, Symbol(julia_to_vue(vals[1])) => vals[2][], channel = channel, except = except)
 end
 
 #===#
