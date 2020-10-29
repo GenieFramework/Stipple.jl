@@ -151,17 +151,25 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     valtype = isa(val, Reactive) ? typeof(val[]) : typeof(val)
 
     newval = try
-      Base.parse(valtype, payload["newval"])
-    catch ex
-      @error ex
-      payload["newval"]
+      convert(valtype, payload["newval"])
+    catch _
+      try
+        Base.parse(valtype, string(payload["newval"]))
+      catch ex
+        # @error ex
+        payload["newval"]
+      end
     end
 
     oldval = try
-      Base.parse(valtype, payload["oldval"])
-    catch ex
-      @error ex
-      payload["oldval"]
+      convert(valtype, payload["oldval"])
+    catch _
+      try
+        Base.parse(valtype, string(payload["oldval"]))
+      catch ex
+        # @error ex
+        payload["oldval"]
+      end
     end
 
     update!(model, field, newval, oldval)
