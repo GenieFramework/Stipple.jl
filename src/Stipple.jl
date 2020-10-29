@@ -277,9 +277,10 @@ end
 const DEPS = Function[]
 
 function deps(channel::String = Genie.config.webchannels_default_route) :: String
-  Genie.Router.route("/js/stipple/vue.js") do
+  vuejs = Genie.Configuration.isprod() ? "vue.min.js" : "vue.js"
+  Genie.Router.route("/js/stipple/$vuejs") do
     Genie.Renderer.WebRenderable(
-      read(joinpath(@__DIR__, "..", "files", "js", "vue.js"), String),
+      read(joinpath(@__DIR__, "..", "files", "js", vuejs), String),
       :javascript) |> Genie.Renderer.respond
   end
 
@@ -305,7 +306,7 @@ function deps(channel::String = Genie.config.webchannels_default_route) :: Strin
   string(
     Genie.Assets.channels_support(channel),
     Genie.Renderer.Html.script(src="/js/stipple/underscore-min.js"),
-    Genie.Renderer.Html.script(src="/js/stipple/vue.js"),
+    Genie.Renderer.Html.script(src="/js/stipple/$vuejs"),
     join([f() for f in DEPS], "\n"),
     Genie.Renderer.Html.script(src="/js/stipple/stipplecore.js"),
     Genie.Renderer.Html.script(src="/js/stipple/vue_filters.js"),
