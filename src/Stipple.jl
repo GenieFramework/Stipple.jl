@@ -189,7 +189,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     "OK"
   end
 
-  ep = channel == Genie.config.webchannels_default_route ? endpoint : "$channel/$endpoint"
+  ep = channel == Genie.config.webchannels_default_route ? endpoint : "js/$channel/$endpoint"
   Genie.Router.route("/$ep") do
     Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, endpoint = ep, channel = "", debounce = debounce) |> Genie.Renderer.Js.js
   end
@@ -302,7 +302,7 @@ function deps(channel::String = Genie.config.webchannels_default_route) :: Strin
       :javascript) |> Genie.Renderer.respond
   end
 
-  endpoint = channel == Genie.config.webchannels_default_route ? Stipple.JS_SCRIPT_NAME : "$(channel)/$(Stipple.JS_SCRIPT_NAME)"
+  endpoint = channel == Genie.config.webchannels_default_route ? Stipple.JS_SCRIPT_NAME : "js/$(channel)/$(Stipple.JS_SCRIPT_NAME)"
   string(
     Genie.Assets.channels_support(channel),
     Genie.Renderer.Html.script(src="/js/stipple/underscore-min.js"),
