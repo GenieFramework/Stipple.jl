@@ -183,8 +183,8 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
       end
     end
 
-    update!(model, field, newval, oldval)
     push!(model, field => newval, channel = channel, except = client)
+    update!(model, field, newval, oldval)
 
     "OK"
   end
