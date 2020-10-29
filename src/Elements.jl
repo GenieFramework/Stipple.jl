@@ -30,13 +30,53 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
   vue_app = replace(vue_app, "}\"" => "} ")
   vue_app = replace(vue_app, "\\\\" => "\\")
 
-  output = "var $vue_app_name = new Vue($vue_app);\n\n"
+  output = raw"""
+    const watcherMixin = {
+      methods: {
+        \$withoutWatchers: function (cb, filter) {
+          let ww = (filter == null) ? this._watchers : []
+          if (typeof(filter) == "string") {
+            this._watchers.forEach((w) => { if (w.expression == filter) {ww.push(w)} } )
+          } else { // if it is a true regex
+            this._watchers.forEach((w) => { if (w.expression.match(filter)) {ww.push(w)} } )
+          }
+          const watchers = ww.map((watcher) => ({ cb: watcher.cb, sync: watcher.sync }))
+          for (let index in ww) {
+            ww[index].cb = () => null
+            ww[index].sync = true
+          }
+          cb()
+          for (let index in ww) {
+            ww[index].cb = watchers[index].cb
+            ww[index].sync = watchers[index].sync
+          }
+        },
+        updateField: function (field, newVal) {
+          this.\$withoutWatchers( () => {this[field] = newVal }, "function () {return this." + field + "}")
+        }
+      }
+    }
+    """
+
+  output *= "\nvar $vue_app_name = new Vue($vue_app);\n\n"
 
   for field in fieldnames(typeof(model))
     output *= Stipple.watch(vue_app_name, getfield(model, field), field, channel, debounce, model)
   end
 
-  output *= "\n\nwindow.parse_payload = function(payload){ window.$(vue_app_name)[payload.key] = payload.value; };"
+  output *= """
+  
+  window.parse_payload = function(payload){
+    if (payload.key) {
+      window.$(vue_app_name).updateField(payload.key, payload.value)
+      let vStr = payload.value.toString()
+      vStr = vStr.length < 60 ? vStr : vStr.substring(0, 55) + ' ...'
+      window.console.log("server update: ", payload.key + ': ' + vStr)
+    } else {
+      window.console.log("server says: ", payload)
+    }
+  }
+  """
 end
 
 #===#
