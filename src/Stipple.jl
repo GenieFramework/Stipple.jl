@@ -162,25 +162,17 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     valtype = isa(val, Reactive) ? typeof(val[]) : typeof(val)
 
     newval = try
-      convert(valtype, payload["newval"])
-    catch _
-      try
-        Base.parse(valtype, string(payload["newval"]))
-      catch ex
-        # @error ex
-        payload["newval"]
-      end
+      Base.parse(valtype, payload["newval"])
+    catch ex
+      @error ex
+      payload["newval"]
     end
 
     oldval = try
-      convert(valtype, payload["oldval"])
-    catch _
-      try
-        Base.parse(valtype, string(payload["oldval"]))
-      catch ex
-        # @error ex
-        payload["oldval"]
-      end
+      Base.parse(valtype, payload["oldval"])
+    catch ex
+      @error ex
+      payload["oldval"]
     end
 
     push!(model, field => newval, channel = channel, except = client)
@@ -203,9 +195,10 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
     isa(getproperty(model, f), Reactive) || continue
 
     on(getproperty(model, f)) do v
-      vstr = repr(v, context = :limit => true)
-      vstr = length(vstr) <= 60 ? vstr : vstr[1:56] * " ..."
-      @info "broadcast to $channel: $f => $vstr"
+      # vstr = repr(v, context = :limit => true)
+      # vstr = length(vstr) <= 60 ? vstr : vstr[1:56] * " ..."
+      # @info "broadcast to $channel: $f => $vstr"
+
       push!(model, f => v, channel = channel)
     end
   end
