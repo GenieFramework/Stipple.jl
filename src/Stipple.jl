@@ -162,14 +162,22 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     valtype = isa(val, Reactive) ? typeof(val[]) : typeof(val)
 
     newval = try
-      Base.parse(valtype, payload["newval"])
+      if AbstractFloat >: valtype && Integer >: typeof(payload["newval"])
+        convert(valtype, payload["newval"])
+      else
+        Base.parse(valtype, payload["newval"])
+      end
     catch ex
       @error ex
       payload["newval"]
     end
 
     oldval = try
-      Base.parse(valtype, payload["oldval"])
+      if AbstractFloat >: valtype && Integer >: typeof(payload["oldval"])
+        convert(valtype, payload["oldval"])
+      else
+        Base.parse(valtype, payload["oldval"])
+      end
     catch ex
       @error ex
       payload["oldval"]
