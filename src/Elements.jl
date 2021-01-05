@@ -82,36 +82,38 @@ end
 #===#
 
 macro iif(expr)
-  "v-if='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+  :( :( "v-if='$($(esc(expr)))'" ) )
 end
 
 macro elsiif(expr)
-  "v-else-if='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+  :( "v-else-if='$($(esc(expr)))'" )
 end
 
 macro els(expr)
-  "v-else='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+  :( "v-else='$($(esc(expr)))'" )
 end
 
 macro text(expr)
-  directive = occursin(" | ", string(expr)) ? ":text-content.prop" : "v-text"
-  "$(directive)='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+  quote
+    directive = occursin(" | ", string($(esc(expr)))) ? ":text-content.prop" : "v-text"
+    "$(directive)='$($(esc(expr)))'"
+  end
 end
 
 macro bind(expr)
-  "v-model='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+  :( "v-model='$($(esc(expr)))'" )
 end
 
 macro data(expr)
-  :(Symbol($expr))
+  :( Symbol($(esc(expr))) )
 end
 
 macro click(expr)
-  "@click='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+  :( "@click='$(replace($(esc(expr)),"'" => raw"\'"))'" )
 end
 
 macro on(args, expr)
-  "v-on:$(string(args))='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+  :( "v-on:$(string($(esc(args))))='$(replace($(esc(expr)),"'" => raw"\'"))'" )
 end
 
 #===#
