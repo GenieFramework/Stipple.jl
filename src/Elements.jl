@@ -29,6 +29,7 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
   vue_app = replace(Genie.Renderer.Json.JSONParser.json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
   vue_app = replace(vue_app, "\\\\" => "\\")
+  vue_app = replace(vue_app, "\\\"" => "\\\\\\\"")
 
   output = raw"""
     const watcherMixin = {
@@ -65,7 +66,7 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
   end
 
   output *= """
-  
+
   window.parse_payload = function(payload){
     if (payload.key) {
       window.$(vue_app_name).updateField(payload.key, payload.value)
