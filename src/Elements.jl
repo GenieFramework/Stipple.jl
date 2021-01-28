@@ -112,7 +112,7 @@ macro data(expr)
     if typeof(x) <: Union{AbstractString, Symbol}
       Symbol(x)
     else
-      startswith("Any[", "$x") ? JSONText(":" * "$x"[4:end]) : JSONText(":$x")
+      startswith("$x", "Any[") ? JSONText(":" * "$x"[4:end]) : JSONText(":$x")
     end
   end
 end
