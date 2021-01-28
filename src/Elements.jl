@@ -109,7 +109,11 @@ end
 macro data(expr)
   quote
     x = $(esc(expr))
-    typeof(x) <: Union{AbstractString, Symbol} ? Symbol(x) : JSONText(":$x")
+    if typeof(x) <: Union{AbstractString, Symbol}
+      Symbol(x)
+    else
+      startswith("Any[", "$x") ? JSONText(":" * "$x"[4:end]) : JSONText(":$x")
+    end
   end
 end
 
