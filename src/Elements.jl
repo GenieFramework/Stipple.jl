@@ -4,6 +4,7 @@ import Genie
 using Stipple
 
 import Genie.Renderer.Html: HTMLString, normal_element
+import Genie.Renderer.Json.JSONParser.JSONText
 
 export root, elem, vm, @iif, @elsiif, @els, @text, @bind, @data, @click, @on
 
@@ -106,7 +107,10 @@ macro bind(expr)
 end
 
 macro data(expr)
-  :( Symbol($(esc(expr))) )
+  quote
+    x = $(esc(expr))
+    typeof(x) <: Union{AbstractString, Symbol} ? Symbol(x) : JSONText(":$x")
+  end
 end
 
 macro click(expr)
