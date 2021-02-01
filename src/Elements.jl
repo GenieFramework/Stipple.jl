@@ -4,6 +4,7 @@ import Genie
 using Stipple
 
 import Genie.Renderer.Html: HTMLString, normal_element
+import Genie.Renderer.Json.JSONParser.JSONText
 
 export root, elem, vm, @iif, @elsiif, @els, @text, @bind, @data, @click, @on
 
@@ -29,6 +30,7 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
   vue_app = replace(Genie.Renderer.Json.JSONParser.json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
   vue_app = replace(vue_app, "\\\\" => "\\")
+  vue_app = replace(vue_app, "\\\"" => "\\\\\\\"")
 
   output = raw"""
     const watcherMixin = {
@@ -82,36 +84,45 @@ end
 #===#
 
 macro iif(expr)
-  "v-if='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+  :( :( "v-if='$($(esc(expr)))'" ) )
 end
 
 macro elsiif(expr)
-  "v-else-if='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+  :( "v-else-if='$($(esc(expr)))'" )
 end
 
 macro els(expr)
-  "v-else='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+  :( "v-else='$($(esc(expr)))'" )
 end
 
 macro text(expr)
-  directive = occursin(" | ", string(expr)) ? ":text-content.prop" : "v-text"
-  "$(directive)='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+  quote
+    directive = occursin(" | ", string($(esc(expr)))) ? ":text-content.prop" : "v-text"
+    "$(directive)='$($(esc(expr)))'"
+  end
 end
 
 macro bind(expr)
-  "v-model='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+  :( "v-model='$($(esc(expr)))'" )
 end
 
 macro data(expr)
-  :(Symbol($expr))
+  quote
+    x = $(esc(expr))
+    if typeof(x) <: Union{AbstractString, Symbol}
+      Symbol(x)
+    else
+      startswith("$x", "Any[") ? JSONText(":" * "$x"[4:end]) : JSONText(":$x")
+    end
+  end
 end
 
 macro click(expr)
-  "@click='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+  :( "@click='$(replace($(esc(expr)),"'" => raw"\'"))'" )
 end
 
 macro on(args, expr)
-  "v-on:$(string(args))='$(startswith(string(expr), ":") ? string(expr)[2:end] : expr)'"
+  :( "v-on:$(string($(esc(args))))='$(replace($(esc(expr)),"'" => raw"\'"))'" )
 end
 
 #===#
