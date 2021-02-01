@@ -34,25 +34,25 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
     const watcherMixin = {
       methods: {
         \$withoutWatchers: function (cb, filter) {
-          let ww = (filter == null) ? this._watchers : []
+          let ww = (filter == null) ? this._watchers : [];
           if (typeof(filter) == "string") {
             this._watchers.forEach((w) => { if (w.expression == filter) {ww.push(w)} } )
           } else { // if it is a true regex
             this._watchers.forEach((w) => { if (w.expression.match(filter)) {ww.push(w)} } )
           }
-          const watchers = ww.map((watcher) => ({ cb: watcher.cb, sync: watcher.sync }))
+          const watchers = ww.map((watcher) => ({ cb: watcher.cb, sync: watcher.sync }));
           for (let index in ww) {
-            ww[index].cb = () => null
-            ww[index].sync = true
+            ww[index].cb = () => null;
+            ww[index].sync = true;
           }
-          cb()
+          cb();
           for (let index in ww) {
-            ww[index].cb = watchers[index].cb
-            ww[index].sync = watchers[index].sync
+            ww[index].cb = watchers[index].cb;
+            ww[index].sync = watchers[index].sync;
           }
         },
         updateField: function (field, newVal) {
-          this.\$withoutWatchers( () => {this[field] = newVal }, "function () {return this." + field + "}")
+          this.\$withoutWatchers( () => {this[field] = newVal }, "function () {return this." + field + "}");
         }
       }
     }
@@ -65,15 +65,15 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
   end
 
   output *= """
-  
+
   window.parse_payload = function(payload){
     if (payload.key) {
-      window.$(vue_app_name).updateField(payload.key, payload.value)
-      let vStr = payload.value.toString()
-      vStr = vStr.length < 60 ? vStr : vStr.substring(0, 55) + ' ...'
-      window.console.log("server update: ", payload.key + ': ' + vStr)
+      window.$(vue_app_name).updateField(payload.key, payload.value);
+      let vStr = payload.value.toString();
+      vStr = vStr.length < 60 ? vStr : vStr.substring(0, 55) + ' ...';
+      window.console.log("server update: ", payload.key + ': ' + vStr);
     } else {
-      window.console.log("server says: ", payload)
+      window.console.log("server says: ", payload);
     }
   }
   """

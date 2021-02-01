@@ -349,4 +349,10 @@ function set_multi_user_mode(value)
   global MULTI_USER_MODE = value
 end
 
+function jsonify(val; escape_untitled::Bool = true) :: String
+  escape_untitled ?
+    replace(Genie.Renderer.Json.JSONParser.json(val), "\"undefined\""=>"undefined") :
+    Genie.Renderer.Json.JSONParser.json(val)
+end
+
 end
