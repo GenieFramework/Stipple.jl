@@ -7,8 +7,8 @@ export layout
 
 
 function layout(output::Union{String,Vector}; partial::Bool = false, title::String = "", class::String = "", style::String = "",
-                head_content::String = "",
-                channel::String = Genie.config.webchannels_default_route) :: String
+                head_content::String = "", channel::String = Genie.config.webchannels_default_route) :: String
+
   isa(output, Vector) && (output = join(output, '\n'))
 
   content = string(
