@@ -18,13 +18,19 @@ import Genie.Renderer.Json.JSONParser.JSONText
 const Reactive = Observables.Observable
 const R = Reactive
 
+WS_ENABLED = Genie.config.websockets_server
+WEB_TRANSPORT = WS_ENABLED ? Genie.WebChannels : Genie.WebThreads
+
 export R, Reactive, ReactiveModel, @R_str
 export newapp
 
 #===#
 
 function __init__()
-  Genie.config.websockets_server = true
+  WS_ENABLED = Genie.config.websockets_server
+  WEB_TRANSPORT = WS_ENABLED ? Genie.WebChannels : Genie.WebThreads
+
+  @info "Using $WEB_TRANSPORT as the web transport layer."
 end
 
 #===#
@@ -35,7 +41,6 @@ abstract type ReactiveModel end
 
 const JS_SCRIPT_NAME = "stipple.js"
 const JS_DEBOUNCE_TIME = 300 #ms
-# MULTI_USER_MODE = true
 
 #===#
 
@@ -126,7 +131,6 @@ function watch(vue_app_name::String, fieldtype::Any, fieldname::Symbol, channel:
   js_channel = channel == "" ? "window.Genie.Settings.webchannels_default_route" : "'$channel'"
   output = """
   $vue_app_name.\\\$watch(function () {return this.$fieldname}, _.debounce(function(newVal, oldVal){
-    window.console.log('ws to server: $fieldname: ' + newVal);
     Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});
   }, $debounce));
   """
@@ -203,10 +207,6 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
     isa(getproperty(model, f), Reactive) || continue
 
     on(getproperty(model, f)) do v
-      # vstr = repr(v, context = :limit => true)
-      # vstr = length(vstr) <= 60 ? vstr : vstr[1:56] * " ..."
-      # @info "broadcast to $channel: $f => $vstr"
-
       push!(model, f => v, channel = channel)
     end
   end
@@ -218,16 +218,16 @@ end
 
 function Base.push!(app::M, vals::Pair{Symbol,T};
                     channel::String = Genie.config.webchannels_default_route,
-                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing} = nothing) where {T,M<:ReactiveModel}
-  Genie.WebChannels.broadcast(channel,
-                              Genie.Renderer.Json.JSONParser.json(Dict( "key" => julia_to_vue(vals[1]),
-                                                                        "value" => Stipple.render(vals[2], vals[1]))),
-                              except = except)
+                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
+  WEB_TRANSPORT.broadcast(channel,
+                          Genie.Renderer.Json.JSONParser.json(Dict( "key" => julia_to_vue(vals[1]),
+                                                                    "value" => Stipple.render(vals[2], vals[1]))),
+                          except = except)
 end
 
 function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
                     channel::String = Genie.config.webchannels_default_route,
-                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing} = nothing) where {T,M<:ReactiveModel}
+                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
   push!(app, Symbol(julia_to_vue(vals[1])) => vals[2][], channel = channel, except = except)
 end
 
@@ -279,6 +279,7 @@ const DEPS = Function[]
 
 function deps(channel::String = Genie.config.webchannels_default_route) :: String
   vuejs = Genie.Configuration.isprod() ? "vue.min.js" : "vue.js"
+
   Genie.Router.route("/js/stipple/$vuejs") do
     Genie.Renderer.WebRenderable(
       read(joinpath(@__DIR__, "..", "files", "js", vuejs), String),
@@ -303,9 +304,11 @@ function deps(channel::String = Genie.config.webchannels_default_route) :: Strin
       :javascript) |> Genie.Renderer.respond
   end
 
-  endpoint = channel == Genie.config.webchannels_default_route ? Stipple.JS_SCRIPT_NAME : "js/$(channel)/$(Stipple.JS_SCRIPT_NAME)"
+  endpoint = (channel == Genie.config.webchannels_default_route) ?
+              Stipple.JS_SCRIPT_NAME :
+              "js/$(channel)/$(Stipple.JS_SCRIPT_NAME)"
   string(
-    Genie.Assets.channels_support(channel),
+    (WS_ENABLED ? Genie.Assets.channels_support(channel) : Genie.Assets.webthreads_support(channel)),
     Genie.Renderer.Html.script(src="/js/stipple/underscore-min.js"),
     Genie.Renderer.Html.script(src="/js/stipple/$vuejs"),
     join([f() for f in DEPS], "\n"),

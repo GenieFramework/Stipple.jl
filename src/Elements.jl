@@ -71,11 +71,6 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
   window.parse_payload = function(payload){
     if (payload.key) {
       window.$(vue_app_name).updateField(payload.key, payload.value);
-      let vStr = payload.value.toString();
-      vStr = vStr.length < 60 ? vStr : vStr.substring(0, 55) + ' ...';
-      window.console.log("server update: ", payload.key + ': ' + vStr);
-    } else {
-      window.console.log("server says: ", payload);
     }
   }
   """
