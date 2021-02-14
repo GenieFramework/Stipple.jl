@@ -153,7 +153,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
 
   deps_routes(channel)
 
-  Genie.Router.channel("/$channel/watchers") do
+  Genie.Router.channel("$(Genie.config.base_path)$(channel)/watchers") do
     payload = Genie.Router.@params(:payload)["payload"]
     client = Genie.Router.@params(:WS_CLIENT)
 
@@ -193,7 +193,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
   end
 
   ep = channel == Genie.config.webchannels_default_route ? endpoint : "js/$channel/$endpoint"
-  Genie.Router.route("/$ep") do
+  Genie.Router.route("/$(ep)") do
     Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, endpoint = ep, channel = "", debounce = debounce) |> Genie.Renderer.Js.js
   end
 
@@ -320,17 +320,17 @@ function deps(channel::String = Genie.config.webchannels_default_route) :: Strin
 
   string(
     (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_support(channel) : Genie.Assets.webthreads_support(channel)),
-    Genie.Renderer.Html.script(src="/js/stipple/underscore-min.js"),
-    Genie.Renderer.Html.script(src="/js/stipple/$(vuejs())"),
+    Genie.Renderer.Html.script(src="$(Genie.config.base_path)js/stipple/underscore-min.js"),
+    Genie.Renderer.Html.script(src="$(Genie.config.base_path)js/stipple/$(vuejs())"),
     join([f() for f in DEPS], "\n"),
-    Genie.Renderer.Html.script(src="/js/stipple/stipplecore.js"),
-    Genie.Renderer.Html.script(src="/js/stipple/vue_filters.js"),
+    Genie.Renderer.Html.script(src="$(Genie.config.base_path)js/stipple/stipplecore.js"),
+    Genie.Renderer.Html.script(src="$(Genie.config.base_path)js/stipple/vue_filters.js"),
 
     # if the model is not configured and we don't generate the stipple.js file, no point in requesting it
-    in(Symbol("get_$(replace(endpoint, "/" => "_"))"), Genie.Router.named_routes() |> keys |> collect) ?
+    in(Symbol("get_$(replace(endpoint, '/' => '_'))"), Genie.Router.named_routes() |> keys |> collect) ?
       string(
         Genie.Renderer.Html.script("Stipple.init({theme: 'stipple-blue'});"),
-        Genie.Renderer.Html.script(src="/$endpoint?v=$(Genie.Configuration.isdev() ? rand() : 1)")
+        Genie.Renderer.Html.script(src="$(Genie.config.base_path)$(endpoint)?v=$(Genie.Configuration.isdev() ? rand() : 1)")
       ) :
       @warn "The Reactive Model is not initialized - make sure you call Stipple.init(YourModel()) to initialize it"
   )
