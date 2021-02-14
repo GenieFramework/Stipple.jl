@@ -26,7 +26,7 @@ export newapp
 #===#
 
 function __init__()
-
+  Genie.config.websockets_server = true
 end
 
 #===#
@@ -146,9 +146,10 @@ end
 
 function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model),
               endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route,
-              debounce::Int = JS_DEBOUNCE_TIME, transport = Genie.WebChannels)::M where {M<:ReactiveModel}
+              debounce::Int = JS_DEBOUNCE_TIME, transport::Module = Genie.WebChannels)::M where {M<:ReactiveModel}
 
   global WEB_TRANSPORT = transport
+  transport == Genie.WebChannels || (Genie.config.websockets_server = false)
 
   deps_routes(channel)
 
