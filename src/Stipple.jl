@@ -282,25 +282,25 @@ vuejs() = Genie.Configuration.isprod() ? "vue.min.js" : "vue.js"
 
 
 function deps_routes(channel::String = Genie.config.webchannels_default_route) :: Nothing
-  Genie.Router.route("$(Genie.config.base_path)js/stipple/$(vuejs())") do
+  Genie.Router.route("/js/stipple/$(vuejs())") do
     Genie.Renderer.WebRenderable(
       read(joinpath(@__DIR__, "..", "files", "js", vuejs()), String),
       :javascript) |> Genie.Renderer.respond
   end
 
-  Genie.Router.route("$(Genie.config.base_path)js/stipple/vue_filters.js") do
+  Genie.Router.route("/js/stipple/vue_filters.js") do
     Genie.Renderer.WebRenderable(
       read(joinpath(@__DIR__, "..", "files", "js", "vue_filters.js"), String),
       :javascript) |> Genie.Renderer.respond
   end
 
-  Genie.Router.route("$(Genie.config.base_path)js/stipple/underscore-min.js") do
+  Genie.Router.route("/js/stipple/underscore-min.js") do
     Genie.Renderer.WebRenderable(
       read(joinpath(@__DIR__, "..", "files", "js", "underscore-min.js"), String),
       :javascript) |> Genie.Renderer.respond
   end
 
-  Genie.Router.route("$(Genie.config.base_path)js/stipple/stipplecore.js") do
+  Genie.Router.route("/js/stipple/stipplecore.js") do
     Genie.Renderer.WebRenderable(
       read(joinpath(@__DIR__, "..", "files", "js", "stipplecore.js"), String),
       :javascript) |> Genie.Renderer.respond
