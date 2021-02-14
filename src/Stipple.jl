@@ -153,7 +153,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
 
   deps_routes(channel)
 
-  Genie.Router.channel("$(Genie.config.base_path)$(channel)/watchers") do
+  Genie.Router.channel("/$(channel)/watchers") do
     payload = Genie.Router.@params(:payload)["payload"]
     client = Genie.Router.@params(:WS_CLIENT)
 
