@@ -126,7 +126,7 @@ end
 function watch(vue_app_name::String, fieldtype::Any, fieldname::Symbol, channel::String, debounce::Int, model::M)::String where {M<:ReactiveModel}
   js_channel = channel == "" ? "window.Genie.Settings.webchannels_default_route" : "'$channel'"
   output = """
-  $vue_app_name.\\\$watch(function () {return this.$fieldname}, _.debounce(function(newVal, oldVal){
+  $vue_app_name.\$watch(function () {return this.$fieldname}, _.debounce(function(newVal, oldVal){
     Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});
   }, $debounce));
   """

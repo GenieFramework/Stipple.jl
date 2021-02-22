@@ -29,13 +29,11 @@ const vm = root
 function vue_integration(model::M; vue_app_name::String, endpoint::String, channel::String, debounce::Int)::String where {M<:ReactiveModel}
   vue_app = replace(Genie.Renderer.Json.JSONParser.json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
-  vue_app = replace(vue_app, "\\\\" => "\\")
-  vue_app = replace(vue_app, "\"" => "\\\"")
 
   output = raw"""
     const watcherMixin = {
       methods: {
-        \$withoutWatchers: function (cb, filter) {
+        $withoutWatchers: function (cb, filter) {
           let ww = (filter == null) ? this._watchers : [];
           if (typeof(filter) == "string") {
             this._watchers.forEach((w) => { if (w.expression == filter) {ww.push(w)} } )
@@ -54,7 +52,7 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
           }
         },
         updateField: function (field, newVal) {
-          this.\$withoutWatchers( () => {this[field] = newVal }, "function () {return this." + field + "}");
+          this.$withoutWatchers( () => {this[field] = newVal }, "function () {return this." + field + "}");
         }
       }
     }
@@ -74,6 +72,14 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
     }
   }
   """
+  
+  # replace output by its julian string representation and 
+  # strip the surrounding quotes
+  # Note: the `prevind(...)` instead of `end-1`is necessary, if the last char
+  # before the doublequote is a two-byte char. This is currently not the case but
+  # might change in the future. I had a similar problem in Plotly...
+  output = repr(output)
+  output[2:prevind(output, lastindex(output))]
 end
 
 #===#
