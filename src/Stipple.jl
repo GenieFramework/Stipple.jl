@@ -110,7 +110,7 @@ function update!(model::M, field::Symbol, newval::T, oldval::T)::M where {T,M<:R
 end
 
 function update!(model::M, field::Reactive, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-  field[1] = newval
+  field[] = newval
 
   model
 end
