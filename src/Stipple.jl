@@ -77,12 +77,8 @@ function Observables.setindex!(observable::Observable, val, keys...; notify=(x)-
     end
 
     if notify(f)
-      if f isa Observables.InternalFunction
-        f(val)
-      else
         Base.invokelatest(f, val)
       end
-    end
 
     count += 1
   end
@@ -110,7 +106,7 @@ function update!(model::M, field::Symbol, newval::T, oldval::T)::M where {T,M<:R
 end
 
 function update!(model::M, field::Reactive, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-  field[] = newval
+  field[1] = newval
 
   model
 end
