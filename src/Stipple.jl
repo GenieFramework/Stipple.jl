@@ -279,16 +279,6 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
     result[julia_to_vue(field)] = Stipple.render(getfield(app, field), field)
   end
 
-  Dict(
-    :el => Elements.elem(app), 
-    :mixins =>JSONText("[watcherMixin]"),
-    :data => result,
-    :components => JSONText(components(app)),
-    :methods    => JSONText("{ $(js_methods(app)) }"),
-    :computed   => JSONText("{ $(js_computed(app)) }"),
-    :watch      => JSONText("{ $(js_watch(app)) }")
-  )
-
   vue = Dict(:el => Elements.elem(app), :mixins =>JSONText("[watcherMixin]"), :data => result)
   components(app)  != "" && push!(vue, :components => components(app))
   js_methods(app)  != "" && push!(vue, :methods    => JSONText("{ $(js_methods(app)) }"))
