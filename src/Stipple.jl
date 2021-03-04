@@ -44,9 +44,30 @@ function render end
 function update! end
 function watch end
 
-function js_methods(m::Any)
-  ""
-end
+"""
+`function js_methods(app)`
+
+Defines js functions for the methods section of the vue element\n
+Usage is typically an app-specific method:
+
+```
+js_methods(MyDashboard) = \"\"\"
+  mysquare: function (x) {
+    return x^2 
+  }
+  myadd: function (x, y) {
+    return x + y
+  }  
+\"\"\"
+```
+"""
+function js_methods(m::Any) "" end
+function js_computed(m::Any) "" end
+function js_watch(m::Any) "" end
+
+js_methods(app::M) where {M<:ReactiveModel} = js_methods(M)
+js_computed(app::M) where {M<:ReactiveModel} = js_computed(M)
+js_watch(app::M) where {M<:ReactiveModel} = js_watch(M)
 
 #===#
 
@@ -64,6 +85,7 @@ function components(m::Type{M}) where {M<:ReactiveModel}
   replace(response, "\""=>"")
 end
 
+components(app::M) where {M<:ReactiveModel} = components(M)
 #===#
 
 function Observables.setindex!(observable::Observable, val, keys...; notify=(x)->true)
@@ -257,7 +279,13 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
     result[julia_to_vue(field)] = Stipple.render(getfield(app, field), field)
   end
 
-  Dict(:el => Elements.elem(app), :data => result, :components => components(typeof(app)), :methods => JSONText("{ $(js_methods(app)) }"), :mixins =>JSONText("[watcherMixin]"))
+  vue = Dict(:el => Elements.elem(app), :mixins =>JSONText("[watcherMixin]"), :data => result)
+  components(app)  != "" && push!(vue, :components => components(app))
+  js_methods(app)  != "" && push!(vue, :methods    => JSONText("{ $(js_methods(app)) }"))
+  js_computed(app) != "" && push!(vue, :computed   => JSONText("{ $(js_computed(app)) }"))
+  js_watch(app)    != "" && push!(vue, :watch      => JSONText("{ $(js_watch(app)) }"))
+  vue
+
 end
 
 function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) where {T}
