@@ -53,11 +53,11 @@ Usage is typically an app-specific method:
 ```
 js_methods(MyDashboard) = \"\"\"
   mysquare: function (x) {
-    return x^2 
+    return x^2
   }
   myadd: function (x, y) {
     return x + y
-  }  
+  }
 \"\"\"
 ```
 """
@@ -73,8 +73,8 @@ js_watch(app::M) where {M<:ReactiveModel} = js_watch(M)
 
 const COMPONENTS = Dict()
 
-function register_components(model::Type{M}, keysvals::Vector{Pair{K,V}}) where {M<:ReactiveModel, K, V}
-  haskey(COMPONENTS, model) || (COMPONENTS[model] = Pair{K,V}[])
+function register_components(model::Type{M}, keysvals::Vector{Any}) where {M<:ReactiveModel}
+  haskey(COMPONENTS, model) || (COMPONENTS[model] = Any[])
   push!(COMPONENTS[model], keysvals...)
 end
 
