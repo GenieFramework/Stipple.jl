@@ -35,23 +35,30 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
     const watcherMixin = {
       methods: {
         $withoutWatchers: function (cb, filter) {
-          let ww = (filter == null) ? this._watchers : [];
+          let ww = (filter === null) ? this._watchers : [];
+
           if (typeof(filter) == "string") {
             this._watchers.forEach((w) => { if (w.expression == filter) {ww.push(w)} } )
           } else { // if it is a true regex
             this._watchers.forEach((w) => { if (w.expression.match(filter)) {ww.push(w)} } )
           }
+
           const watchers = ww.map((watcher) => ({ cb: watcher.cb, sync: watcher.sync }));
+
           for (let index in ww) {
             ww[index].cb = () => null;
             ww[index].sync = true;
           }
+
           cb();
+
           for (let index in ww) {
             ww[index].cb = watchers[index].cb;
             ww[index].sync = watchers[index].sync;
           }
+
         },
+
         updateField: function (field, newVal) {
           this.$withoutWatchers( () => {this[field] = newVal }, "function () {return this." + field + "}");
         }
@@ -71,6 +78,11 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
     if (payload.key) {
       window.$(vue_app_name).updateField(payload.key, payload.value);
     }
+  }
+
+  window.onload = function() {
+    console.log("Loading completed");
+    $vue_app_name.\$forceUpdate();
   }
   """
 
