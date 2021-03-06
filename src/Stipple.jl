@@ -73,7 +73,7 @@ js_watch(app::M) where {M<:ReactiveModel} = js_watch(M)
 
 const COMPONENTS = Dict()
 
-function register_components(model::Type{M}, keysvals::Vector{Any}) where {M<:ReactiveModel}
+function register_components(model::Type{M}, keysvals::AbstractVector) where {M<:ReactiveModel}
   haskey(COMPONENTS, model) || (COMPONENTS[model] = Any[])
   push!(COMPONENTS[model], keysvals...)
 end
