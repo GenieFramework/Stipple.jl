@@ -22,6 +22,7 @@ WEB_TRANSPORT = Genie.WebChannels
 
 export R, Reactive, ReactiveModel, @R_str
 export newapp
+export onbutton
 
 #===#
 
@@ -392,5 +393,37 @@ function jsonify(val; escape_untitled::Bool = true) :: String
     replace(Genie.Renderer.Json.JSONParser.json(val), "\"undefined\""=>"undefined") :
     Genie.Renderer.Json.JSONParser.json(val)
 end
+
+# add a method to Observables.on to accept inverted order of arguments similar to route()
+import Observables.on
+on(observable::Observables.AbstractObservable, f::Function; weak = false) = on(f, observable; weak = weak)
+
+"""
+`onbutton(f::Function, button::R{Bool}; async = false, weak = false)`
+
+Links a function to a reactive boolean parameter, typically a representing a button of an app.
+After the function is called, the parameter is set back to false. The `async` keyword
+specifies whether the call should be made asynchroneously or not.
+
+```
+onbutton(model.save_button) do
+  # save what has to be saved
+end
+```
+"""
+onbutton(f::Function, button::R{Bool}; async = false, kwargs...) = on(button; kwargs...) do pressed
+  pressed || return
+  if async
+      @async begin
+          f()
+          button[] = false
+      end
+  else
+      f()
+      button[] = false
+  end
+  return
+end
+onbutton(button::R{Bool}, f::Function; kwargs...) = onbutton(f, button; kwargs...)
 
 end
