@@ -86,7 +86,7 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
   }
   """
 
-  output = replace(repr(output), r"\\'"=>"'")
+  output = replace(replace(repr(output), r"\\'"=>"'"), "'" => '"')
 
   output[2:prevind(output, lastindex(output))]
 end
