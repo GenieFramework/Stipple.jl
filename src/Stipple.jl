@@ -462,9 +462,40 @@ macro kwredef(expr)
   end
   t[n] = T_new
 
+  params_ex = Expr(:parameters)
+  call_args = Any[]
+  
+  Base._kwdef!(expr.args[3], params_ex.args, call_args)
+  # Only define a constructor if the type has fields, otherwise we'll get a stack
+  # overflow on construction
+  if !isempty(params_ex.args)
+      if T isa Symbol
+          kwdefs = :(($(esc(T_new)))($params_ex) = ($(esc(T_new)))($(call_args...)))
+      elseif T isa Expr && T.head === :curly
+          T = T::Expr
+          # if T == S{A<:AA,B<:BB}, define two methods
+          #   S(...) = ...
+          #   S{A,B}(...) where {A<:AA,B<:BB} = ...
+          S = T.args[1]
+          P = T.args[2:end]
+          Q = Any[U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
+          SQ = :($S{$(Q...)})
+          kwdefs = quote
+              ($(esc(S_new)))($params_ex) =($(esc(S_new)))($(call_args...))
+              ($(esc(SQ)))($params_ex) where {$(esc.(P)...)} =
+                  ($(esc(SQ)))($(call_args...))
+          end
+      else
+          error("Invalid usage of @kwdef")
+      end
+  else
+      kwdefs = nothing
+  end
+
   quote
-      Base.@kwdef $expr
-      $(esc(T_old)) = $(esc(T_new))
+    Base.@__doc__($(esc(expr)))
+    $kwdefs
+    $(esc(T_old)) = $(esc(T_new))
   end
 end
 
