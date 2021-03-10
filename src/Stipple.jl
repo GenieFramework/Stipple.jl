@@ -14,6 +14,7 @@ using Logging, Reexport
 @reexport using Genie
 @reexport using Genie.Renderer.Html
 import Genie.Renderer.Json.JSONParser.JSONText
+import Base.@kwdef
 
 const Reactive = Observables.Observable
 const R = Reactive
@@ -23,6 +24,7 @@ WEB_TRANSPORT = Genie.WebChannels
 export R, Reactive, ReactiveModel, @R_str
 export newapp
 export onbutton
+export @kwdef, @kwredef
 
 #===#
 
@@ -425,5 +427,45 @@ onbutton(f::Function, button::R{Bool}; async = false, kwargs...) = on(button; kw
   return
 end
 onbutton(button::R{Bool}, f::Function; kwargs...) = onbutton(f, button; kwargs...)
+
+"""
+```
+@kwredef
+```
+Helper function during development that is a one-to-one replacement
+for `@kwdef` but allows for redefintion of the struct.
+  
+Internally it defines a new struct with a number appended to the original struct name
+and assigns this struct to a variable with the original struct name.
+"""
+macro kwredef(expr)
+  expr = macroexpand(__module__, expr) # to expand @static
+  expr isa Expr && expr.head === :struct || error("Invalid usage of @kwdef")
+  expr = expr::Expr
+
+  t = expr.args; n = 2
+  T = expr.args[2]
+  if T isa Expr && T.head === :<:
+      t = T.args; n = 1
+      T = T.args[1]
+  end
+  if T isa Expr && T.head === :curly
+      t = T.args; n=1
+  end
+
+  T_old = t[n]
+  i = 1
+  T_new = Symbol("$(T_old)_$i")
+  while isdefined(__module__, T_new)
+      i += 1
+      T_new = Symbol("$(T_old)_$i")
+  end
+  t[n] = T_new
+
+  quote
+      Base.@kwdef $expr
+      $(esc(T_old)) = $(esc(T_new))
+  end
+end
 
 end
