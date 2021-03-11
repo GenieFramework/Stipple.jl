@@ -481,7 +481,7 @@ macro kwredef(expr)
           Q = Any[U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
           SQ = :($S{$(Q...)})
           kwdefs = quote
-              ($(esc(S_new)))($params_ex) =($(esc(S_new)))($(call_args...))
+              ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
               ($(esc(SQ)))($params_ex) where {$(esc.(P)...)} =
                   ($(esc(SQ)))($(call_args...))
           end
