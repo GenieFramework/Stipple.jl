@@ -14,17 +14,17 @@ using Logging, Reexport
 @reexport using Genie
 @reexport using Genie.Renderer.Html
 import Genie.Renderer.Json.JSONParser.JSONText
-import Base.@kwdef
+import Genie.Configuration: isprod, PROD, DEV
 
 const Reactive = Observables.Observable
 const R = Reactive
 
 WEB_TRANSPORT = Genie.WebChannels
 
-export R, Reactive, ReactiveModel, @R_str
+export R, Reactive, ReactiveModel, @R_str, @js_str
 export newapp
 export onbutton
-export @kwdef, @kwredef
+export @kwredef
 
 #===#
 
@@ -50,9 +50,8 @@ function watch end
 """
 `function js_methods(app)`
 
-Defines js functions for the methods section of the vue element\n
-Usage is typically an app-specific method:
-
+Defines js functions for the `methods` section of the vue element.\n
+# Example
 ```
 js_methods(MyDashboard) = \"\"\"
   mysquare: function (x) {
@@ -65,12 +64,62 @@ js_methods(MyDashboard) = \"\"\"
 ```
 """
 function js_methods(m::Any) "" end
+
+"""
+`function js_computed(app)`
+
+Defines js functions for the `computed` section of the vue element.\n
+These properties are updated every time on of the inner parameters changes its value.
+# Example
+```
+js_computed(MyDashboard) = \"\"\"
+  fullName: function () {
+    return this.firstName + ' ' + this.lastName
+  }
+\"\"\"
+```
+"""
 function js_computed(m::Any) "" end
+
+"""
+`function js_watch(app)`
+
+Defines js functions for the `watch` section of the vue element.
+These functions are called every time the respective property changes.
+# Example
+Updates the `fullName` every time `firstName` or `lastName` changes.
+```
+js_watch(MyDashboard) = \"\"\"
+  firstName: function (val) {
+    this.fullName = val + ' ' + this.lastName
+  },
+  lastName: function (val) {
+    this.fullName = this.firstName + ' ' + val
+  }
+\"\"\"
+```
+"""
 function js_watch(m::Any) "" end
+
+"""
+`function js_created(app)`
+
+Defines js statements for the `created` section of the vue element.
+They are executed directly after the creation of the vue element.
+# Example
+```
+js_created(MyDashboard) = \"\"\"
+    if (this.cameraon) { startcamera() }
+}
+\"\"\"
+```
+"""
+function js_created(m::Any) "" end
 
 js_methods(app::M) where {M<:ReactiveModel} = js_methods(M)
 js_computed(app::M) where {M<:ReactiveModel} = js_computed(M)
 js_watch(app::M) where {M<:ReactiveModel} = js_watch(M)
+js_created(app::M) where {M<:ReactiveModel} = js_created(M)
 
 #===#
 
@@ -287,8 +336,9 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
   js_methods(app)  != "" && push!(vue, :methods    => JSONText("{ $(js_methods(app)) }"))
   js_computed(app) != "" && push!(vue, :computed   => JSONText("{ $(js_computed(app)) }"))
   js_watch(app)    != "" && push!(vue, :watch      => JSONText("{ $(js_watch(app)) }"))
-  vue
-
+  js_created(app)  != "" && push!(vue, :created    => JSONText("function () { $(js_created(app)) }"))
+  
+  return vue
 end
 
 function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) where {T}
@@ -430,6 +480,18 @@ onbutton(button::R{Bool}, f::Function; kwargs...) = onbutton(f, button; kwargs..
 
 """
 ```
+@js_str -> JSONText
+```
+Construct a JSONText, such as `js"button=false"`, without interpolation and unescaping
+(except for quotation mark " which still has to be escaped). Avoid escaping " can be done by
+`js\"\"\"alert("Hello World")\"\"\"`.
+"""
+macro js_str(expr)
+  :( JSONText($(esc(expr))) )
+end
+
+"""
+```
 @kwredef
 ```
 Helper function during development that is a one-to-one replacement
@@ -440,63 +502,43 @@ and assigns this struct to a variable with the original struct name.
 """
 macro kwredef(expr)
   expr = macroexpand(__module__, expr) # to expand @static
-  expr isa Expr && expr.head === :struct || error("Invalid usage of @kwdef")
+  expr isa Expr && expr.head === :struct || error("Invalid usage of @kwredef")
   expr = expr::Expr
 
   t = expr.args; n = 2
-  T = expr.args[2]
-  if T isa Expr && T.head === :<:
-      t = T.args; n = 1
-      T = T.args[1]
+  if t[n] isa Expr && t[n].head === :<:
+      t = t[n].args
+      n = 1
   end
-  if T isa Expr && T.head === :curly
-      t = T.args; n=1
+  if t[n] isa Expr && t[n].head === :curly
+      t = t[n].args
+      n=1
   end
 
   T_old = t[n]
-  i = 1
-  T_new = Symbol("$(T_old)_$i")
-  while isdefined(__module__, T_new)
-      i += 1
-      T_new = Symbol("$(T_old)_$i")
-  end
-  t[n] = T_new
+  t[n] = T_new = gensym(T_old)
 
-  params_ex = Expr(:parameters)
-  call_args = Any[]
+  esc(quote
+    Base.@kwdef $expr
+    $T_old = $T_new
+    $T_new.name.name = $(QuoteNode(T_old)) # fix the name
+  end)
+end
+
+"""
+```
+  Stipple.@kwdef
+```
+Helper function for model definition that acts as a one-to-one replacement
+for `Base.@kwdef`.
   
-  Base._kwdef!(expr.args[3], params_ex.args, call_args)
-  # Only define a constructor if the type has fields, otherwise we'll get a stack
-  # overflow on construction
-  if !isempty(params_ex.args)
-      if T isa Symbol
-          kwdefs = :(($(esc(T_new)))($params_ex) = ($(esc(T_new)))($(call_args...)))
-      elseif T isa Expr && T.head === :curly
-          T = T::Expr
-          # if T == S{A<:AA,B<:BB}, define two methods
-          #   S(...) = ...
-          #   S{A,B}(...) where {A<:AA,B<:BB} = ...
-          S = T.args[1]
-          P = T.args[2:end]
-          Q = Any[U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
-          SQ = :($S{$(Q...)})
-          kwdefs = quote
-              ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
-              ($(esc(SQ)))($params_ex) where {$(esc.(P)...)} =
-                  ($(esc(SQ)))($(call_args...))
-          end
-      else
-          error("Invalid usage of @kwdef")
-      end
-  else
-      kwdefs = nothing
-  end
-
-  quote
-    Base.@__doc__($(esc(expr)))
-    $kwdefs
-    $(esc(T_old)) = $(esc(T_new))
-  end
+When `Stipple.isprod() == true` this macro calls @kwredef and allows for 
+redefinition of models. Otherwise it calls Base.@kwredef.
+"""
+macro kwdef(expr)
+  esc(quote
+    Stipple.isprod() ? Base.@kwdef($expr) : Stipple.@kwredef($expr)
+  end)
 end
 
 end
