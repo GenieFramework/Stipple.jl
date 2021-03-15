@@ -1,7 +1,7 @@
 name = "Stipple"
 uuid = "4acbeb90-81a0-11ea-1966-bdaff8155998"
 authors = ["Adrian <e@essenciary.com>"]
-version = "0.9.8-DEV"
+version = "0.9.8"
 
 [deps]
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
