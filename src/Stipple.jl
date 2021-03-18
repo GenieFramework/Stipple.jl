@@ -15,14 +15,17 @@ using Logging, Reexport
 @reexport using Genie.Renderer.Html
 
 import Genie.Renderer.Json.JSONParser.JSONText
+import Genie.Configuration: isprod, PROD, DEV
 
 const Reactive = Observables.Observable
 const R = Reactive
 
 WEB_TRANSPORT = Genie.WebChannels
 
-export R, Reactive, ReactiveModel, @R_str
+export R, Reactive, ReactiveModel, @R_str, @js_str
 export newapp
+export onbutton
+export @kwredef
 
 #===#
 
@@ -48,9 +51,8 @@ function watch end
 """
 `function js_methods(app)`
 
-Defines js functions for the methods section of the vue element\n
-Usage is typically an app-specific method:
-
+Defines js functions for the `methods` section of the vue element.\n
+# Example
 ```
 js_methods(MyDashboard) = \"\"\"
   mysquare: function (x) {
@@ -63,12 +65,62 @@ js_methods(MyDashboard) = \"\"\"
 ```
 """
 function js_methods(m::Any) "" end
+
+"""
+`function js_computed(app)`
+
+Defines js functions for the `computed` section of the vue element.\n
+These properties are updated every time on of the inner parameters changes its value.
+# Example
+```
+js_computed(MyDashboard) = \"\"\"
+  fullName: function () {
+    return this.firstName + ' ' + this.lastName
+  }
+\"\"\"
+```
+"""
 function js_computed(m::Any) "" end
+
+"""
+`function js_watch(app)`
+
+Defines js functions for the `watch` section of the vue element.
+These functions are called every time the respective property changes.
+# Example
+Updates the `fullName` every time `firstName` or `lastName` changes.
+```
+js_watch(MyDashboard) = \"\"\"
+  firstName: function (val) {
+    this.fullName = val + ' ' + this.lastName
+  },
+  lastName: function (val) {
+    this.fullName = this.firstName + ' ' + val
+  }
+\"\"\"
+```
+"""
 function js_watch(m::Any) "" end
+
+"""
+`function js_created(app)`
+
+Defines js statements for the `created` section of the vue element.
+They are executed directly after the creation of the vue element.
+# Example
+```
+js_created(MyDashboard) = \"\"\"
+    if (this.cameraon) { startcamera() }
+}
+\"\"\"
+```
+"""
+function js_created(m::Any) "" end
 
 js_methods(app::M) where {M<:ReactiveModel} = js_methods(M)
 js_computed(app::M) where {M<:ReactiveModel} = js_computed(M)
 js_watch(app::M) where {M<:ReactiveModel} = js_watch(M)
+js_created(app::M) where {M<:ReactiveModel} = js_created(M)
 
 #===#
 
@@ -285,8 +337,9 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
   js_methods(app)  != "" && push!(vue, :methods    => JSONText("{ $(js_methods(app)) }"))
   js_computed(app) != "" && push!(vue, :computed   => JSONText("{ $(js_computed(app)) }"))
   js_watch(app)    != "" && push!(vue, :watch      => JSONText("{ $(js_watch(app)) }"))
-  vue
-
+  js_created(app)  != "" && push!(vue, :created    => JSONText("function () { $(js_created(app)) }"))
+  
+  return vue
 end
 
 function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) where {T}
@@ -392,6 +445,101 @@ function jsonify(val; escape_untitled::Bool = true) :: String
   escape_untitled ?
     replace(Genie.Renderer.Json.JSONParser.json(val), "\"undefined\""=>"undefined") :
     Genie.Renderer.Json.JSONParser.json(val)
+end
+
+# add a method to Observables.on to accept inverted order of arguments similar to route()
+import Observables.on
+on(observable::Observables.AbstractObservable, f::Function; weak = false) = on(f, observable; weak = weak)
+
+"""
+`onbutton(f::Function, button::R{Bool}; async = false, weak = false)`
+
+Links a function to a reactive boolean parameter, typically a representing a button of an app.
+After the function is called, the parameter is set back to false. The `async` keyword
+specifies whether the call should be made asynchroneously or not.
+
+```
+onbutton(model.save_button) do
+  # save what has to be saved
+end
+```
+"""
+onbutton(f::Function, button::R{Bool}; async = false, kwargs...) = on(button; kwargs...) do pressed
+  pressed || return
+  if async
+      @async begin
+          f()
+          button[] = false
+      end
+  else
+      f()
+      button[] = false
+  end
+  return
+end
+onbutton(button::R{Bool}, f::Function; kwargs...) = onbutton(f, button; kwargs...)
+
+"""
+```
+@js_str -> JSONText
+```
+Construct a JSONText, such as `js"button=false"`, without interpolation and unescaping
+(except for quotation mark " which still has to be escaped). Avoid escaping " can be done by
+`js\"\"\"alert("Hello World")\"\"\"`.
+"""
+macro js_str(expr)
+  :( JSONText($(esc(expr))) )
+end
+
+"""
+```
+@kwredef
+```
+Helper function during development that is a one-to-one replacement
+for `@kwdef` but allows for redefintion of the struct.
+  
+Internally it defines a new struct with a number appended to the original struct name
+and assigns this struct to a variable with the original struct name.
+"""
+macro kwredef(expr)
+  expr = macroexpand(__module__, expr) # to expand @static
+  expr isa Expr && expr.head === :struct || error("Invalid usage of @kwredef")
+  expr = expr::Expr
+
+  t = expr.args; n = 2
+  if t[n] isa Expr && t[n].head === :<:
+      t = t[n].args
+      n = 1
+  end
+  if t[n] isa Expr && t[n].head === :curly
+      t = t[n].args
+      n=1
+  end
+
+  T_old = t[n]
+  t[n] = T_new = gensym(T_old)
+
+  esc(quote
+    Base.@kwdef $expr
+    $T_old = $T_new
+    $T_new.name.name = $(QuoteNode(T_old)) # fix the name
+  end)
+end
+
+"""
+```
+  Stipple.@kwdef
+```
+Helper function for model definition that acts as a one-to-one replacement
+for `Base.@kwdef`.
+  
+When `Stipple.isprod() == true` this macro calls @kwredef and allows for 
+redefinition of models. Otherwise it calls Base.@kwredef.
+"""
+macro kwdef(expr)
+  esc(quote
+    Stipple.isprod() ? Base.@kwdef($expr) : Stipple.@kwredef($expr)
+  end)
 end
 
 end

@@ -112,8 +112,19 @@ macro text(expr)
   end
 end
 
+"""
+`@bind(expr, [type])`
+
+Binds a model parameter to a quasar or vue component, optionally defining the parameter type.
+
+`@bind(:xparam)` or `@bind(:xparam, :number)
+"""
 macro bind(expr)
   :( "v-model='$($(esc(expr)))'" )
+end
+
+macro bind(expr, type)
+  :( "v-model.$($(esc(type)))='$($(esc(expr)))'" )
 end
 
 macro data(expr)
@@ -127,10 +138,39 @@ macro data(expr)
   end
 end
 
-macro click(expr)
-  :( "@click='$(replace($(esc(expr)),"'" => raw"\'"))'" )
+"""
+`@click(expr)`
+
+Defines a js routine that is called by a click of the quasar component.
+If a symbol argument is supplied, `@click` sets this value to true.
+
+`@click("savefile = true")` or `@click("myjs_func();")` or `@click(:button)`
+
+Modifers can be appended:
+```
+@click(:me, :native)
+# "@click.native='me = true'"
+```
+"""
+macro click(expr, mode="")
+  quote
+    x = $(esc(expr))
+    m = $(esc(mode))
+    if x isa Symbol
+      """@click$(m == "" ? "" : ".$m")='$x = true'"""
+    else
+      "@click='$(replace(x, "'" => raw"\'"))'"
+    end
+  end
 end
 
+"""
+`on(action, expr)`
+
+Defines a js routine that is called by the given `action` of the quasar component, e.g. `:click`, `:input`
+
+`@on(:click, "savefile = true")` or `@on("input.native", "myjs_func();")`
+"""
 macro on(args, expr)
   :( "v-on:$(string($(esc(args))))='$(replace($(esc(expr)),"'" => raw"\'"))'" )
 end
