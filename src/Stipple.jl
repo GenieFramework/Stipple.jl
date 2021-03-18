@@ -13,6 +13,7 @@ using Logging, Reexport
 @reexport using Observables
 @reexport using Genie
 @reexport using Genie.Renderer.Html
+
 import Genie.Renderer.Json.JSONParser.JSONText
 
 const Reactive = Observables.Observable
@@ -99,8 +100,8 @@ function Observables.setindex!(observable::Observable, val, keys...; notify=(x)-
     end
 
     if notify(f)
-        Base.invokelatest(f, val)
-      end
+      Base.invokelatest(f, val)
+    end
 
     count += 1
   end
