@@ -14,6 +14,7 @@ using Logging, Reexport
 @reexport using Genie
 @reexport using Genie.Renderer.Html
 import Genie.Renderer.Json.JSONParser: JSONText, json
+export JSONText
 
 import Genie.Configuration: isprod, PROD, DEV
 
