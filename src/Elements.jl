@@ -29,9 +29,10 @@ const vm = root
 function vue_integration(model::M; vue_app_name::String, endpoint::String, channel::String, debounce::Int)::String where {M<:ReactiveModel}
   vue_app = replace(Genie.Renderer.Json.JSONParser.json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
-  vue_app = replace(vue_app, '"' => "'")
 
-  output = raw"""
+  output =
+  string(
+    raw"""
     const watcherMixin = {
       methods: {
         $withoutWatchers: function (cb, filter) {
@@ -66,27 +67,31 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
     }
     """
 
-  output *= "\nvar $vue_app_name = new Vue($vue_app);\n\n"
+    ,
 
-  for field in fieldnames(typeof(model))
-    output *= Stipple.watch(vue_app_name, getfield(model, field), field, channel, debounce, model)
-  end
+    "\nvar $vue_app_name = new Vue($vue_app);\n\n"
 
-  output *= """
+    ,
 
-  window.parse_payload = function(payload){
-    if (payload.key) {
-      window.$(vue_app_name).updateField(payload.key, payload.value);
+    join([Stipple.watch(vue_app_name, getfield(model, field), field, channel, debounce, model) for field in fieldnames(typeof(model))])
+
+    ,
+
+    """
+
+    window.parse_payload = function(payload){
+      if (payload.key) {
+        window.$(vue_app_name).updateField(payload.key, payload.value);
+      }
     }
-  }
 
-  window.onload = function() {
-    console.log("Loading completed");
-    $vue_app_name.\$forceUpdate();
-  }
-  """
+    window.onload = function() {
+      console.log("Loading completed");
+      $vue_app_name.\$forceUpdate();
+    }
+    """
+  ) |> repr
 
-  output = replace(replace(repr(output), r"\\'"=>"'"), "'" => '"')
 
   output[2:prevind(output, lastindex(output))]
 end
