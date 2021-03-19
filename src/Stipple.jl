@@ -14,6 +14,7 @@ using Logging, Reexport
 @reexport using Genie
 @reexport using Genie.Renderer.Html
 import Genie.Renderer.Json.JSONParser: JSONText, json
+
 import Genie.Configuration: isprod, PROD, DEV
 
 mutable struct Reactive{T} <: Observables.AbstractObservable{T}
@@ -183,8 +184,8 @@ function Base.setindex!(field::Reactive, val, keys...; notify=(x)->true)
     end
 
     if notify(f)
-        Base.invokelatest(f, val)
-      end
+      Base.invokelatest(f, val)
+    end
 
     count += 1
   end
