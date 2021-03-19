@@ -13,15 +13,47 @@ using Logging, Reexport
 @reexport using Observables
 @reexport using Genie
 @reexport using Genie.Renderer.Html
-import Genie.Renderer.Json.JSONParser.JSONText
+import Genie.Renderer.Json.JSONParser: JSONText, json
 import Genie.Configuration: isprod, PROD, DEV
 
-const Reactive = Observables.Observable
+mutable struct Reactive{T} <: Observables.AbstractObservable{T}
+  o::Observables.Observable{T}
+  mode::Symbol
+end
+
+mutable struct Private{T}
+  v::T
+end
+
+Base.convert(::Type{Private{T}}, v::T) where T = Private(v)
+Base.convert(::Type{T}, p::Private{T}) where T = p.v
+function Base.show(io::IO, x::Private)
+  Base.show(io, x.v)
+end
+
+Reactive(v) = Reactive(Observable(v), :public)
+Reactive(v, m::Symbol) = Reactive(Observable(v), m)
+
+Base.promote_rule(::Type{Private{T}}, ::Type{T}) where T = T
+Base.convert(::Type{Reactive{T}}, (v, s)::Tuple{T, Symbol}) where T = Reactive(Observable(v), s)
+Base.convert(::Type{Reactive{T}}, v::T) where T = Reactive(v)
+Base.convert(::Type{Observable{T}}, r::Reactive{T}) where T = r.o
+
+Base.getindex(v::Reactive{T}, args...) where T = Base.getindex(v.o, args...)
+Base.setindex!(v::Reactive{T}, args...) where T = Base.setindex!(v.o, args...)
+Observables.observe(v::Reactive{T}, args...; kwargs...) where T = Observables.observe(v.o, args...; kwargs...)
+Observables.listeners(v::Reactive{T}, args...; kwargs...) where T = Observables.listeners(v.o, args...; kwargs...)
+
 const R = Reactive
+
+
+OptDict = Dict{Symbol, Any}
+opts(;kwargs...) = OptDict(kwargs...)
+
 
 WEB_TRANSPORT = Genie.WebChannels
 
-export R, Reactive, ReactiveModel, @R_str, @js_str
+export R, Reactive, ReactiveModel, Private, @R_str, @js_str
 export newapp
 export onbutton
 export @kwredef
@@ -140,11 +172,11 @@ end
 components(app::M) where {M<:ReactiveModel} = components(M)
 #===#
 
-function Observables.setindex!(observable::Observable, val, keys...; notify=(x)->true)
+function Base.setindex!(field::Reactive, val, keys...; notify=(x)->true)
   count = 1
-  observable.val = val
+  field.o.val = val
 
-  for f in Observables.listeners(observable)
+  for f in Observables.listeners(field.o)
     if in(count, keys)
       count += 1
       continue
@@ -274,9 +306,10 @@ end
 function setup(model::M, channel = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
   for f in fieldnames(typeof(model))
     isa(getproperty(model, f), Reactive) || continue
+    getproperty(model, f).mode == :private && continue
 
     on(getproperty(model, f)) do v
-      push!(model, f => v, channel = channel)
+      push!(model, f => getproperty(model, f), channel = channel)
     end
   end
 
@@ -297,7 +330,8 @@ end
 function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
                     channel::String = Genie.config.webchannels_default_route,
                     except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
-  push!(app, Symbol(julia_to_vue(vals[1])) => vals[2][], channel = channel, except = except)
+  v = vals[2].mode != :jsfunction ? vals[2][] : replace_jsfunction(vals[2][])
+  push!(app, Symbol(julia_to_vue(vals[1])) => v, channel = channel, except = except)
 end
 
 #===#
@@ -326,12 +360,15 @@ end
 
 function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dict{Symbol,Any} where {M<:ReactiveModel}
   result = Dict{String,Any}()
-
   for field in fieldnames(typeof(app))
-    result[julia_to_vue(field)] = Stipple.render(getfield(app, field), field)
+    f = getfield(app, field)
+    @info string(field), f isa Private, endswith(string(field), "_private") 
+    (f isa Private || endswith(string(field), "_private")) && continue
+    f isa Reactive && f.mode == :private && continue
+    result[julia_to_vue(field)] = Stipple.render(f, field)
   end
 
-  vue = Dict(:el => Elements.elem(app), :mixins =>JSONText("[watcherMixin]"), :data => result)
+  vue = Dict(:el => Elements.elem(app), :mixins =>JSONText("[watcherMixin, reviveMixin]"), :data => result)
   components(app)  != "" && push!(vue, :components => components(app))
   js_methods(app)  != "" && push!(vue, :methods    => JSONText("{ $(js_methods(app)) }"))
   js_computed(app) != "" && push!(vue, :computed   => JSONText("{ $(js_computed(app)) }"))
@@ -346,9 +383,59 @@ function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) wher
 end
 
 function Stipple.render(o::Reactive{T}, fieldname::Union{Symbol,Nothing} = nothing) where {T}
+  o.mode == :private && return
   Stipple.render(o[], fieldname)
 end
 
+"""
+```
+function parse_jsfunction(s::AbstractString)
+```
+Checks whether the string is a valid js function and returns a `Dict` from which a reviver function
+in the backend can construct a function.
+"""
+function parse_jsfunction(s::AbstractString)
+    # look for classical function definition
+    m = match( r"function\s*\(([^)]*)\)\s*{(.*)}", s)
+    !isnothing(m) && length(m.captures) == 2 && return opts(arguments=m[1], body=m[2])
+
+    # look for pure function definition
+    m = match( r"\s*\(?([^=)]*?)\)?\s*=>\s*({*.*?}*)\s*$" , s )
+    (isnothing(m) || length(m.captures) != 2) && return nothing
+
+    # if pure function body is without curly brackets, add a `return`, otherwise strip the brackets
+    # Note: for utf-8 strings m[2][2:end-1] will fail if the string ends with a wide character, e.g. ϕ
+    body = startswith(m[2], "{") ? m[2][2:prevind(m[2], lastindex(m[2]))] : "return " * m[2]
+    return opts(arguments=m[1], body=body)
+end
+
+"""
+```
+function replace_jsfunction!(js::Union{Dict, JSONText})
+```
+Replaces all JSONText values that contain a valid js function by a `Dict` that codes the function for a reviver.
+For JSONText variables it encapsulates the dict in a JSONText to make the function type stable.
+"""
+function replace_jsfunction!(d::Dict)
+    for (k,v) in d
+        if isa(v, Dict)
+            replace_jsfunction!(v)
+        elseif isa(v, JSONText)
+            jsfunc = parse_jsfunction(v.s)
+            isnothing(jsfunc) || ( d[k] = opts(jsfunction=jsfunc) )
+        end
+    end
+    return d
+end
+
+function replace_jsfunction(d::Dict)
+  replace_jsfunction!(deepcopy(d))
+end
+
+function replace_jsfunction(js::JSONText)
+    jsfunc = parse_jsfunction(js.s)
+    isnothing(jsfunc) ? js : JSONText(json(opts(jsfunction=jsfunc)))
+end
 #===#
 
 

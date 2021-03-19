@@ -29,7 +29,7 @@ const vm = root
 function vue_integration(model::M; vue_app_name::String, endpoint::String, channel::String, debounce::Int)::String where {M<:ReactiveModel}
   vue_app = replace(Genie.Renderer.Json.JSONParser.json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
-  vue_app = replace(vue_app, '"' => "'")
+  # vue_app = replace(vue_app, '"' => "'")
 
   output = raw"""
     const watcherMixin = {
@@ -64,6 +64,25 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
         }
       }
     }
+    const reviveMixin = {
+      methods: {
+        revive_payload: function(obj) {
+          if (typeof obj === 'object') {
+            for (var key in obj) {
+              if ( (typeof obj[key] === 'object') && !(obj[key].jsfunction) ) {
+                this.revive_payload(obj[key])
+              } else {
+                if (obj[key].jsfunction) {
+                  obj[key] = Function(obj[key].jsfunction.arguments, obj[key].jsfunction.body)
+                  if (key=='stipplejs') { obj[key](); }
+                }
+              }
+            }
+          }
+          return obj;
+        }
+      }
+    }
     """
 
   output *= "\nvar $vue_app_name = new Vue($vue_app);\n\n"
@@ -76,6 +95,7 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
 
   window.parse_payload = function(payload){
     if (payload.key) {
+      window.$(vue_app_name).revive_payload(payload)
       window.$(vue_app_name).updateField(payload.key, payload.value);
     }
   }
@@ -85,8 +105,8 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
     $vue_app_name.\$forceUpdate();
   }
   """
-
-  output = replace(replace(repr(output), r"\\'"=>"'"), "'" => '"')
+  # output = replace(replace(repr(output), r"\\'"=>"'"), "'" => '"')
+  output = repr(output)
 
   output[2:prevind(output, lastindex(output))]
 end
