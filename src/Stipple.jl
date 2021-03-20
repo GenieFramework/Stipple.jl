@@ -502,7 +502,7 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
   isempty(components(app) |> strip)   || push!(vue, :components => components(app))
   isempty(js_methods(app) |> strip)   || push!(vue, :methods    => JSONText("{ $(js_methods(app)) }"))
   isempty(js_computed(app) |> strip)  || push!(vue, :computed   => JSONText("{ $(js_computed(app)) }"))
-  isempty(js_watch(app) |> strip))    || push!(vue, :watch      => JSONText("{ $(js_watch(app)) }"))
+  isempty(js_watch(app) |> strip)     || push!(vue, :watch      => JSONText("{ $(js_watch(app)) }"))
   isempty(js_created(app) |> strip)   || push!(vue, :created    => JSONText("function(){ $(js_created(app)); }"))
 
   vue
