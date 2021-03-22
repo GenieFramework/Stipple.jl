@@ -530,7 +530,7 @@ end
 
 const DEPS = Function[]
 
-@static vuejs() = Genie.Configuration.isprod() ? "vue.min.js" : "vue.js"
+vuejs() = Genie.Configuration.isprod() ? "vue.min.js" : "vue.js"
 
 """
     `function deps_routes(channel::String = Genie.config.webchannels_default_route) :: Nothing`
