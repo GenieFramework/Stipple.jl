@@ -511,7 +511,8 @@ macro kwredef(expr)
       t = t[n].args
       n = 1
   end
-  if t[n] isa Expr && t[n].head === :curly
+  curly = t[n] isa Expr && t[n].head === :curly
+  if curly
       t = t[n].args
       n=1
   end
@@ -522,7 +523,7 @@ macro kwredef(expr)
   esc(quote
     Base.@kwdef $expr
     $T_old = $T_new
-    $T_new.name.name = $(QuoteNode(T_old)) # fix the name
+    $curly ? $T_new.body.name.name = $(QuoteNode(T_old)) : $T_new.name.name = $(QuoteNode(T_old)) # fix the name
   end)
 end
 
