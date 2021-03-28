@@ -94,9 +94,11 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
 
     join([Stipple.watch(vue_app_name, getfield(model, field), field, channel, debounce, model) 
       for field in fieldnames(typeof(model))
-      if !(endswith(String(field), "_private") || 
+      if !( 
+        endswith(String(field), "_") || 
         getfield(model, field) isa Reactive && getfield(model, field).mode != :public || 
-        getfield(model, field) isa Private)
+        getfield(model, field) isa Private
+      )
     ])
     
     ,

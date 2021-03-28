@@ -210,17 +210,13 @@ const newapp = Generator.newapp
 #===#
 
 function update!(model::M, field::Symbol, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-  update!(model, getfield(model, field), newval, oldval)
-end
-
-function update!(model::M, field::Reactive, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-  field[1] = newval
-
+  f = getfield(model, field)
+  f isa Reactive ? (f.mode == :private ? f[] = newval : f[1] = newval) : setfield!(model, field, newval)
   model
 end
 
-function update!(model::M, field::Any, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-  setfield!(model, field, newval)
+function update!(model::M, field::Reactive, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
+  field.mode == :private ? field[] = newval : field[1] = newval
 
   model
 end
@@ -264,8 +260,18 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     payload["newval"] == payload["oldval"] && return "OK"
 
     field = Symbol(payload["field"])
+
+    #check if field exists
+    hasfield(M, field) || return "OK"
     val = getfield(model, field)
 
+    # reject non-public types
+    if val isa Reactive 
+      val.mode == :public || return "OK"
+    else
+      endswith(String(field), "_") && return "OK"
+    end
+    
     valtype = isa(val, Reactive) ? typeof(val[]) : typeof(val)
 
     newval = try
@@ -364,8 +370,7 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
   result = Dict{String,Any}()
   for field in fieldnames(typeof(app))
     f = getfield(app, field)
-    @info string(field), f isa Private, endswith(string(field), "_private") 
-    (f isa Private || endswith(string(field), "_private")) && continue
+    (f isa Private || endswith(string(field), "__")) && continue
     f isa Reactive && f.mode == :private && continue
     result[julia_to_vue(field)] = Stipple.render(f, field)
   end
@@ -385,7 +390,6 @@ function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) wher
 end
 
 function Stipple.render(o::Reactive{T}, fieldname::Union{Symbol,Nothing} = nothing) where {T}
-  o.mode == :private && return
   Stipple.render(o[], fieldname)
 end
 
