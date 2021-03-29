@@ -92,12 +92,13 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
 
     ,
 
-    join([Stipple.watch(vue_app_name, getfield(model, field), field, channel, debounce, model) 
+    join([Stipple.watch(vue_app_name, field, channel, debounce, model) 
       for field in fieldnames(typeof(model))
-      if !( 
-        endswith(String(field), "_") || 
-        getfield(model, field) isa Reactive && getfield(model, field).mode != :public || 
-        getfield(model, field) isa Private
+      if !(
+        occursin(Stipple.SETTINGS.readonly_pattern, String(field)) || 
+        occursin(Stipple.SETTINGS.private_pattern, String(field))  ||
+        getfield(model, field) isa Reactive && 
+          (getfield(model, field).mode != :public || getfield(model, field).no_frontend_update)
       )
     ])
     
