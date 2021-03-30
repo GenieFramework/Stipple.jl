@@ -20,24 +20,22 @@ import Genie.Configuration: isprod, PROD, DEV
 
 mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   o::Observables.Observable{T}
-  mode::Symbol
+  mode::Int
   no_backend_watcher::Bool
   no_frontend_watcher::Bool
 end
 
-Reactive(v, no_backend_watcher::Bool = false, no_frontend_watcher::Bool = false) = Reactive(Observable(v), :public, no_backend_watcher, no_frontend_watcher)
-Reactive(v, m::Symbol, no_backend_watcher::Bool = false, no_frontend_watcher::Bool = false) = Reactive(Observable(v), m, no_backend_watcher, no_frontend_watcher)
-Reactive(v, m::Symbol, updatemode::Int) = Reactive(Observable(v), m, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0)
-Reactive(v, updatemode::Int) = Reactive(v, :public, updatemode)
+Reactive(v, no_backend_watcher::Bool = false, no_frontend_watcher::Bool = false) = Reactive(Observable(v), 0, no_backend_watcher, no_frontend_watcher)
+Reactive(v, m::Int, no_backend_watcher::Bool = false, no_frontend_watcher::Bool = false) = Reactive(Observable(v), m, no_backend_watcher, no_frontend_watcher)
+Reactive(v, m::Int, updatemode::Int) = Reactive(Observable(v), m, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0)
 
 Base.convert(::Type{Reactive{T}}, v::T) where T = Reactive(v)
-Base.convert(::Type{Reactive{T}}, (v, s)::Tuple{T, Symbol}) where T = Reactive(Observable(v), s)
-Base.convert(::Type{Reactive{T}}, (v, b)::Tuple{T, Bool}) where T = Reactive(v, :public, b, false)
-Base.convert(::Type{Reactive{T}}, (v, s, b)::Tuple{T, Symbol, Bool}) where T = Reactive(v, s, b, false)
-Base.convert(::Type{Reactive{T}}, (v, b1, b2)::Tuple{T, Bool, Bool}) where T = Reactive(v, :public, b1, b2)
-Base.convert(::Type{Reactive{T}}, (v, s, b1, b2)::Tuple{T, Symbol, Bool, Bool}) where T = Reactive(v, s, b1, b2)
-Base.convert(::Type{Reactive{T}}, (v, s, u)::Tuple{T, Symbol, Int}) where T = Reactive(v, s, u)
-Base.convert(::Type{Reactive{T}}, (v, u)::Tuple{T, Int}) where T = Reactive(v, u)
+Base.convert(::Type{Reactive{T}}, (v, m)::Tuple{T, Int}) where T = m < 16 ? Reactive(v, m, 0) : Reactive(v, 0, m)
+Base.convert(::Type{Reactive{T}}, (v, w)::Tuple{T, Bool}) where T = Reactive(v, PUBLIC, w, false)
+Base.convert(::Type{Reactive{T}}, (v, m, nw)::Tuple{T, Int, Bool}) where T = Reactive(v, m, nw, false)
+Base.convert(::Type{Reactive{T}}, (v, nbw, nfw)::Tuple{T, Bool, Bool}) where T = Reactive(v, PUBLIC, nbw, nfw)
+Base.convert(::Type{Reactive{T}}, (v, m, nbw, nfw)::Tuple{T, Int, Bool, Bool}) where T = Reactive(v, m, nbw, nfw)
+Base.convert(::Type{Reactive{T}}, (v, m, nw)::Tuple{T, Int, Int}) where T = Reactive(v, m, nw)
 Base.convert(::Type{Observable{T}}, r::Reactive{T}) where T = r.o
 
 Base.getindex(v::Reactive{T}, args...) where T = Base.getindex(v.o, args...)
@@ -46,9 +44,13 @@ Observables.observe(v::Reactive{T}, args...; kwargs...) where T = Observables.ob
 Observables.listeners(v::Reactive{T}, args...; kwargs...) where T = Observables.listeners(v.o, args...; kwargs...)
 
 const R = Reactive
-const NO_BACKEND_WATCHER = 1
-const NO_FRONTEND_WATCHER = 2
-const NO_WATCHER = 3
+const PUBLIC = 1
+const PRIVATE = 2
+const READONLY = 4
+const JSFUNCTION = 8
+const NO_BACKEND_WATCHER = 16
+const NO_FRONTEND_WATCHER = 32
+const NO_WATCHER = 48
 
 
 OptDict = Dict{Symbol, Any}
@@ -57,7 +59,8 @@ opts(;kwargs...) = OptDict(kwargs...)
 
 WEB_TRANSPORT = Genie.WebChannels
 
-export R, Reactive, ReactiveModel, Private, @R_str, @js_str, NO_WATCHER, NO_BACKEND_WATCHER, NO_FRONTEND_WATCHER
+export R, Reactive, ReactiveModel, Private, @R_str, @js_str
+export PRIVATE, PUBLIC, READONLY, JSFUNCTION, NO_WATCHER, NO_BACKEND_WATCHER, NO_FRONTEND_WATCHER
 export newapp
 export onbutton
 export @kwredef
@@ -219,12 +222,12 @@ const newapp = Generator.newapp
 
 function update!(model::M, field::Symbol, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
   f = getfield(model, field)
-  f isa Reactive ? (f.mode == :private ? f[] = newval : f[1] = newval) : setfield!(model, field, newval)
+  f isa Reactive ? (f.mode == PRIVATE ? f[] = newval : f[1] = newval) : setfield!(model, field, newval)
   model
 end
 
 function update!(model::M, field::Reactive, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-  field.mode == :private ? field[] = newval : field[1] = newval
+  field.mode == PRIVATE ? field[] = newval : field[1] = newval
 
   model
 end
@@ -275,7 +278,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
 
     # reject non-public types
     if val isa Reactive 
-      val.mode == :public || return "OK"
+      val.mode == PUBLIC || return "OK"
     else
       occursin(SETTINGS.readonly_pattern, String(field)) || occursin(SETTINGS.private, String(field)) &&
         return "OK"
@@ -324,7 +327,7 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
   for field in fieldnames(M)
     f = getproperty(model, field)
     isa(f, Reactive) || continue
-    f.mode == :private || f.no_backend_watcher && continue
+    f.mode == PRIVATE || f.no_backend_watcher && continue
 
     on(f) do _
       push!(model, field => f, channel = channel)
@@ -381,7 +384,7 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
   for field in fieldnames(typeof(app))
     f = getfield(app, field)
     !(f isa Reactive) && occursin(SETTINGS.private_pattern, String(field)) && continue
-    f isa Reactive && f.mode == :private && continue
+    f isa Reactive && f.mode == PRIVATE && continue
     result[julia_to_vue(field)] = Stipple.render(f, field)
   end
 
