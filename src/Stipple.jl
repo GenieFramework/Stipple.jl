@@ -299,7 +299,11 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
       if valtype <: AbstractFloat && typeof(payload["newval"]) <: Integer 
         convert(valtype, payload["newval"])
       elseif valtype <: AbstractArray
-        a = convert(Array{eltype(valtype)}, payload["newval"])
+        a = if payload["newval"] isa AbstractArray
+          convert(Array{eltype(valtype)}, payload["newval"])
+        else
+          valtype([payload["newval"]])
+        end
       else
         Base.parse(valtype, payload["newval"])
       end
@@ -312,7 +316,11 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
       if AbstractFloat >: valtype && Integer >: typeof(payload["oldval"])
         convert(valtype, payload["oldval"])
       elseif valtype <: AbstractArray
-        a = convert(Array{eltype(valtype)}, payload["newval"])
+        a = if payload["oldval"] isa AbstractArray
+          convert(Array{eltype(valtype)}, payload["oldval"])
+        else
+          Vector{eltype(valtype)}([payload["oldval"]])
+        end
       else
         Base.parse(valtype, payload["oldval"])
       end
