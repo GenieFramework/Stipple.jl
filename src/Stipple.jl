@@ -24,19 +24,24 @@ mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   mode::Int
   no_backend_watcher::Bool
   no_frontend_watcher::Bool
+  Reactive{T}() where {T} = new{T}(Observable{T}(), PUBLIC, false, false)
+  Reactive{T}(o, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, PUBLIC, no_bw, no_fw)
+  Reactive{T}(o, mode::Int, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, mode, no_bw, no_fw)
+  Reactive{T}(o, mode::Int, updatemode::Int) where {T} = new{T}(o, mode, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0)
+
+  # Construct an Reactive{Any} without runtime dispatch
+  Reactive{Any}(@nospecialize(o)) = new{Any}(Observable{Any}(o), PUBLIC, false, false)
 end
 
-Reactive(v, no_backend_watcher::Bool = false, no_frontend_watcher::Bool = false) = Reactive(Observable(v), 0, no_backend_watcher, no_frontend_watcher)
-Reactive(v, m::Int, no_backend_watcher::Bool = false, no_frontend_watcher::Bool = false) = Reactive(Observable(v), m, no_backend_watcher, no_frontend_watcher)
-Reactive(v, m::Int, updatemode::Int) = Reactive(Observable(v), m, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0)
+Base.convert(::Type{T}, x::T) where {T<:Reactive} = x  # resolves ambiguity with convert(::Type{T}, x::T) in base/essentials.jl
+Base.convert(::Type{T}, x) where {T<:Reactive} = T(x)
 
-Base.convert(::Type{Reactive{T}}, v::T) where T = Reactive(v)
-Base.convert(::Type{Reactive{T}}, (v, m)::Tuple{T, Int}) where T = m < 16 ? Reactive(v, m, 0) : Reactive(v, 0, m)
-Base.convert(::Type{Reactive{T}}, (v, w)::Tuple{T, Bool}) where T = Reactive(v, PUBLIC, w, false)
-Base.convert(::Type{Reactive{T}}, (v, m, nw)::Tuple{T, Int, Bool}) where T = Reactive(v, m, nw, false)
-Base.convert(::Type{Reactive{T}}, (v, nbw, nfw)::Tuple{T, Bool, Bool}) where T = Reactive(v, PUBLIC, nbw, nfw)
-Base.convert(::Type{Reactive{T}}, (v, m, nbw, nfw)::Tuple{T, Int, Bool, Bool}) where T = Reactive(v, m, nbw, nfw)
-Base.convert(::Type{Reactive{T}}, (v, m, nw)::Tuple{T, Int, Int}) where T = Reactive(v, m, nw)
+Base.convert(::Type{Reactive{T}}, (v, m)::Tuple{T, Int}) where T = m < 16 ? Reactive{T}(Observable(v), m, 0) : Reactive{T}(Observable(v), 0, m)
+Base.convert(::Type{Reactive{T}}, (v, w)::Tuple{T, Bool}) where T = Reactive{T}(Observable(v), PUBLIC, w, false)
+Base.convert(::Type{Reactive{T}}, (v, m, nw)::Tuple{T, Int, Bool}) where T = Reactive{T}(Observable(v), m, nw, false)
+Base.convert(::Type{Reactive{T}}, (v, nbw, nfw)::Tuple{T, Bool, Bool}) where T = Reactive{T}(Observable(v), PUBLIC, nbw, nfw)
+Base.convert(::Type{Reactive{T}}, (v, m, nbw, nfw)::Tuple{T, Int, Bool, Bool}) where T = Reactive{T}(Observable(v), m, nbw, nfw)
+Base.convert(::Type{Reactive{T}}, (v, m, u)::Tuple{T, Int, Int}) where T = Reactive{T}(Observable(v), m, u)
 Base.convert(::Type{Observable{T}}, r::Reactive{T}) where T = r.o
 
 Base.getindex(v::Reactive{T}, args...) where T = Base.getindex(v.o, args...)
@@ -60,7 +65,8 @@ opts(;kwargs...) = OptDict(kwargs...)
 
 WEB_TRANSPORT = Genie.WebChannels
 
-export R, Reactive, ReactiveModel, @R_str, @js_str, NO_WATCHER, NO_BACKEND_WATCHER, NO_FRONTEND_WATCHER
+export R, Reactive, ReactiveModel, @R_str, @js_str
+export PRIVATE, PUBLIC, READONLY, JSFUNCTION, NO_WATCHER, NO_BACKEND_WATCHER, NO_FRONTEND_WATCHER
 export newapp
 export onbutton
 export @kwredef
@@ -304,7 +310,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
         a = if payload["newval"] isa AbstractArray
           convert(Array{eltype(valtype)}, payload["newval"])
         else
-          valtype([payload["newval"]])
+          eltype(valtype)[payload["newval"]]
         end
       else
         Base.parse(valtype, payload["newval"])
@@ -321,7 +327,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
         a = if payload["oldval"] isa AbstractArray
           convert(Array{eltype(valtype)}, payload["oldval"])
         else
-          Vector{eltype(valtype)}([payload["oldval"]])
+          eltype(valtype)[payload["oldval"]]
         end
       else
         Base.parse(valtype, payload["oldval"])
