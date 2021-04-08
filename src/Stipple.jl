@@ -11,6 +11,7 @@ module Stipple
 using Logging, Reexport
 
 @reexport using Observables
+@reexport using OffsetArrays
 @reexport using Genie
 @reexport using Genie.Renderer.Html
 import Genie.Renderer.Json.JSONParser: JSONText, json
@@ -59,8 +60,7 @@ opts(;kwargs...) = OptDict(kwargs...)
 
 WEB_TRANSPORT = Genie.WebChannels
 
-export R, Reactive, ReactiveModel, Private, @R_str, @js_str
-export PRIVATE, PUBLIC, READONLY, JSFUNCTION, NO_WATCHER, NO_BACKEND_WATCHER, NO_FRONTEND_WATCHER
+export R, Reactive, ReactiveModel, @R_str, @js_str, NO_WATCHER, NO_BACKEND_WATCHER, NO_FRONTEND_WATCHER
 export newapp
 export onbutton
 export @kwredef
@@ -220,14 +220,26 @@ const newapp = Generator.newapp
 
 #===#
 
-function update!(model::M, field::Symbol, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
+function update!(model::M, field::Symbol, newval, oldval=newval)::M where {M<:ReactiveModel}
   f = getfield(model, field)
-  f isa Reactive ? (f.mode == PRIVATE ? f[] = newval : f[1] = newval) : setfield!(model, field, newval)
+  ftype = f isa Reactive ? eltype(f) : typeof(f)
+  if ftype <: OffsetArray && ! isa(newval, OffsetArray)
+    o = f isa Reactive ? f[].offsets : f.offsets
+    newval = OffsetArray(newval, OffsetArrays.Origin(1 .+ o))
+  end
+  if f isa Reactive
+    f.mode == :private ? f[] = newval : f[1] = newval
+  else
+    setfield!(model, field, newval)
+  end
   model
 end
 
-function update!(model::M, field::Reactive, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-  field.mode == PRIVATE ? field[] = newval : field[1] = newval
+function update!(model::M, field::Reactive, newval, oldval=newval)::M where {M<:ReactiveModel}
+  if eltype(f) <: OffsetArray && ! isa(newval, OffsetArray)
+    newval = OffsetArray(newval, OffsetArrays.Origin(1 .+ f[].offsets))
+  end
+  field.mode == :private ? field[] = newval : field[1] = newval
 
   model
 end
@@ -284,11 +296,16 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
         return "OK"
     end
     
-    valtype = isa(val, Reactive) ? typeof(val[]) : typeof(val)
-
+    valtype = isa(val, Reactive) ? eltype(val) : typeof(val)
     newval = try
-      if AbstractFloat >: valtype && Integer >: typeof(payload["newval"])
+      if valtype <: AbstractFloat && typeof(payload["newval"]) <: Integer 
         convert(valtype, payload["newval"])
+      elseif valtype <: AbstractArray
+        a = if payload["newval"] isa AbstractArray
+          convert(Array{eltype(valtype)}, payload["newval"])
+        else
+          valtype([payload["newval"]])
+        end
       else
         Base.parse(valtype, payload["newval"])
       end
@@ -300,6 +317,12 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     oldval = try
       if AbstractFloat >: valtype && Integer >: typeof(payload["oldval"])
         convert(valtype, payload["oldval"])
+      elseif valtype <: AbstractArray
+        a = if payload["oldval"] isa AbstractArray
+          convert(Array{eltype(valtype)}, payload["oldval"])
+        else
+          Vector{eltype(valtype)}([payload["oldval"]])
+        end
       else
         Base.parse(valtype, payload["oldval"])
       end
@@ -573,11 +596,19 @@ onbutton(f::Function, button::R{Bool}; async = false, kwargs...) = on(button; kw
   pressed || return
   if async
       @async begin
-          f()
+          try
+            f()
+          catch ex
+            warn(ex)
+          end
           button[] = false
       end
   else
-      f()
+      try
+        f()
+      catch ex
+        warn(ex)
+      end
       button[] = false
   end
   return
