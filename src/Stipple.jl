@@ -228,7 +228,7 @@ function update!(model::M, field::Symbol, newval, oldval=newval)::M where {M<:Re
     newval = OffsetArray(newval, OffsetArrays.Origin(1 .+ o))
   end
   if f isa Reactive
-    f.mode == :private ? f[] = newval : f[1] = newval
+    f.mode == PRIVATE ? f[] = newval : f[1] = newval
   else
     setfield!(model, field, newval)
   end
@@ -239,7 +239,7 @@ function update!(model::M, field::Reactive, newval, oldval=newval)::M where {M<:
   if eltype(f) <: OffsetArray && ! isa(newval, OffsetArray)
     newval = OffsetArray(newval, OffsetArrays.Origin(1 .+ f[].offsets))
   end
-  field.mode == :private ? field[] = newval : field[1] = newval
+  field.mode == PRIVATE ? field[] = newval : field[1] = newval
 
   model
 end
