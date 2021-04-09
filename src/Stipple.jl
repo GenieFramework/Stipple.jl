@@ -278,14 +278,10 @@ end
 include("Typography.jl")
 include("Elements.jl")
 include("Layout.jl")
-include("Generator.jl")
 
 @reexport using .Typography
 @reexport using .Elements
 @reexport using .Layout
-using .Generator
-
-const newapp = Generator.newapp
 
 #===#
 
