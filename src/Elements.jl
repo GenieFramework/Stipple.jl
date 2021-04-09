@@ -99,7 +99,7 @@ end
 #===#
 
 macro iif(expr)
-  :( :( "v-if='$($(esc(expr)))'" ) )
+  :( "v-if='$($(esc(expr)))'" )
 end
 
 macro elsiif(expr)
