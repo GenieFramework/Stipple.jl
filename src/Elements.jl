@@ -1,3 +1,8 @@
+"""
+# Stipple.Elements
+
+The `Elements` module provides utility methods for interfacing between Julia and Vue.js.
+"""
 module Elements
 
 import Genie
@@ -6,10 +11,15 @@ using Stipple
 import Genie.Renderer.Html: HTMLString, normal_element
 import Genie.Renderer.Json.JSONParser.JSONText
 
-export root, elem, vm, @iif, @elsiif, @els, @text, @bind, @data, @click, @on
+export root, elem, vm, @iif, @elsiif, @els, @text, @bind, @data, @on
 
 #===#
 
+"""
+    `function root(app::M)::String where {M<:ReactiveModel}`
+
+Generates a valid JavaScript object name to be used as the name of the Vue app -- and its respective HTML container.
+"""
 function root(app::M)::String where {M<:ReactiveModel}
   Genie.Generator.validname(typeof(app) |> string)
 end
@@ -18,6 +28,11 @@ function root(app::Type{M})::String where {M<:ReactiveModel}
   Genie.Generator.validname(app |> string)
 end
 
+"""
+    `function elem(app::M)::String where {M<:ReactiveModel}`
+
+Generates a JS id `#` reference to the DOM element containing the Vue app template.
+"""
 function elem(app::M)::String where {M<:ReactiveModel}
   "#$(root(app))"
 end
@@ -26,6 +41,12 @@ const vm = root
 
 #===#
 
+"""
+    `function vue_integration(model::M; vue_app_name::String, endpoint::String, channel::String, debounce::Int)::String where {M<:ReactiveModel}`
+
+Generates the JS/Vue.js code which handles the 2-way data sync between Julia and JavaScript/Vue.js.
+It is called internally by `Stipple.init` which allows for the configuration of all the parameters.
+"""
 function vue_integration(model::M; vue_app_name::String, endpoint::String, channel::String, debounce::Int)::String where {M<:ReactiveModel}
   vue_app = replace(Genie.Renderer.Json.JSONParser.json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
@@ -98,18 +119,73 @@ end
 
 #===#
 
+"""
+    `@iif(expr)`
+
+Generates `v-if` Vue.js code using `expr` as the condition.
+<https://vuejs.org/v2/api/#v-if>
+
+### Example
+
+```julia
+julia> span("Bad stuff's about to happen", class="warning", @iif(:warning))
+"<span class=\"warning\" v-if='warning'>Bad stuff's about to happen</span>"
+```
+"""
 macro iif(expr)
   :( "v-if='$($(esc(expr)))'" )
 end
 
+"""
+    `@elsiif(expr)`
+
+Generates `v-else-if` Vue.js code using `expr` as the condition.
+<https://vuejs.org/v2/api/#v-else-if>
+
+### Example
+
+```julia
+julia> span("An error has occurred", class="error", @elsiif(:error))
+"<span class=\"error\" v-else-if='error'>An error has occurred</span>"
+```
+"""
 macro elsiif(expr)
   :( "v-else-if='$($(esc(expr)))'" )
 end
 
+"""
+    `@els(expr)`
+
+Generates `v-else` Vue.js code using `expr` as the condition.
+<https://vuejs.org/v2/api/#v-else>
+
+### Example
+
+```julia
+julia> span("Might want to keep an eye on this", class="notice", @els(:notice))
+"<span class=\"notice\" v-else='notice'>Might want to keep an eye on this</span>"
+```
+"""
 macro els(expr)
   :( "v-else='$($(esc(expr)))'" )
 end
 
+"""
+    `@text(expr)`
+
+Creates a `v-text` or a `text-content.prop` Vue biding to the element's `textContent` property.
+<https://vuejs.org/v2/api/#v-text>
+
+### Example
+
+```julia
+julia> span("", @text("abc | def"))
+"<span :text-content.prop='abc | def'></span>"
+
+julia> span("", @text("abc"))
+"<span v-text='abc'></span>"
+```
+"""
 macro text(expr)
   quote
     directive = occursin(" | ", string($(esc(expr)))) ? ":text-content.prop" : "v-text"
@@ -118,11 +194,20 @@ macro text(expr)
 end
 
 """
-`@bind(expr, [type])`
+    `@bind(expr, [type])`
 
-Binds a model parameter to a quasar or vue component, optionally defining the parameter type.
+Binds a model parameter to a Vue component, generating a `v-model` property, optionally defining the parameter type.
+<https://vuejs.org/v2/api/#v-model>
 
-`@bind(:xparam)` or `@bind(:xparam, :number)
+### Example
+
+```julia
+julia> input("", placeholder="Type your name", @bind(:name))
+"<input placeholder=\"Type your name\"  v-model='name' />"
+
+julia> input("", placeholder="Type your name", @bind(:name, :identity))
+"<input placeholder=\"Type your name\"  v-model.identity='name' />"
+```
 """
 macro bind(expr)
   :( "v-model='$($(esc(expr)))'" )
@@ -132,49 +217,43 @@ macro bind(expr, type)
   :( "v-model.$($(esc(type)))='$($(esc(expr)))'" )
 end
 
+"""
+    `@data(expr)`
+
+Creates a Vue.js data binding for the elements that expect it.
+
+### Example
+
+```julia
+julia> plot(@data(:piechart), options! = "plot_options")
+"<template><apexchart :options=\"plot_options\" :series=\"piechart\"></apexchart></template>"
+```
+"""
 macro data(expr)
   quote
     x = $(esc(expr))
-    if typeof(x) <: Union{AbstractString, Symbol}
+    if typeof(x) <: Union{AbstractString,Symbol}
       Symbol(x)
     else
-      startswith("$x", "Any[") ? JSONText(":" * "$x"[4:end]) : JSONText(":$x")
+      strx = strip("$x")
+      startswith(strx, "Any[") && (strx = strx[4:end])
+
+      JSONText(string(":", strx))
     end
   end
 end
 
 """
-`@click(expr)`
+    `on(action, expr)`
 
-Defines a js routine that is called by a click of the quasar component.
-If a symbol argument is supplied, `@click` sets this value to true.
+Defines a js routine that is called by the given `action` of the Vue component, e.g. `:click`, `:input`
 
-`@click("savefile = true")` or `@click("myjs_func();")` or `@click(:button)`
+### Example
 
-Modifers can be appended:
+```julia
+julia> input("", @bind(:input), @on("keyup.enter", "process = true"))
+"<input  v-model='input' v-on:keyup.enter='process = true' />"
 ```
-@click(:me, :native)
-# "@click.native='me = true'"
-```
-"""
-macro click(expr, mode="")
-  quote
-    x = $(esc(expr))
-    m = $(esc(mode))
-    if x isa Symbol
-      """@click$(m == "" ? "" : ".$m")='$x = true'"""
-    else
-      "@click='$(replace(x, "'" => raw"\'"))'"
-    end
-  end
-end
-
-"""
-`on(action, expr)`
-
-Defines a js routine that is called by the given `action` of the quasar component, e.g. `:click`, `:input`
-
-`@on(:click, "savefile = true")` or `@on("input.native", "myjs_func();")`
 """
 macro on(args, expr)
   :( "v-on:$(string($(esc(args))))='$(replace($(esc(expr)),"'" => raw"\'"))'" )
