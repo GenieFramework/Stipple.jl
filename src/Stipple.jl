@@ -530,7 +530,7 @@ end
 
 const DEPS = Function[]
 
-@static vuejs() = Genie.Configuration.isprod() ? "vue.min.js" : "vue.js"
+vuejs() = @static Genie.Configuration.isprod() ? "vue.min.js" : "vue.js"
 
 """
     `function deps_routes(channel::String = Genie.config.webchannels_default_route) :: Nothing`
@@ -601,12 +601,7 @@ end
 
 #===#
 
-function camelcase(s::String) :: String
-  replacements = [replace(s, r.match=>uppercase(r.match[2:end])) for r in eachmatch(r"_.", s) |> collect] |> unique
-  isempty(replacements) ? s : first(replacements)
-end
-
-function Core.NamedTuple(kwargs::Dict) :: NamedTuple
+function Core.NamedTuple(kwargs::Dict{Symbol,T})::NamedTuple where {T}
   NamedTuple{Tuple(keys(kwargs))}(collect(values(kwargs)))
 end
 
