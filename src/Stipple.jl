@@ -226,13 +226,43 @@ const newapp = Generator.newapp
 
 #===#
 
+function convertvalue(targetfield::Any, value)
+  valtype = isa(targetfield, Reactive) ? eltype(targetfield) : typeof(targetfield)
+  newval = try
+    if valtype <: AbstractFloat && typeof(value) <: Integer 
+      convert(valtype, value)
+    elseif valtype <: AbstractArray
+      a = if value isa AbstractArray
+        convert(Array{eltype(valtype)}, value)
+      else
+        eltype(valtype)[value]
+      end
+    else
+      Base.parse(valtype, value)
+    end
+  catch ex
+    @error ex
+    value
+  end
+end
+
+function convertvalue(targetfield::Union{T, Reactive{T}}, value) where T <: OffsetArray
+  valtype = isa(targetfield, Reactive) ? eltype(targetfield) : typeof(targetfield)
+  a = if value isa AbstractArray
+    convert(Array{eltype(valtype)}, value)
+  else
+    eltype(valtype)[value]
+  end
+  if ! isa(value, OffsetArray)
+    o = targetfield isa Reactive ? targetfield[].offsets : targetfield.offsets
+    OffsetArray(a, OffsetArrays.Origin(1 .+ o))
+  else
+    value
+  end
+end
+
 function update!(model::M, field::Symbol, newval, oldval=newval)::M where {M<:ReactiveModel}
   f = getfield(model, field)
-  ftype = f isa Reactive ? eltype(f) : typeof(f)
-  if ftype <: OffsetArray && ! isa(newval, OffsetArray)
-    o = f isa Reactive ? f[].offsets : f.offsets
-    newval = OffsetArray(newval, OffsetArrays.Origin(1 .+ o))
-  end
   if f isa Reactive
     f.mode == PRIVATE ? f[] = newval : f[1] = newval
   else
@@ -242,9 +272,6 @@ function update!(model::M, field::Symbol, newval, oldval=newval)::M where {M<:Re
 end
 
 function update!(model::M, field::Reactive, newval, oldval=newval)::M where {M<:ReactiveModel}
-  if eltype(f) <: OffsetArray && ! isa(newval, OffsetArray)
-    newval = OffsetArray(newval, OffsetArrays.Origin(1 .+ f[].offsets))
-  end
   field.mode == PRIVATE ? field[] = newval : field[1] = newval
 
   model
@@ -301,42 +328,8 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
       occursin(SETTINGS.readonly_pattern, String(field)) || occursin(SETTINGS.private, String(field)) &&
         return "OK"
     end
-    
-    valtype = isa(val, Reactive) ? eltype(val) : typeof(val)
-    newval = try
-      if valtype <: AbstractFloat && typeof(payload["newval"]) <: Integer 
-        convert(valtype, payload["newval"])
-      elseif valtype <: AbstractArray
-        a = if payload["newval"] isa AbstractArray
-          convert(Array{eltype(valtype)}, payload["newval"])
-        else
-          eltype(valtype)[payload["newval"]]
-        end
-      else
-        Base.parse(valtype, payload["newval"])
-      end
-    catch ex
-      @error ex
-      payload["newval"]
-    end
-
-    oldval = try
-      if AbstractFloat >: valtype && Integer >: typeof(payload["oldval"])
-        convert(valtype, payload["oldval"])
-      elseif valtype <: AbstractArray
-        a = if payload["oldval"] isa AbstractArray
-          convert(Array{eltype(valtype)}, payload["oldval"])
-        else
-          eltype(valtype)[payload["oldval"]]
-        end
-      else
-        Base.parse(valtype, payload["oldval"])
-      end
-    catch ex
-      @error ex
-      payload["oldval"]
-    end
-
+    newval = convertvalue(val, payload["newval"])
+    oldval = convertvalue(val, payload["oldval"])
     push!(model, field => newval, channel = channel, except = client)
     update!(model, field, newval, oldval)
 
