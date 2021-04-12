@@ -43,8 +43,17 @@ Base.convert(::Type{Reactive{T}}, (v, m, nbw, nfw)::Tuple{T, Int, Bool, Bool}) w
 Base.convert(::Type{Reactive{T}}, (v, m, u)::Tuple{T, Int, Int}) where T = Reactive{T}(Observable(v), m, u)
 Base.convert(::Type{Observable{T}}, r::Reactive{T}) where T = r.o
 
-Base.getindex(v::Reactive{T}, args...) where T = Base.getindex(v.o, args...)
-Base.setindex!(v::Reactive{T}, args...) where T = Base.setindex!(v.o, args...)
+Base.getindex(v::Reactive{T}) where T = Base.getindex(v.o)
+Base.setindex!(v::Reactive{T}) where T = Base.setindex!(v.o)
+
+function Base.getindex(r::Reactive{T}, arg1, args...) where T
+  Base.getindex(r.o.val, arg1, args...)
+end
+function Base.setindex!(r::Reactive{T}, val, arg1, args...) where T
+  setindex!(r.o.val, val, arg1, args...)
+  notify!(r)
+end
+
 Observables.observe(v::Reactive{T}, args...; kwargs...) where T = Observables.observe(v.o, args...; kwargs...)
 Observables.listeners(v::Reactive{T}, args...; kwargs...) where T = Observables.listeners(v.o, args...; kwargs...)
 
@@ -204,7 +213,7 @@ end
 components(app::M) where {M<:ReactiveModel} = components(M)
 #===#
 
-function Base.setindex!(field::Reactive, val, keys...; notify=(x)->true)
+function setindex_withoutwatchers!(field::Reactive, val, keys...; notify=(x)->true)
   count = 1
   field.o.val = val
 
@@ -262,7 +271,7 @@ end
 function update!(model::M, field::Symbol, newval, oldval=newval)::M where {M<:ReactiveModel}
   f = getfield(model, field)
   if f isa Reactive
-    f.mode == PRIVATE ? f[] = newval : f[1] = newval
+    f.mode == PRIVATE ? f[] = newval : setindex_withoutwatchers!(f, newval, 1)
   else
     setfield!(model, field, newval)
   end
@@ -270,7 +279,7 @@ function update!(model::M, field::Symbol, newval, oldval=newval)::M where {M<:Re
 end
 
 function update!(model::M, field::Reactive, newval, oldval=newval)::M where {M<:ReactiveModel}
-  field.mode == PRIVATE ? field[] = newval : field[1] = newval
+  field.mode == PRIVATE ? field[] = newval : setindex_withoutwatchers!(f, newval, 1)
 
   model
 end
