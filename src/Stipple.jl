@@ -8,10 +8,9 @@ taking care of the full data sync workflow.
 """
 module Stipple
 
-using Logging, Reexport
+using Logging, Reexport, Requires
 
 @reexport using Observables
-@reexport using OffsetArrays
 @reexport using Genie
 @reexport using Genie.Renderer.Html
 import Genie.Renderer.Json.JSONParser: JSONText, json
@@ -75,6 +74,20 @@ export @kwredef
 
 function __init__()
   Genie.config.websockets_server = true
+  @require OffsetArrays  = "6fe1bfb0-de20-5000-8ca7-80f57d26f881" function convertvalue(targetfield::Union{T, Reactive{T}}, value) where T <: OffsetArrays.OffsetArray
+    valtype = isa(targetfield, Reactive) ? eltype(targetfield) : typeof(targetfield)
+    a = if value isa AbstractArray
+      convert(Array{eltype(valtype)}, value)
+    else
+      eltype(valtype)[value]
+    end
+    if ! isa(value, OffsetArrays.OffsetArray)
+      o = targetfield isa Reactive ? targetfield[].offsets : targetfield.offsets
+      OffsetArrays.OffsetArray(a, OffsetArrays.Origin(1 .+ o))
+    else
+      value
+    end
+  end
 end
 
 #===#
@@ -246,21 +259,6 @@ function convertvalue(targetfield::Any, value)
   end
 end
 
-function convertvalue(targetfield::Union{T, Reactive{T}}, value) where T <: OffsetArray
-  valtype = isa(targetfield, Reactive) ? eltype(targetfield) : typeof(targetfield)
-  a = if value isa AbstractArray
-    convert(Array{eltype(valtype)}, value)
-  else
-    eltype(valtype)[value]
-  end
-  if ! isa(value, OffsetArray)
-    o = targetfield isa Reactive ? targetfield[].offsets : targetfield.offsets
-    OffsetArray(a, OffsetArrays.Origin(1 .+ o))
-  else
-    value
-  end
-end
-
 function update!(model::M, field::Symbol, newval, oldval=newval)::M where {M<:ReactiveModel}
   f = getfield(model, field)
   if f isa Reactive
@@ -312,8 +310,8 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
   Genie.Router.channel("/$(channel)/watchers") do
     payload = Genie.Router.@params(:payload)["payload"]
     client = Genie.Router.@params(:WS_CLIENT)
-
-    payload["newval"] == payload["oldval"] && return "OK"
+    # if only elements of the array change, oldval and newval are identical
+    ! isa(payload["newval"], Array) && payload["newval"] == payload["oldval"] && return "OK"
 
     field = Symbol(payload["field"])
 
