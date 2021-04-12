@@ -1,3 +1,8 @@
+"""
+# Stipple.Typography
+
+Typography utilities for Stipple apps.
+"""
 module Typography
 
 import Genie
