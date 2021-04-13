@@ -198,19 +198,19 @@ function update! end
 """
     `function watch`
 
-Abstract function. Can be used by plugins to defined custom Vue.js watch functions.
+Abstract function. Can be used by plugins to define custom Vue.js watch functions.
 """
 function watch end
 
 """
-    `function js_methods(app)`
+    `function js_methods(app::T) where {T<:ReactiveModel}`
 
 Defines js functions for the `methods` section of the vue element.
 
 ### Example
 
 ```julia
-js_methods(MyDashboard) = \"\"\"
+js_methods(app::MyDashboard) = \"\"\"
   mysquare: function (x) {
     return x^2
   }
@@ -220,12 +220,12 @@ js_methods(MyDashboard) = \"\"\"
 \"\"\"
 ```
 """
-function js_methods(m::T)::String where {T<:ReactiveModel}
+function js_methods(app::T)::String where {T<:ReactiveModel}
   ""
 end
 
 """
-    `function js_computed(app)`
+    `function js_computed(app::T) where {T<:ReactiveModel}`
 
 Defines js functions for the `computed` section of the vue element.
 These properties are updated every time on of the inner parameters changes its value.
@@ -233,19 +233,19 @@ These properties are updated every time on of the inner parameters changes its v
 ### Example
 
 ```julia
-js_computed(MyDashboard) = \"\"\"
+js_computed(app::MyDashboard) = \"\"\"
   fullName: function () {
     return this.firstName + ' ' + this.lastName
   }
 \"\"\"
 ```
 """
-function js_computed(m::T)::String where {T<:ReactiveModel}
+function js_computed(app::T)::String where {T<:ReactiveModel}
   ""
 end
 
 """
-    `function js_watch(app)`
+    `function js_watch(app::T) where {T<:ReactiveModel}`
 
 Defines js functions for the `watch` section of the vue element.
 These functions are called every time the respective property changes.
@@ -255,7 +255,7 @@ These functions are called every time the respective property changes.
 Updates the `fullName` every time `firstName` or `lastName` changes.
 
 ```julia
-js_watch(MyDashboard) = \"\"\"
+js_watch(app::MyDashboard) = \"\"\"
   firstName: function (val) {
     this.fullName = val + ' ' + this.lastName
   },
@@ -270,7 +270,7 @@ function js_watch(m::T)::String where {T<:ReactiveModel}
 end
 
 """
-    `function js_created(app)`
+    `function js_created(app::T)::String where {T<:ReactiveModel}`
 
 Defines js statements for the `created` section of the vue element.
 They are executed directly after the creation of the vue element.
@@ -278,12 +278,30 @@ They are executed directly after the creation of the vue element.
 ### Example
 
 ```julia
-js_created(MyDashboard) = \"\"\"
+js_created(app::MyDashboard) = \"\"\"
     if (this.cameraon) { startcamera() }
 \"\"\"
 ```
 """
-function js_created(m::T)::String where {T<:ReactiveModel}
+function js_created(app::T)::String where {T<:ReactiveModel}
+  ""
+end
+
+"""
+    `function js_mounted(app::T)::String where {T<:ReactiveModel}`
+
+Defines js statements for the `mounted` section of the vue element.
+They are executed directly after the mounting of the vue element.
+
+### Example
+
+```julia
+js_created(app::MyDashboard) = \"\"\"
+    if (this.cameraon) { startcamera() }
+\"\"\"
+```
+"""
+function js_mounted(app::T)::String where {T<:ReactiveModel}
   ""
 end
 
@@ -533,7 +551,7 @@ end
 function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
                     channel::String = Genie.config.webchannels_default_route,
                     except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
-  v = vals[2].mode != :jsfunction ? vals[2][] : replace_jsfunction(vals[2][])
+                    v = vals[2].mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
   push!(app, Symbol(julia_to_vue(vals[1])) => v, channel = channel, except = except)
 end
 
@@ -592,6 +610,7 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
   isempty(js_computed(app) |> strip)  || push!(vue, :computed   => JSONText("{ $(js_computed(app)) }"))
   isempty(js_watch(app) |> strip)     || push!(vue, :watch      => JSONText("{ $(js_watch(app)) }"))
   isempty(js_created(app) |> strip)   || push!(vue, :created    => JSONText("function(){ $(js_created(app)); }"))
+  isempty(js_mounted(app) |> strip)   || push!(vue, :mounted    => JSONText("function(){ $(js_mounted(app)); }"))
 
   vue
 end
