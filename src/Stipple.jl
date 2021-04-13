@@ -39,6 +39,8 @@ mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   Reactive{Any}(@nospecialize(o)) = new{Any}(Observable{Any}(o), PUBLIC, false, false)
 end
 
+Reactive(v::T, args...) where T = convert(Reactive{T}, (v, args...))
+
 Base.convert(::Type{T}, x::T) where {T<:Reactive} = x  # resolves ambiguity with convert(::Type{T}, x::T) in base/essentials.jl
 Base.convert(::Type{T}, x) where {T<:Reactive} = T(x)
 
