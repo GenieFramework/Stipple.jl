@@ -495,7 +495,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     if val isa Reactive 
       val.mode == PUBLIC || return "OK"
     else
-      occursin(SETTINGS.readonly_pattern, String(field)) || occursin(SETTINGS.private, String(field)) &&
+      occursin(SETTINGS.readonly_pattern, String(field)) || occursin(SETTINGS.private_pattern, String(field)) &&
         return "OK"
     end
     newval = convertvalue(val, payload["newval"])
