@@ -58,7 +58,7 @@ function Base.getindex(r::Reactive{T}, arg1, args...) where T
 end
 function Base.setindex!(r::Reactive{T}, val, arg1, args...) where T
   setindex!(r.o.val, val, arg1, args...)
-  notify!(r)
+  Observables.notify!(r)
 end
 
 Observables.observe(v::Reactive{T}, args...; kwargs...) where T = Observables.observe(v.o, args...; kwargs...)
