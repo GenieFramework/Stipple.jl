@@ -385,10 +385,6 @@ end
 Sets the value of `model.field` from `oldval` to `newval`. Returns the upated `model` instance.
 """
 function update!(model::M, field::Symbol, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-  update!(model, getfield(model, field), newval, oldval)
-end
-
-function update!(model::M, field::Symbol, newval, oldval=newval)::M where {M<:ReactiveModel}
   f = getfield(model, field)
   if f isa Reactive
     f.mode == PRIVATE ? f[] = newval : setindex_withoutwatchers!(f, newval, 1)
@@ -398,8 +394,14 @@ function update!(model::M, field::Symbol, newval, oldval=newval)::M where {M<:Re
   model
 end
 
-function update!(model::M, field::Reactive, newval, oldval=newval)::M where {M<:ReactiveModel}
-  field.mode == PRIVATE ? field[] = newval : setindex_withoutwatchers!(f, newval, 1)
+function update!(model::M, field::Reactive, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
+  field.mode == PRIVATE ? field[] = newval : setindex_withoutwatchers!(field, newval, 1)
+
+  model
+end
+
+function update!(model::M, field::Any, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
+  setfield!(model, field, newval)
 
   model
 end
@@ -462,7 +464,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     client = Genie.Router.@params(:WS_CLIENT)
     # if only elements of the array change, oldval and newval are identical
     ! isa(payload["newval"], Array) && payload["newval"] == payload["oldval"] && return "OK"
-
+    
     field = Symbol(payload["field"])
 
     #check if field exists
@@ -583,7 +585,7 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
     result[julia_to_vue(field)] = Stipple.render(f, field)
   end
 
-  vue = Dict(:el => Elements.elem(app), :mixins =>JSONText("[watcherMixin]"), :data => result)
+  vue = Dict(:el => Elements.elem(app), :mixins =>JSONText("[watcherMixin, reviveMixin]"), :data => result)
 
   isempty(components(app) |> strip)   || push!(vue, :components => components(app))
   isempty(js_methods(app) |> strip)   || push!(vue, :methods    => JSONText("{ $(js_methods(app)) }"))
