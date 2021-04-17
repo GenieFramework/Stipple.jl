@@ -27,7 +27,7 @@ import Genie.Configuration: isprod, PROD, DEV
 
 mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   o::Observables.Observable{T}
-  mode::Int
+  r_mode::Int
   no_backend_watcher::Bool
   no_frontend_watcher::Bool
   Reactive{T}() where {T} = new{T}(Observable{T}(), PUBLIC, false, false)
@@ -56,16 +56,35 @@ Base.convert(::Type{Observable{T}}, r::Reactive{T}) where T = r.o
 Base.getindex(v::Reactive{T}) where T = Base.getindex(v.o)
 Base.setindex!(v::Reactive{T}) where T = Base.setindex!(v.o)
 
+# pass indexing and property methods to referenced variable
 function Base.getindex(r::Reactive{T}, arg1, args...) where T
   Base.getindex(r.o.val, arg1, args...)
 end
+
 function Base.setindex!(r::Reactive{T}, val, arg1, args...) where T
   setindex!(r.o.val, val, arg1, args...)
   Observables.notify!(r)
 end
 
-Observables.observe(v::Reactive{T}, args...; kwargs...) where T = Observables.observe(v.o, args...; kwargs...)
-Observables.listeners(v::Reactive{T}, args...; kwargs...) where T = Observables.listeners(v.o, args...; kwargs...)
+function Base.getproperty(r::Reactive{T}, field::Symbol) where T
+  if field in fieldnames(Reactive)
+    Base.getfield(r, field)
+  else
+    Base.getproperty(getfield(r, :o).val, field)
+  end
+end
+
+function Base.setproperty!(r::Reactive{T}, field::Symbol, val) where T
+  if field in fieldnames(Reactive)
+    Base.setfield!(r, field, val)
+  else
+    Base.setproperty!(getfield(r, :o).val, field, val)
+    Observables.notify!(r)
+  end
+end
+
+Observables.observe(r::Reactive{T}, args...; kwargs...) where T = Observables.observe(r.o, args...; kwargs...)
+Observables.listeners(r::Reactive{T}, args...; kwargs...) where T = Observables.listeners(r.o, args...; kwargs...)
 
 const R = Reactive
 const PUBLIC = 1
@@ -408,7 +427,7 @@ Sets the value of `model.field` from `oldval` to `newval`. Returns the upated `m
 function update!(model::M, field::Symbol, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
   f = getfield(model, field)
   if f isa Reactive
-    f.mode == PRIVATE ? f[] = newval : setindex_withoutwatchers!(f, newval, 1)
+    f.r_mode == PRIVATE ? f[] = newval : setindex_withoutwatchers!(f, newval, 1)
   else
     setfield!(model, field, newval)
   end
@@ -416,7 +435,7 @@ function update!(model::M, field::Symbol, newval::T, oldval::T)::M where {T,M<:R
 end
 
 function update!(model::M, field::Reactive, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-  field.mode == PRIVATE ? field[] = newval : setindex_withoutwatchers!(field, newval, 1)
+  field.r_mode == PRIVATE ? field[] = newval : setindex_withoutwatchers!(field, newval, 1)
 
   model
 end
@@ -494,7 +513,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
 
     # reject non-public types
     if val isa Reactive 
-      val.mode == PUBLIC || return "OK"
+      val.r_mode == PUBLIC || return "OK"
     else
       occursin(SETTINGS.readonly_pattern, String(field)) || occursin(SETTINGS.private_pattern, String(field)) &&
         return "OK"
@@ -524,7 +543,7 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
   for field in fieldnames(M)
     f = getproperty(model, field)
     isa(f, Reactive) || continue
-    f.mode == PRIVATE || f.no_backend_watcher && continue
+    f.r_mode == PRIVATE || f.no_backend_watcher && continue
 
     on(f) do _
       push!(model, field => f, channel = channel)
@@ -554,7 +573,7 @@ end
 function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
                     channel::String = Genie.config.webchannels_default_route,
                     except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
-                    v = vals[2].mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
+                    v = vals[2].r_mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
   push!(app, Symbol(julia_to_vue(vals[1])) => v, channel = channel, except = except)
 end
 
@@ -602,7 +621,7 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
   for field in fieldnames(typeof(app))
     f = getfield(app, field)
     !(f isa Reactive) && occursin(SETTINGS.private_pattern, String(field)) && continue
-    f isa Reactive && f.mode == PRIVATE && continue
+    f isa Reactive && f.r_mode == PRIVATE && continue
     result[julia_to_vue(field)] = Stipple.render(f, field)
   end
 
