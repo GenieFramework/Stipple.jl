@@ -119,7 +119,7 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
         occursin(Stipple.SETTINGS.readonly_pattern, String(field)) || 
         occursin(Stipple.SETTINGS.private_pattern, String(field))  ||
         getfield(model, field) isa Reactive && 
-          (getfield(model, field).mode != PUBLIC || getfield(model, field).no_frontend_watcher)
+          (getfield(model, field).r_mode != PUBLIC || getfield(model, field).no_frontend_watcher)
       )
     ])
     
