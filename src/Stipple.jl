@@ -354,7 +354,8 @@ hs_model = Stipple.init(HelloPie())
 """
 function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model),
               endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route,
-              debounce::Int = JS_DEBOUNCE_TIME, transport::Module = Genie.WebChannels)::M where {M<:ReactiveModel}
+              debounce::Int = JS_DEBOUNCE_TIME, transport::Module = Genie.WebChannels,
+              parse_errors::Bool = false)::M where {M<:ReactiveModel}
 
   global WEB_TRANSPORT = transport
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
@@ -376,10 +377,18 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
       if AbstractFloat >: valtype && Integer >: typeof(payload["newval"])
         convert(valtype, payload["newval"])
       else
-        Base.parse(valtype, payload["newval"])
+        try
+          Base.parse(valtype, payload["newval"])
+        catch ex
+          parse_errors &&
+          @error "
+            $ex
+            Please define `Base.parse(::Type{$(valtype)}, $(typeof(payload["newval"])))`"
+        end
       end
     catch ex
-      @error ex
+      parse_errors && @error ex
+
       payload["newval"]
     end
 
@@ -387,10 +396,18 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
       if AbstractFloat >: valtype && Integer >: typeof(payload["oldval"])
         convert(valtype, payload["oldval"])
       else
-        Base.parse(valtype, payload["oldval"])
+        try
+          Base.parse(valtype, payload["oldval"])
+        catch ex
+          parse_errors &&
+          @error "
+            $ex
+            Please define `Base.parse(::Type{$(valtype)}, $(typeof(payload["oldval"])))`"
+        end
       end
     catch ex
-      @error ex
+      parse_errors && @error ex
+
       payload["oldval"]
     end
 
