@@ -117,16 +117,16 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
 
     ,
 
-    join([Stipple.watch(vue_app_name, field, channel, debounce, model) 
+    join([Stipple.watch(vue_app_name, field, channel, debounce, model)
       for field in fieldnames(typeof(model))
       if !(
-        occursin(Stipple.SETTINGS.readonly_pattern, String(field)) || 
+        occursin(Stipple.SETTINGS.readonly_pattern, String(field)) ||
         occursin(Stipple.SETTINGS.private_pattern, String(field))  ||
-        getfield(model, field) isa Reactive && 
+        getfield(model, field) isa Reactive &&
           (getfield(model, field).r_mode != PUBLIC || getfield(model, field).no_frontend_watcher)
       )
     ])
-    
+
     ,
 
     """
@@ -135,19 +135,17 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
     if (payload.key) {
       window.$(vue_app_name).revive_payload(payload)
       window.$(vue_app_name).updateField(payload.key, payload.value);
-
     }
+  }
 
-
-    window.onload = function() {
-      console.log("Loading completed");
-      $vue_app_name.\$forceUpdate();
-    }
+  window.onload = function() {
+    console.log("Loading completed");
+    $vue_app_name.\$forceUpdate();
   }
   """
   ) |> repr
 
-  
+
   output[2:prevind(output, lastindex(output))]
 end
 
