@@ -11,12 +11,14 @@ Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 Observables = "510215fc-4207-5dde-b226-833fc4488ee2"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
+Requires = "ae029012-a4dd-5104-9daa-d747884805df"
 
 [compat]
 FilePathsBase = "0.9"
 Genie = "1"
 JSON = "0.21"
 Observables = "0.3, 0.4"
+Requires = "1.1"
 Reexport = "0.2, 1"
 julia = "1.3"
 
