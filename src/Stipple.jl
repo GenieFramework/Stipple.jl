@@ -583,10 +583,13 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
     f = getproperty(model, field)
     isa(f, Reactive) || continue
     if f.r_mode == 0
+      @info field, f, f.r_mode
       if occursin(SETTINGS.private_pattern, String(field))
         f.r_mode = PRIVATE
       elseif occursin(SETTINGS.readonly_pattern, String(field))
         f.r_mode = READONLY
+      else
+        f.r_mode = PUBLIC
       end
     end
     f.r_mode == PRIVATE || f.no_backend_watcher && continue
