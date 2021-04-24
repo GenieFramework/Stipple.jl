@@ -39,35 +39,37 @@ mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   Reactive{Any}(@nospecialize(o)) = new{Any}(Observable{Any}(o), 0, false, false)
 end
 
-Reactive(v::T, arg1, args...) where T = convert(Reactive{T}, (v, arg1, args...))
-Reactive(v::T) where T = convert(Reactive{T}, v)
+Reactive(r::T, arg1, args...) where T = convert(Reactive{T}, (r, arg1, args...))
+Reactive(r::T) where T = convert(Reactive{T}, r)
 
 Base.convert(::Type{T}, x::T) where {T<:Reactive} = x  # resolves ambiguity with convert(::Type{T}, x::T) in base/essentials.jl
 Base.convert(::Type{T}, x) where {T<:Reactive} = T(x)
 
-Base.convert(::Type{Reactive{T}}, (v, m)::Tuple{T, Int}) where T = m < 16 ? Reactive{T}(Observable(v), m, 0) : Reactive{T}(Observable(v), 0, m)
-Base.convert(::Type{Reactive{T}}, (v, w)::Tuple{T, Bool}) where T = Reactive{T}(Observable(v), 0, w, false)
-Base.convert(::Type{Reactive{T}}, (v, m, nw)::Tuple{T, Int, Bool}) where T = Reactive{T}(Observable(v), m, nw, false)
-Base.convert(::Type{Reactive{T}}, (v, nbw, nfw)::Tuple{T, Bool, Bool}) where T = Reactive{T}(Observable(v), 0, nbw, nfw)
-Base.convert(::Type{Reactive{T}}, (v, m, nbw, nfw)::Tuple{T, Int, Bool, Bool}) where T = Reactive{T}(Observable(v), m, nbw, nfw)
-Base.convert(::Type{Reactive{T}}, (v, m, u)::Tuple{T, Int, Int}) where T = Reactive{T}(Observable(v), m, u)
-Base.convert(::Type{Observable{T}}, r::Reactive{T}) where T = r.o
+Base.convert(::Type{Reactive{T}}, (r, m)::Tuple{T, Int}) where T = m < 16 ? Reactive{T}(Observable(r), m, 0) : Reactive{T}(Observable(r), 0, m)
+Base.convert(::Type{Reactive{T}}, (r, w)::Tuple{T, Bool}) where T = Reactive{T}(Observable(r), 0, w, false)
+Base.convert(::Type{Reactive{T}}, (r, m, nw)::Tuple{T, Int, Bool}) where T = Reactive{T}(Observable(r), m, nw, false)
+Base.convert(::Type{Reactive{T}}, (r, nbw, nfw)::Tuple{T, Bool, Bool}) where T = Reactive{T}(Observable(r), 0, nbw, nfw)
+Base.convert(::Type{Reactive{T}}, (r, m, nbw, nfw)::Tuple{T, Int, Bool, Bool}) where T = Reactive{T}(Observable(r), m, nbw, nfw)
+Base.convert(::Type{Reactive{T}}, (r, m, u)::Tuple{T, Int, Int}) where T = Reactive{T}(Observable(r), m, u)
+Base.convert(::Type{Observable{T}}, r::Reactive{T}) where T = getfield(r, :o)
 
-Base.getindex(v::Reactive{T}) where T = Base.getindex(v.o)
-Base.setindex!(v::Reactive{T}) where T = Base.setindex!(v.o)
+Base.getindex(r::Reactive{T}) where T = Base.getindex(getfield(r, :o))
+Base.setindex!(r::Reactive{T}) where T = Base.setindex!(getfield(r, :o))
 
 # pass indexing and property methods to referenced variable
 function Base.getindex(r::Reactive{T}, arg1, args...) where T
-  getindex(r.o.val, arg1, args...)
+  getindex(getfield(r, :o).val, arg1, args...)
 end
 
 function Base.setindex!(r::Reactive{T}, val, arg1, args...) where T
-  setindex!(r.o.val, val, arg1, args...)
+  setindex!(getfield(r, :o).val, val, arg1, args...)
   Observables.notify!(r)
 end
 
+Base.setindex!(r::Reactive, val, ::typeof(!)) = getfield(r, :o).val = val
+
 function Base.getproperty(r::Reactive{T}, field::Symbol) where T
-  if field in fieldnames(Reactive)
+  if field in (:o, :r_mode, :no_backend_watcher, :no_frontend_watcher) # fieldnames(Reactive)
     getfield(r, field)
   else
     if field == :val
@@ -93,8 +95,8 @@ function Base.setproperty!(r::Reactive{T}, field::Symbol, val) where T
   end
 end
 
-Observables.observe(r::Reactive{T}, args...; kwargs...) where T = Observables.observe(r.o, args...; kwargs...)
-Observables.listeners(r::Reactive{T}, args...; kwargs...) where T = Observables.listeners(r.o, args...; kwargs...)
+Observables.observe(r::Reactive{T}, args...; kwargs...) where T = Observables.observe(getfield(r, :o), args...; kwargs...)
+Observables.listeners(r::Reactive{T}, args...; kwargs...) where T = Observables.listeners(getfield(r, :o), args...; kwargs...)
 
 const R = Reactive
 const PUBLIC = 1
