@@ -124,15 +124,15 @@ export @kwredef
 
 function __init__()
   Genie.config.websockets_server = true
-  @require OffsetArrays  = "6fe1bfb0-de20-5000-8ca7-80f57d26f881" function convertvalue(targetfield::Union{T, Reactive{T}}, value) where T <: OffsetArrays.OffsetArray
-    valtype = isa(targetfield, Reactive) ? eltype(targetfield) : typeof(targetfield)
+  @require OffsetArrays  = "6fe1bfb0-de20-5000-8ca7-80f57d26f881" function convertvalue(targetfield::Union{Ref{T}, Reactive{T}}, value) where T <: OffsetArrays.OffsetArray
+    valtype = eltype(targetfield)
     a = if value isa AbstractArray
       convert(Array{eltype(valtype)}, value)
     else
       eltype(valtype)[value]
     end
     if ! isa(value, OffsetArrays.OffsetArray)
-      o = targetfield isa Reactive ? targetfield[].offsets : targetfield.offsets
+      o = targetfield[].offsets
       OffsetArrays.OffsetArray(a, OffsetArrays.Origin(1 .+ o))
     else
       value
@@ -436,8 +436,7 @@ include("Layout.jl")
 #===#
 
 function convertvalue(targetfield::Any, value)
-  valtype = isa(targetfield, Reactive) ? eltype(targetfield) : typeof(targetfield)
-
+  valtype = eltype(targetfield)
   try
     if valtype <: AbstractFloat && typeof(value) <: Integer
       convert(valtype, value)
@@ -549,8 +548,9 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
 
     #check if field exists
     hasfield(M, field) || return "OK"
-    val = getfield(model, field)
-
+    valtype = Dict(zip(fieldnames(M), M.types))[field]
+    val = valtype <: Reactive ? getfield(model, field) : Ref{valtype}(getfield(model, field))
+    @show val
     # reject non-public types
     if val isa Reactive
       val.r_mode == PUBLIC || return "OK"
