@@ -550,7 +550,6 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     hasfield(M, field) || return "OK"
     valtype = Dict(zip(fieldnames(M), M.types))[field]
     val = valtype <: Reactive ? getfield(model, field) : Ref{valtype}(getfield(model, field))
-    @show val
     # reject non-public types
     if val isa Reactive
       val.r_mode == PUBLIC || return "OK"
