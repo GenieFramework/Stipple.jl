@@ -83,7 +83,7 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
 
         updateField: function (field, newVal) {
           try {
-            this.$withoutWatchers(()=>{this[field]=newVal},"function(){return this." + field + ";}");
+            this.$withoutWatchers(()=>{this[field]=newVal},"function(){return this." + field + "}");
           } catch(ex) {
             console.log(ex);
           }
