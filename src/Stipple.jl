@@ -67,6 +67,7 @@ function Base.setindex!(r::Reactive{T}, val, arg1, args...) where T
 end
 
 Base.setindex!(r::Reactive, val, ::typeof(!)) = getfield(r, :o).val = val
+Base.getindex(r::Reactive, ::typeof(!)) = getfield(r, :o).val
 
 function Base.getproperty(r::Reactive{T}, field::Symbol) where T
   if field in (:o, :r_mode, :no_backend_watcher, :no_frontend_watcher) # fieldnames(Reactive)
