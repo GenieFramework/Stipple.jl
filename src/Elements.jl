@@ -83,7 +83,7 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
 
         updateField: function (field, newVal) {
           try {
-            this.$withoutWatchers(()=>{this[field]=newVal},"function(){return this." + field + ";}");
+            this.$withoutWatchers(()=>{this[field]=newVal},"function(){return this." + field + "}");
           } catch(ex) {
             console.log(ex);
           }
@@ -120,10 +120,10 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
     join([Stipple.watch(vue_app_name, field, channel, debounce, model)
       for field in fieldnames(typeof(model))
       if !(
-        occursin(Stipple.SETTINGS.readonly_pattern, String(field)) ||
-        occursin(Stipple.SETTINGS.private_pattern, String(field))  ||
+        !(getfield(model, field) isa Reactive) && 
+          ( occursin(Stipple.SETTINGS.readonly_pattern, String(field)) || occursin(Stipple.SETTINGS.private_pattern, String(field)) )  ||
         getfield(model, field) isa Reactive &&
-          (getfield(model, field).r_mode != PUBLIC || getfield(model, field).no_frontend_watcher)
+          ( getfield(model, field).r_mode != PUBLIC || getfield(model, field).no_frontend_watcher )
       )
     ])
 

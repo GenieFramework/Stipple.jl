@@ -30,61 +30,74 @@ mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   r_mode::Int
   no_backend_watcher::Bool
   no_frontend_watcher::Bool
-  Reactive{T}() where {T} = new{T}(Observable{T}(), PUBLIC, false, false)
-  Reactive{T}(o, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, PUBLIC, no_bw, no_fw)
+  Reactive{T}() where {T} = new{T}(Observable{T}(), 0, false, false)
+  Reactive{T}(o, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, 0, no_bw, no_fw)
   Reactive{T}(o, mode::Int, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, mode, no_bw, no_fw)
   Reactive{T}(o, mode::Int, updatemode::Int) where {T} = new{T}(o, mode, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0)
 
   # Construct an Reactive{Any} without runtime dispatch
-  Reactive{Any}(@nospecialize(o)) = new{Any}(Observable{Any}(o), PUBLIC, false, false)
+  Reactive{Any}(@nospecialize(o)) = new{Any}(Observable{Any}(o), 0, false, false)
 end
 
-Reactive(v::T, arg1, args...) where T = convert(Reactive{T}, (v, arg1, args...))
-Reactive(v::T) where T = convert(Reactive{T}, v)
+Reactive(r::T, arg1, args...) where T = convert(Reactive{T}, (r, arg1, args...))
+Reactive(r::T) where T = convert(Reactive{T}, r)
 
 Base.convert(::Type{T}, x::T) where {T<:Reactive} = x  # resolves ambiguity with convert(::Type{T}, x::T) in base/essentials.jl
 Base.convert(::Type{T}, x) where {T<:Reactive} = T(x)
 
-Base.convert(::Type{Reactive{T}}, (v, m)::Tuple{T, Int}) where T = m < 16 ? Reactive{T}(Observable(v), m, 0) : Reactive{T}(Observable(v), 0, m)
-Base.convert(::Type{Reactive{T}}, (v, w)::Tuple{T, Bool}) where T = Reactive{T}(Observable(v), PUBLIC, w, false)
-Base.convert(::Type{Reactive{T}}, (v, m, nw)::Tuple{T, Int, Bool}) where T = Reactive{T}(Observable(v), m, nw, false)
-Base.convert(::Type{Reactive{T}}, (v, nbw, nfw)::Tuple{T, Bool, Bool}) where T = Reactive{T}(Observable(v), PUBLIC, nbw, nfw)
-Base.convert(::Type{Reactive{T}}, (v, m, nbw, nfw)::Tuple{T, Int, Bool, Bool}) where T = Reactive{T}(Observable(v), m, nbw, nfw)
-Base.convert(::Type{Reactive{T}}, (v, m, u)::Tuple{T, Int, Int}) where T = Reactive{T}(Observable(v), m, u)
-Base.convert(::Type{Observable{T}}, r::Reactive{T}) where T = r.o
+Base.convert(::Type{Reactive{T}}, (r, m)::Tuple{T, Int}) where T = m < 16 ? Reactive{T}(Observable(r), m, 0) : Reactive{T}(Observable(r), 0, m)
+Base.convert(::Type{Reactive{T}}, (r, w)::Tuple{T, Bool}) where T = Reactive{T}(Observable(r), 0, w, false)
+Base.convert(::Type{Reactive{T}}, (r, m, nw)::Tuple{T, Int, Bool}) where T = Reactive{T}(Observable(r), m, nw, false)
+Base.convert(::Type{Reactive{T}}, (r, nbw, nfw)::Tuple{T, Bool, Bool}) where T = Reactive{T}(Observable(r), 0, nbw, nfw)
+Base.convert(::Type{Reactive{T}}, (r, m, nbw, nfw)::Tuple{T, Int, Bool, Bool}) where T = Reactive{T}(Observable(r), m, nbw, nfw)
+Base.convert(::Type{Reactive{T}}, (r, m, u)::Tuple{T, Int, Int}) where T = Reactive{T}(Observable(r), m, u)
+Base.convert(::Type{Observable{T}}, r::Reactive{T}) where T = getfield(r, :o)
 
-Base.getindex(v::Reactive{T}) where T = Base.getindex(v.o)
-Base.setindex!(v::Reactive{T}) where T = Base.setindex!(v.o)
+Base.getindex(r::Reactive{T}) where T = Base.getindex(getfield(r, :o))
+Base.setindex!(r::Reactive{T}) where T = Base.setindex!(getfield(r, :o))
 
 # pass indexing and property methods to referenced variable
 function Base.getindex(r::Reactive{T}, arg1, args...) where T
-  Base.getindex(r.o.val, arg1, args...)
+  getindex(getfield(r, :o).val, arg1, args...)
 end
 
 function Base.setindex!(r::Reactive{T}, val, arg1, args...) where T
-  setindex!(r.o.val, val, arg1, args...)
+  setindex!(getfield(r, :o).val, val, arg1, args...)
   Observables.notify!(r)
 end
 
+Base.setindex!(r::Reactive, val, ::typeof(!)) = getfield(r, :o).val = val
+Base.getindex(r::Reactive, ::typeof(!)) = getfield(r, :o).val
+
 function Base.getproperty(r::Reactive{T}, field::Symbol) where T
-  if field in fieldnames(Reactive)
-    Base.getfield(r, field)
+  if field in (:o, :r_mode, :no_backend_watcher, :no_frontend_watcher) # fieldnames(Reactive)
+    getfield(r, field)
   else
-    Base.getproperty(getfield(r, :o).val, field)
+    if field == :val
+      @warn """Reactive API has changed, use "[]" instead of ".val"!"""
+      getfield(r, :o).val
+    else
+      getproperty(getfield(r, :o).val, field)
+    end
   end
 end
 
 function Base.setproperty!(r::Reactive{T}, field::Symbol, val) where T
   if field in fieldnames(Reactive)
-    Base.setfield!(r, field, val)
+    setfield!(r, field, val)
   else
-    Base.setproperty!(getfield(r, :o).val, field, val)
-    Observables.notify!(r)
+    if field == :val
+      @warn """Reactive API has changed, use "setfield_withoutwatchers!() or o.val" instead of ".val"!"""
+      getfield(r, :o).val = val
+    else
+      setproperty!(getfield(r, :o).val, field, val)
+      Observables.notify!(r)
+    end
   end
 end
 
-Observables.observe(r::Reactive{T}, args...; kwargs...) where T = Observables.observe(r.o, args...; kwargs...)
-Observables.listeners(r::Reactive{T}, args...; kwargs...) where T = Observables.listeners(r.o, args...; kwargs...)
+Observables.observe(r::Reactive{T}, args...; kwargs...) where T = Observables.observe(getfield(r, :o), args...; kwargs...)
+Observables.listeners(r::Reactive{T}, args...; kwargs...) where T = Observables.listeners(getfield(r, :o), args...; kwargs...)
 
 const R = Reactive
 const PUBLIC = 1
@@ -112,15 +125,15 @@ export @kwredef
 
 function __init__()
   Genie.config.websockets_server = true
-  @require OffsetArrays  = "6fe1bfb0-de20-5000-8ca7-80f57d26f881" function convertvalue(targetfield::Union{T, Reactive{T}}, value) where T <: OffsetArrays.OffsetArray
-    valtype = isa(targetfield, Reactive) ? eltype(targetfield) : typeof(targetfield)
+  @require OffsetArrays  = "6fe1bfb0-de20-5000-8ca7-80f57d26f881" function convertvalue(targetfield::Union{Ref{T}, Reactive{T}}, value) where T <: OffsetArrays.OffsetArray
+    valtype = eltype(targetfield)
     a = if value isa AbstractArray
       convert(Array{eltype(valtype)}, value)
     else
       eltype(valtype)[value]
     end
     if ! isa(value, OffsetArrays.OffsetArray)
-      o = targetfield isa Reactive ? targetfield[].offsets : targetfield.offsets
+      o = targetfield[].offsets
       OffsetArrays.OffsetArray(a, OffsetArrays.Origin(1 .+ o))
     else
       value
@@ -366,9 +379,17 @@ end
 
 #===#
 
-function setindex_withoutwatchers!(field::Reactive, val, keys...; notify=(x)->true)
+"""
+    `setindex_withoutwatchers!(field::Reactive, val; notify=(x)->true)`
+    `setindex_withoutwatchers!(field::Reactive, val, keys::Int...; notify=(x)->true)`
+
+Change the content of a Reactive field without triggering the listeners.
+If keys are specified, only these listeners are exempted from triggering.
+"""
+function setindex_withoutwatchers!(field::Reactive, val, keys::Int...; notify=(x)->true)
   count = 1
   field.o.val = val
+  length(keys) == 0 && return field
 
   for f in Observables.listeners(field.o)
     if in(count, keys)
@@ -383,6 +404,24 @@ function setindex_withoutwatchers!(field::Reactive, val, keys...; notify=(x)->tr
     count += 1
   end
 
+  return field
+end
+
+"""
+    `setfield_withoutwatchers!(app::ReactiveModel, field::Symmbol, val; notify=(x)->true)``
+    `setfield_withoutwatchers!(app::ReactiveModel, field::Symmbol, val, keys...; notify=(x)->true)`
+
+Change the field of a ReactiveModel without triggering the listeners.
+If keys are specified, only these listeners are exempted from triggering.
+"""
+function setfield_withoutwatchers!(app::T, field::Symbol, val, keys...; notify=(x)->true) where T <: ReactiveModel
+  f = getfield(app, field)
+  if f isa Reactive
+    setindex_withoutwatchers!(f, val, keys...; notify = notify)
+  else
+    setfield!(app, field, val)
+  end
+  return app
 end
 
 #===#
@@ -398,8 +437,7 @@ include("Layout.jl")
 #===#
 
 function convertvalue(targetfield::Any, value)
-  valtype = isa(targetfield, Reactive) ? eltype(targetfield) : typeof(targetfield)
-
+  valtype = eltype(targetfield)
   try
     if valtype <: AbstractFloat && typeof(value) <: Integer
       convert(valtype, value)
@@ -436,7 +474,7 @@ function update!(model::M, field::Symbol, newval::T, oldval::T)::M where {T,M<:R
 end
 
 function update!(model::M, field::Reactive, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-  field.r_mode == PRIVATE ? field[] = newval : setindex_withoutwatchers!(field, newval, 1)
+  field.r_mode == PRIVATE || field.no_backend_watcher ? field[] = newval : setindex_withoutwatchers!(field, newval, 1)
 
   model
 end
@@ -465,7 +503,7 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
   """
   # in production mode vue does not fill `this.expression` in the watcher, so we do it manually
   if Genie.Configuration.isprod()
-    output *= "$vue_app_name._watchers[$vue_app_name._watchers.length - 1].expression = 'function(){return this.$fieldname;}'"
+    output *= "$vue_app_name._watchers[$vue_app_name._watchers.length - 1].expression = 'function(){return this.$fieldname}'"
   end
 
   output *= "\n\n"
@@ -511,14 +549,13 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
 
     #check if field exists
     hasfield(M, field) || return "OK"
-    val = getfield(model, field)
-
+    valtype = Dict(zip(fieldnames(M), M.types))[field]
+    val = valtype <: Reactive ? getfield(model, field) : Ref{valtype}(getfield(model, field))
     # reject non-public types
     if val isa Reactive
       val.r_mode == PUBLIC || return "OK"
-    else
-      occursin(SETTINGS.readonly_pattern, String(field)) || occursin(SETTINGS.private_pattern, String(field)) &&
-        return "OK"
+    elseif occursin(SETTINGS.readonly_pattern, String(field)) || occursin(SETTINGS.private_pattern, String(field))
+      return "OK"
     end
 
     newval = convertvalue(val, payload["newval"])
@@ -547,6 +584,15 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
   for field in fieldnames(M)
     f = getproperty(model, field)
     isa(f, Reactive) || continue
+    if f.r_mode == 0
+      if occursin(SETTINGS.private_pattern, String(field))
+        f.r_mode = PRIVATE
+      elseif occursin(SETTINGS.readonly_pattern, String(field))
+        f.r_mode = READONLY
+      else
+        f.r_mode = PUBLIC
+      end
+    end
     f.r_mode == PRIVATE || f.no_backend_watcher && continue
 
     on(f) do _
