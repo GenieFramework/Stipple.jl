@@ -936,7 +936,7 @@ onbutton(f::Function, button::R{Bool}; async = false, kwargs...) = on(button; kw
       try
         f()
       catch ex
-        warn(ex)
+        @warn(ex)
       end
       button[] = false
   end
