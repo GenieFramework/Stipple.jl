@@ -99,7 +99,9 @@ end
 Observables.observe(r::Reactive{T}, args...; kwargs...) where T = Observables.observe(getfield(r, :o), args...; kwargs...)
 Observables.listeners(r::Reactive{T}, args...; kwargs...) where T = Observables.listeners(getfield(r, :o), args...; kwargs...)
 
-Observables.appendinputs!(r::Reactive{T}, obsfuncs) where T = Observables.appendinputs!(getfield(r, :o), obsfuncs)
+@static if isdefined(Observables, :appendinputs!)
+    Observables.appendinputs!(r::Reactive{T}, obsfuncs) where T = Observables.appendinputs!(getfield(r, :o), obsfuncs)
+end
 
 # workaround for `map!()`, as long as Observables.MapUpdater is not patched to handle AbstractObservables (probably Observables <= v0.4.0)
 import Base.map!
