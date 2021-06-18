@@ -99,6 +99,14 @@ end
 Observables.observe(r::Reactive{T}, args...; kwargs...) where T = Observables.observe(getfield(r, :o), args...; kwargs...)
 Observables.listeners(r::Reactive{T}, args...; kwargs...) where T = Observables.listeners(getfield(r, :o), args...; kwargs...)
 
+@static if isdefined(Observables, :appendinputs!)
+    Observables.appendinputs!(r::Reactive{T}, obsfuncs) where T = Observables.appendinputs!(getfield(r, :o), obsfuncs)
+end
+
+# workaround for `map!()`, as long as Observables.MapUpdater is not patched to handle AbstractObservables (probably Observables <= v0.4.0)
+import Base.map!
+@inline Base.map!(f::F, r::Reactive, os...; update::Bool=true) where F = Base.map!(f::F, getfield(r, :o), os...; update=update)
+
 const R = Reactive
 const PUBLIC = 1
 const PRIVATE = 2
@@ -115,7 +123,7 @@ opts(;kwargs...) = OptDict(kwargs...)
 
 WEB_TRANSPORT = Genie.WebChannels
 
-export R, Reactive, ReactiveModel, @R_str, @js_str
+export R, Reactive, ReactiveModel, @R_str, @js_str, client_data
 export PRIVATE, PUBLIC, READONLY, JSFUNCTION, NO_WATCHER, NO_BACKEND_WATCHER, NO_FRONTEND_WATCHER
 export newapp
 export onbutton
@@ -339,6 +347,25 @@ js_created(app::MyDashboard) = \"\"\"
 function js_mounted(app::T)::String where {T<:ReactiveModel}
   ""
 end
+
+"""
+    `function client_data(app::T)::String where {T<:ReactiveModel}`
+
+Defines additional data that will only be visible by the browser.
+
+It is meant to keep volatile data, e.g. form data that needs to pass a validation first.
+In order to use the data you most probably also want to define [`js_methods`](@ref)
+### Example
+
+```julia
+import Stipple.client_data
+client_data(m::Example) = client_data(client_name = js"null", client_age = js"null", accept = false)
+```
+will define the additional fields `client_name`, `clientage` and `accept` for the model `Example`. These should, of course, not overlap with existing fields of your model.
+"""
+client_data(app::T) where T <: ReactiveModel = Dict{String, Any}()
+
+client_data(;kwargs...) = Dict{String, Any}([String(k) => v for (k, v) in kwargs]...)
 
 #===#
 
@@ -675,7 +702,7 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
     result[julia_to_vue(field)] = Stipple.render(f, field)
   end
 
-  vue = Dict(:el => Elements.elem(app), :mixins =>JSONText("[watcherMixin, reviveMixin]"), :data => result)
+  vue = Dict(:el => Elements.elem(app), :mixins =>JSONText("[watcherMixin, reviveMixin]"), :data => merge(result, client_data(app)))
 
   isempty(components(app) |> strip)   || push!(vue, :components => components(app))
   isempty(js_methods(app) |> strip)   || push!(vue, :methods    => JSONText("{ $(js_methods(app)) }"))
@@ -909,7 +936,7 @@ onbutton(f::Function, button::R{Bool}; async = false, kwargs...) = on(button; kw
       try
         f()
       catch ex
-        warn(ex)
+        @warn(ex)
       end
       button[] = false
   end
