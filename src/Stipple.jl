@@ -490,17 +490,17 @@ end
 
 Sets the value of `model.field` from `oldval` to `newval`. Returns the upated `model` instance.
 """
-function update!(model::M, field::Symbol, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
+function update!(model::M, field::Symbol, newval::T1, oldval::T2)::M where {T1, T2, M<:ReactiveModel}
   f = getfield(model, field)
   if f isa Reactive
-    f.r_mode == PRIVATE ? f[] = newval : setindex_withoutwatchers!(f, newval, 1)
+    f.r_mode == PRIVATE || f.no_backend_watcher ? f[] = newval : setindex_withoutwatchers!(f, newval, 1)
   else
     setfield!(model, field, newval)
   end
   model
 end
 
-function update!(model::M, field::Reactive, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
+function update!(model::M, field::Reactive{T}, newval::T, oldval::T)::M where {T, M<:ReactiveModel}
   field.r_mode == PRIVATE || field.no_backend_watcher ? field[] = newval : setindex_withoutwatchers!(field, newval, 1)
 
   model
@@ -567,8 +567,8 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
   deps_routes(channel)
 
   Genie.Router.channel("/$(channel)/watchers") do
-    payload = Genie.Router.@params(:payload)["payload"]
-    client = Genie.Router.@params(:WS_CLIENT)
+    payload = Genie.Router.params(:payload)["payload"]
+    client = Genie.Router.params(:WS_CLIENT)
     # if only elements of the array change, oldval and newval are identical
     ! isa(payload["newval"], Array) && payload["newval"] == payload["oldval"] && return "OK"
 

@@ -95,10 +95,10 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
         revive_payload: function(obj) {
           if (typeof obj === 'object') {
             for (var key in obj) {
-              if ( (typeof obj[key] === 'object') && !(obj[key].jsfunction) ) {
+              if ( (typeof obj[key] === 'object') && (obj[key]!=null) && !(obj[key].jsfunction) ) {
                 this.revive_payload(obj[key])
               } else {
-                if (obj[key].jsfunction) {
+                if ( (obj[key]!=null) && (obj[key].jsfunction) ) {
                   obj[key] = Function(obj[key].jsfunction.arguments, obj[key].jsfunction.body)
                   if (key=='stipplejs') { obj[key](); }
                 }
