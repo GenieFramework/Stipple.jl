@@ -567,7 +567,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
   deps_routes(channel)
 
   Genie.Router.channel("/$(channel)/watchers") do
-    payload = Genie.Router.params(:payload)["payload"]
+    payload = Genie.Requests.payload(:payload)["payload"]
     client = Genie.Requests.wsclient()
     # if only elements of the array change, oldval and newval are identical
     ! isa(payload["newval"], Array) && payload["newval"] == payload["oldval"] && return "OK"
