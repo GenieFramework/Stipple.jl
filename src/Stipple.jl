@@ -20,10 +20,29 @@ using Logging, Reexport, Requires
 @reexport using Observables
 @reexport using Genie
 @reexport using Genie.Renderer.Html
-import Genie.Renderer.Json.JSONParser: JSONText, json
-export JSONText
+@reexport using JSON
+
+const JSONParser = JSON
+export JSONParser
 
 import Genie.Configuration: isprod, PROD, DEV
+
+struct Undefined
+end
+
+const UNDEFINED = Undefined()
+JSON.lower(x::Undefined) = "__undefined__"
+Base.show(io::IO, x::Undefined) = Base.print(io, "undefined")
+
+
+function Genie.Renderer.Html.attrparser(k::Symbol, v::JSONParser.JSONText) :: String
+  if startswith(v.s, ":")
+    print(a, ":$(k |> parseattr)=$(v.s[2:end]) ")
+  else
+    print(a, "$(k |> parseattr)=$(v.s) ")
+  end
+end
+
 
 mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   o::Observables.Observable{T}
@@ -201,7 +220,7 @@ const SETTINGS = Settings()
 Abstract function. Needs to be specialized by plugins. It is automatically invoked by `Stipple` to serialize a Julia
 data type (corresponding to the fields in the `ReactiveModel` instance) to JavaScript/JSON. In general the specialized
 methods should return a Julia `Dict` which are automatically JSON encoded by `Stipple`. If custom JSON serialization is
-required for certain types in the resulting `Dict`, specialize `Genie.Renderer.Json.JSON.lower` for that specific type.
+required for certain types in the resulting `Dict`, specialize `JSON.lower` for that specific type.
 
 ### Example
 
@@ -214,7 +233,7 @@ end
 #### Specialized JSON rendering for `Undefined`
 
 ```julia
-Genie.Renderer.Json.JSON.lower(x::Undefined) = "__undefined__"
+JSON.lower(x::Undefined) = "__undefined__"
 ```
 """
 function render end
@@ -397,7 +416,7 @@ JSON representation of the Vue.js components registered for the `ReactiveModel` 
 function components(m::Type{M})::String where {M<:ReactiveModel}
   haskey(COMPONENTS, m) || return ""
 
-  replace(Dict(COMPONENTS[m]...) |> Genie.Renderer.Json.JSONParser.json, "\""=>"") |> string
+  replace(Dict(COMPONENTS[m]...) |> JSON.json, "\""=>"") |> string
 end
 
 function components(app::M)::String where {M<:ReactiveModel}
@@ -642,7 +661,7 @@ function Base.push!(app::M, vals::Pair{Symbol,T};
                     channel::String = Genie.config.webchannels_default_route,
                     except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
   WEB_TRANSPORT.broadcast(channel,
-                          Genie.Renderer.Json.JSONParser.json(Dict( "key" => julia_to_vue(vals[1]),
+                          JSON.json(Dict( "key" => julia_to_vue(vals[1]),
                                                                     "value" => Stipple.render(vals[2], vals[1]))),
                           except = except)
 end
@@ -702,7 +721,7 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
     result[julia_to_vue(field)] = Stipple.render(f, field)
   end
 
-  vue = Dict(:el => Elements.elem(app), :mixins =>JSONText("[watcherMixin, reviveMixin]"), :data => merge(result, client_data(app)))
+  vue = Dict(:el => Elements.elem(app), :mixins => JSONText("[watcherMixin, reviveMixin]"), :data => merge(result, client_data(app)))
 
   isempty(components(app) |> strip)   || push!(vue, :components => components(app))
   isempty(js_methods(app) |> strip)   || push!(vue, :methods    => JSONText("{ $(js_methods(app)) }"))

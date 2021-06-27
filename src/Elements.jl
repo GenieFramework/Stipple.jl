@@ -9,7 +9,7 @@ import Genie
 using Stipple
 
 import Genie.Renderer.Html: HTMLString, normal_element
-import Genie.Renderer.Json.JSONParser.JSONText
+import JSON.JSONText
 
 export root, elem, vm, @iif, @elsiif, @els, @text, @bind, @data, @on
 
@@ -48,7 +48,7 @@ Generates the JS/Vue.js code which handles the 2-way data sync between Julia and
 It is called internally by `Stipple.init` which allows for the configuration of all the parameters.
 """
 function vue_integration(model::M; vue_app_name::String, endpoint::String, channel::String, debounce::Int)::String where {M<:ReactiveModel}
-  vue_app = replace(Genie.Renderer.Json.JSONParser.json(model |> Stipple.render), "\"{" => " {")
+  vue_app = replace(JSON.json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
 
   output =
@@ -120,7 +120,7 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
     join([Stipple.watch(vue_app_name, field, channel, debounce, model)
       for field in fieldnames(typeof(model))
       if !(
-        !(getfield(model, field) isa Reactive) && 
+        !(getfield(model, field) isa Reactive) &&
           ( occursin(Stipple.SETTINGS.readonly_pattern, String(field)) || occursin(Stipple.SETTINGS.private_pattern, String(field)) )  ||
         getfield(model, field) isa Reactive &&
           ( getfield(model, field).r_mode != PUBLIC || getfield(model, field).no_frontend_watcher )
