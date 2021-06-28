@@ -37,9 +37,9 @@ Base.show(io::IO, x::Undefined) = Base.print(io, "undefined")
 
 function Genie.Renderer.Html.attrparser(k::Symbol, v::JSONParser.JSONText) :: String
   if startswith(v.s, ":")
-    print(a, ":$(k |> parseattr)=$(v.s[2:end]) ")
+    ":$(k |> Genie.Renderer.Html.parseattr)=$(v.s[2:end]) "
   else
-    print(a, "$(k |> parseattr)=$(v.s) ")
+    "$(k |> Genie.Renderer.Html.parseattr)=$(v.s) "
   end
 end
 
