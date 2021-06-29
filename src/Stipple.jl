@@ -440,11 +440,16 @@ function setindex_withoutwatchers!(field::Reactive, val, keys::Int...; notify=(x
   for f in Observables.listeners(field.o)
     if in(count, keys)
       count += 1
+
       continue
     end
 
     if notify(f)
-      Base.invokelatest(f, val)
+      try
+        f(val)
+      catch ex
+        isa(ex, MethodError) && string(ex.f) == string(f) ? Base.invokelatest(f, val) : rethrow(ex)
+      end
     end
 
     count += 1
