@@ -12,6 +12,9 @@ The Stipple ecosystem also includes:
 
 * [StippleUI.jl](https://github.com/GenieFramework/StippleUI.jl) - the UI library for `Stipple.jl`, providing access to 30+ reactive UI elements (including forms, lists, tables, as well as layout).
 * [StippleCharts.jl](https://github.com/GenieFramework/StippleCharts.jl) - the  charts library for `Stipple.jl`, providing access to a growing collection of reactive charts.
+* [StipplePlotly.jl](https://github.com/GenieFramework/StipplePlotly.jl) - alternative plotting library for `Stipple.jl` which uses Plotly. 
+* [StipplePlotlyExport.jl](https://github.com/GenieFramework/StipplePlotlyExport.jl) - add-on for `StipplePlotly.jl` to allow server side generation and exporting of plots. 
+* [StippleLatex.jl](https://github.com/GenieFramework/StippleLatex.jl) - support for (reactive) Latex content. 
 
 ## Installation
 
