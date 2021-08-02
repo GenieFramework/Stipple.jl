@@ -113,7 +113,7 @@ function vue_integration(model::M; vue_app_name::String, endpoint::String, chann
 
     ,
 
-    "\nvar $vue_app_name = new Vue($vue_app);\n\n"
+    "\nvar $vue_app_name = new Vue($( replace(vue_app, "\"$(Stipple.UNDEFINED_PLACEHOLDER)\""=>Stipple.UNDEFINED_VALUE) ));\n\n"
 
     ,
 

@@ -22,17 +22,25 @@ using Logging, Reexport, Requires
 @reexport using Genie.Renderer.Html
 @reexport using JSON
 
+include("NamedTuples.jl")
+using .NamedTuples
+
 const JSONParser = JSON
 export JSONParser
 
 import Genie.Configuration: isprod, PROD, DEV
 
+
+# support for handling JS `undefined` values
 struct Undefined
 end
 
 const UNDEFINED = Undefined()
-JSON.lower(x::Undefined) = "__undefined__"
-Base.show(io::IO, x::Undefined) = Base.print(io, "undefined")
+const UNDEFINED_PLACEHOLDER = "__undefined__"
+const UNDEFINED_VALUE = "undefined"
+
+JSON.lower(x::Undefined) = UNDEFINED_PLACEHOLDER
+Base.show(io::IO, x::Undefined) = Base.print(io, UNDEFINED_VALUE)
 
 
 function Genie.Renderer.Html.attrparser(k::Symbol, v::JSONParser.JSONText) :: String
@@ -593,6 +601,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
   Genie.Router.channel("/$(channel)/watchers") do
     payload = Genie.Requests.payload(:payload)["payload"]
     client = Genie.Requests.wsclient()
+
     # if only elements of the array change, oldval and newval are identical
     ! isa(payload["newval"], Array) && payload["newval"] == payload["oldval"] && return "OK"
 
@@ -602,6 +611,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     hasfield(M, field) || return "OK"
     valtype = Dict(zip(fieldnames(M), M.types))[field]
     val = valtype <: Reactive ? getfield(model, field) : Ref{valtype}(getfield(model, field))
+
     # reject non-public types
     if val isa Reactive
       val.r_mode == PUBLIC || return "OK"
@@ -665,10 +675,14 @@ Pushes data payloads over to the frontend by broadcasting the `vals` through the
 function Base.push!(app::M, vals::Pair{Symbol,T};
                     channel::String = Genie.config.webchannels_default_route,
                     except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
-  WEB_TRANSPORT.broadcast(channel,
-                          JSON.json(Dict( "key" => julia_to_vue(vals[1]),
-                                                                    "value" => Stipple.render(vals[2], vals[1]))),
-                          except = except)
+  try
+    WEB_TRANSPORT.broadcast(channel,
+                            JSON.json(Dict( "key" => julia_to_vue(vals[1]),
+                                            "value" => Stipple.render(vals[2], vals[1]))),
+                            except = except)
+  catch ex
+    @warn ex
+  end
 end
 
 function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
@@ -876,48 +890,6 @@ function deps(channel::String = Genie.config.webchannels_default_route) :: Strin
         ""
       end
   )
-end
-
-#===#
-
-"""
-    `function Core.NamedTuple(kwargs::Dict{Symbol,T})::NamedTuple where {T}`
-
-Converts the `Dict` `kwargs` with keys of type `Symbol` to a `NamedTuple`.
-
-### Example
-
-```julia
-julia> NamedTuple(Dict(:a => "a", :b => "b"))
-(a = "a", b = "b")
-```
-"""
-function Core.NamedTuple(kwargs::Dict{Symbol,T})::NamedTuple where {T}
-  NamedTuple{Tuple(keys(kwargs))}(collect(values(kwargs)))
-end
-
-"""
-    `function Core.NamedTuple(kwargs::Dict{Symbol,T}, property::Symbol, value::String)::NamedTuple where {T}`
-
-Prepends `value` to `kwargs[property]` if defined or adds a new `kwargs[property] = value` and then converts the
-resulting `kwargs` dict to a `NamedTuple`.
-
-### Example
-
-```julia
-julia> NamedTuple(Dict(:a => "a", :b => "b"), :d, "h")
-(a = "a", b = "b", d = "h")
-
-julia> NamedTuple(Dict(:a => "a", :b => "b"), :a, "h")
-(a = "h a", b = "b")
-```
-"""
-function Core.NamedTuple(kwargs::Dict{Symbol,T}, property::Symbol, value::String)::NamedTuple where {T}
-  value = "$value $(get!(kwargs, property, ""))" |> strip
-  kwargs = delete!(kwargs, property)
-  kwargs[property] = value
-
-  NamedTuple(kwargs)
 end
 
 macro R_str(s)
