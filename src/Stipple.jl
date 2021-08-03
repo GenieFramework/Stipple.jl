@@ -32,6 +32,8 @@ import Genie.Configuration: isprod, PROD, DEV
 
 
 # support for handling JS `undefined` values
+export Undefined, UNDEFINED
+
 struct Undefined
 end
 
@@ -680,8 +682,7 @@ function Base.push!(app::M, vals::Pair{Symbol,T};
                             JSON.json(Dict( "key" => julia_to_vue(vals[1]),
                                             "value" => Stipple.render(vals[2], vals[1]))),
                             except = except)
-  catch ex
-    @warn ex
+  catch
   end
 end
 
