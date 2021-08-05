@@ -442,7 +442,7 @@ end
 Change the content of a Reactive field without triggering the listeners.
 If keys are specified, only these listeners are exempted from triggering.
 """
-function setindex_withoutwatchers!(field::Reactive, val, keys::Int...; notify=(x)->true)
+function setindex_withoutwatchers!(field::Reactive{T}, val, keys::Int...; notify=(x)->true) where T
   count = 1
   field.o.val = val
   length(keys) == 0 && return field
@@ -466,6 +466,10 @@ function setindex_withoutwatchers!(field::Reactive, val, keys::Int...; notify=(x
   end
 
   return field
+end
+
+function Base.setindex!(r::Reactive{T}, val, args::Vector{Int}; notify=(x)->true) where T
+  setindex_withoutwatchers!(r, val, args...)
 end
 
 """
