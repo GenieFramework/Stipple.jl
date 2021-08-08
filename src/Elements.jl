@@ -11,7 +11,7 @@ using Stipple
 import Genie.Renderer.Html: HTMLString, normal_element
 import JSON.JSONText
 
-export root, elem, vm, @iif, @elsiif, @els, @text, @bind, @data, @on
+export root, elem, vm, @iif, @elsiif, @els, @text, @bind, @data, @on, @showif
 
 #===#
 
@@ -289,6 +289,10 @@ julia> input("", @bind(:input), @on("keyup.enter", "process = true"))
 """
 macro on(args, expr)
   :( "v-on:$(string($(esc(args))))='$(replace($(esc(expr)),"'" => raw"\'"))'" )
+end
+
+macro showif(expr)
+  :( "v-show='$($(esc(expr)))'" )
 end
 
 #===#

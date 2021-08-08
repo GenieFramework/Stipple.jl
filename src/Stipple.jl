@@ -316,6 +316,8 @@ function js_computed(app::T)::String where {T<:ReactiveModel}
   ""
 end
 
+const jscomputed = js_computed
+
 """
     `function js_watch(app::T) where {T<:ReactiveModel}`
 
@@ -683,9 +685,9 @@ function Base.push!(app::M, vals::Pair{Symbol,T};
                     except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
   try
     WEB_TRANSPORT.broadcast(channel,
-                            JSON.json(Dict( "key" => julia_to_vue(vals[1]),
-                                            "value" => Stipple.render(vals[2], vals[1]))),
-                            except = except)
+                                    JSON.json(Dict( "key" => julia_to_vue(vals[1]),
+                                                    "value" => Stipple.render(vals[2], vals[1]))),
+                                    except = except)
   catch
   end
 end
@@ -747,12 +749,12 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
 
   vue = Dict(:el => Elements.elem(app), :mixins => JSONText("[watcherMixin, reviveMixin]"), :data => merge(result, client_data(app)))
 
-  isempty(components(app) |> strip)   || push!(vue, :components => components(app))
-  isempty(js_methods(app) |> strip)   || push!(vue, :methods    => JSONText("{ $(js_methods(app)) }"))
-  isempty(js_computed(app) |> strip)  || push!(vue, :computed   => JSONText("{ $(js_computed(app)) }"))
-  isempty(js_watch(app) |> strip)     || push!(vue, :watch      => JSONText("{ $(js_watch(app)) }"))
-  isempty(js_created(app) |> strip)   || push!(vue, :created    => JSONText("function(){ $(js_created(app)); }"))
-  isempty(js_mounted(app) |> strip)   || push!(vue, :mounted    => JSONText("function(){ $(js_mounted(app)); }"))
+  isempty(components(app)   |> strip)   || push!(vue, :components => components(app))
+  isempty(js_methods(app)   |> strip)   || push!(vue, :methods    => JSONText("{ $(js_methods(app)) }"))
+  isempty(js_computed(app)  |> strip)   || push!(vue, :computed   => JSONText("{ $(js_computed(app)) }"))
+  isempty(js_watch(app)     |> strip)   || push!(vue, :watch      => JSONText("{ $(js_watch(app)) }"))
+  isempty(js_created(app)   |> strip)   || push!(vue, :created    => JSONText("function(){ $(js_created(app)); }"))
+  isempty(js_mounted(app)   |> strip)   || push!(vue, :mounted    => JSONText("function(){ $(js_mounted(app)); }"))
 
   vue
 end
