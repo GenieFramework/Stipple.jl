@@ -28,9 +28,6 @@ using .NamedTuples
 const JSONParser = JSON
 export JSONParser
 
-import Genie.Configuration: isprod, PROD, DEV
-
-
 # support for handling JS `undefined` values
 export Undefined, UNDEFINED
 
@@ -836,17 +833,17 @@ end
 
 const DEPS = Function[]
 
-vuejs() = @static Genie.Configuration.isprod() ? "vue.min.js" : "vue.js"
-
 """
     `function deps_routes(channel::String = Genie.config.webchannels_default_route) :: Nothing`
 
 Registers the `routes` for all the required JavaScript dependencies (scripts).
 """
 function deps_routes(channel::String = Genie.config.webchannels_default_route) :: Nothing
-  Genie.Router.route("/js/stipple/$(vuejs())") do
+  VUEJS = Genie.Configuration.isprod() ? "vue.min.js" : "vue.js"
+
+  Genie.Router.route("/js/stipple/$VUEJS") do
     Genie.Renderer.WebRenderable(
-      read(joinpath(@__DIR__, "..", "files", "js", vuejs()), String),
+      read(joinpath(@__DIR__, "..", "files", "js", VUEJS), String),
       :javascript) |> Genie.Renderer.respond
   end
 
@@ -879,6 +876,7 @@ end
 Outputs the HTML code necessary for injecting the dependencies in the page (the <script> tags).
 """
 function deps(channel::String = Genie.config.webchannels_default_route) :: String
+  VUEJS = Genie.Configuration.isprod() ? "vue.min.js" : "vue.js"
 
   endpoint = (channel == Genie.config.webchannels_default_route) ?
               Stipple.JS_SCRIPT_NAME :
@@ -887,7 +885,7 @@ function deps(channel::String = Genie.config.webchannels_default_route) :: Strin
   string(
     (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_support(channel) : Genie.Assets.webthreads_support(channel)),
     Genie.Renderer.Html.script(src="$(Genie.config.base_path)js/stipple/underscore-min.js"),
-    Genie.Renderer.Html.script(src="$(Genie.config.base_path)js/stipple/$(vuejs())"),
+    Genie.Renderer.Html.script(src="$(Genie.config.base_path)js/stipple/$VUEJS"),
     join([f() for f in DEPS], "\n"),
     Genie.Renderer.Html.script(src="$(Genie.config.base_path)js/stipple/stipplecore.js", defer=true),
     Genie.Renderer.Html.script(src="$(Genie.config.base_path)js/stipple/vue_filters.js", defer=true),
