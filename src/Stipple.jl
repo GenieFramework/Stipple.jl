@@ -343,6 +343,8 @@ function js_watch(m::T)::String where {T<:ReactiveModel}
   ""
 end
 
+const jswatch = js_watch
+
 """
     `function js_created(app::T)::String where {T<:ReactiveModel}`
 
@@ -361,6 +363,8 @@ function js_created(app::T)::String where {T<:ReactiveModel}
   ""
 end
 
+const jscreated = js_created
+
 """
     `function js_mounted(app::T)::String where {T<:ReactiveModel}`
 
@@ -378,6 +382,8 @@ js_created(app::MyDashboard) = \"\"\"
 function js_mounted(app::T)::String where {T<:ReactiveModel}
   ""
 end
+
+const jsmounted = js_mounted
 
 """
     `function client_data(app::T)::String where {T<:ReactiveModel}`
