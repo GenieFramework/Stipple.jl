@@ -36,12 +36,12 @@ julia> layout([
 ```
 """
 function layout(output::Union{String,Vector}; partial::Bool = false, title::String = "", class::String = "", style::String = "",
-                head_content::String = "", channel::String = Genie.config.webchannels_default_route) :: String
+                head_content::String = "", channel::String = Genie.config.webchannels_default_route, core_theme::Bool = true) :: String
 
   isa(output, Vector) && (output = join(output, '\n'))
 
   content = string(
-    theme(),
+    theme(; core_theme = core_theme),
     output,
     Stipple.deps(channel)
   )

@@ -21,16 +21,21 @@ julia> StippleUI.theme()
 julia> push!(Stipple.Layout.THEMES, StippleUI.theme)
 ```
 """
-function theme() :: String
-  Genie.Router.route("/css/stipple/stipplecore.min.css") do
-    Genie.Renderer.WebRenderable(
-      read(joinpath(@__DIR__, "..", "..", "files", "css", "stipplecore.min.css"), String),
-      :css) |> Genie.Renderer.respond
+function theme(; core_theme::Bool = true) :: String
+  output = ""
+
+  if core_theme
+    Genie.Router.route("/css/stipple/stipplecore.min.css") do
+      Genie.Renderer.WebRenderable(
+        read(joinpath(@__DIR__, "..", "..", "files", "css", "stipplecore.min.css"), String),
+        :css) |> Genie.Renderer.respond
+    end
+
+    output *= string(
+      Stipple.Elements.stylesheet("https://fonts.googleapis.com/css?family=Material+Icons"),
+      Stipple.Elements.stylesheet("$(Genie.config.base_path)css/stipple/stipplecore.min.css")
+    )
   end
 
-  string(
-    Stipple.Elements.stylesheet("https://fonts.googleapis.com/css?family=Material+Icons"),
-    Stipple.Elements.stylesheet("$(Genie.config.base_path)css/stipple/stipplecore.min.css"),
-    join([f() for f in THEMES], "\n")
-  )
+  string(output, join([f() for f in THEMES], "\n"))
 end
