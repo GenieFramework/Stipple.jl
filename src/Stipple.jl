@@ -1002,12 +1002,12 @@ end
 
 Helper function for model definition that acts as a one-to-one replacement for `Base.@kwdef`.
 
-When `Stipple.isprod() == true` this macro calls `@kwredef` and allows for redefinition of models.
+When `Genie.Configuration.isprod() == true` this macro calls `@kwredef` and allows for redefinition of models.
 Otherwise it calls `Base.@kwdef`.
 """
 macro kwdef(expr)
   esc(quote
-    Stipple.isprod() ? Base.@kwdef($expr) : Stipple.@kwredef($expr)
+    Genie.Configuration.isprod() ? Base.@kwdef($expr) : Stipple.@kwredef($expr)
   end)
 end
 
