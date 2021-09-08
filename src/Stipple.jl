@@ -569,7 +569,7 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
   output = """
     $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){
       Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});
-    }, $debounce));
+    }, $debounce), {deep: true});
   """
   # in production mode vue does not fill `this.expression` in the watcher, so we do it manually
   if Genie.Configuration.isprod()
@@ -614,7 +614,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     client = Genie.Requests.wsclient()
 
     # if only elements of the array change, oldval and newval are identical
-    ! isa(payload["newval"], Array) && payload["newval"] == payload["oldval"] && return "OK"
+    ! isa(payload["newval"], Array) && ! isa(payload["newval"], Dict) && payload["newval"] == payload["oldval"] && return "OK"
 
     field = Symbol(payload["field"])
 
@@ -809,9 +809,12 @@ function replace_jsfunction!(js::Union{Dict, JSONText})
 Replaces all JSONText values that contain a valid js function by a `Dict` that codes the function for a reviver.
 For JSONText variables it encapsulates the dict in a JSONText to make the function type stable.
 """
+# fallback is identity function
+replace_jsfunction!(x) = x
+
 function replace_jsfunction!(d::Dict)
     for (k,v) in d
-        if isa(v, Dict)
+        if isa(v, Dict) || isa(v, Array)
             replace_jsfunction!(v)
         elseif isa(v, JSONText)
             jsfunc = parse_jsfunction(v.s)
@@ -821,8 +824,16 @@ function replace_jsfunction!(d::Dict)
     return d
 end
 
+function replace_jsfunction!(v::Array)
+  replace_jsfunction!.(v)
+end
+
 function replace_jsfunction(d::Dict)
   replace_jsfunction!(deepcopy(d))
+end
+
+function replace_jsfunction(v::Vector)
+  replace_jsfunction!.(deepcopy(v))
 end
 
 function replace_jsfunction(js::JSONText)
