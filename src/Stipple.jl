@@ -1013,7 +1013,7 @@ end
 
 Helper function for model definition that acts as a one-to-one replacement for `Base.@kwdef`.
 
-When `Genie.Configuration.isprod() == true` this macro calls `@kwredef` and allows for redefinition of models.
+When `Genie.Configuration.isprod() == false` this macro calls `@kwredef` and allows for redefinition of models.
 Otherwise it calls `Base.@kwdef`.
 """
 macro kwdef(expr)
