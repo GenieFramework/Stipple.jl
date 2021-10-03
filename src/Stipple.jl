@@ -655,7 +655,9 @@ Configures the reactive handlers for the reactive properties of the model. Calle
 function setup(model::M, channel = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
   for field in fieldnames(M)
     f = getproperty(model, field)
+
     isa(f, Reactive) || continue
+
     if f.r_mode == 0
       if occursin(SETTINGS.private_pattern, String(field))
         f.r_mode = PRIVATE
@@ -745,8 +747,10 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
   result = Dict{String,Any}()
   for field in fieldnames(typeof(app))
     f = getfield(app, field)
-    ( ! (f isa Reactive) || occursin(SETTINGS.private_pattern, String(field))) && continue
+
+    occursin(SETTINGS.private_pattern, String(field)) && continue
     f isa Reactive && f.r_mode == PRIVATE && continue
+
     result[julia_to_vue(field)] = Stipple.render(f, field)
   end
 
