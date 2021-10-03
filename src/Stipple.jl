@@ -521,7 +521,7 @@ function convertvalue(targetfield::Any, value)
       Base.parse(valtype, value)
     end
   catch ex
-    # @error ex
+    @error ex
     value
   end
 end
@@ -745,7 +745,7 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
   result = Dict{String,Any}()
   for field in fieldnames(typeof(app))
     f = getfield(app, field)
-    !(f isa Reactive) && occursin(SETTINGS.private_pattern, String(field)) && continue
+    ( ! (f isa Reactive) || occursin(SETTINGS.private_pattern, String(field))) && continue
     f isa Reactive && f.r_mode == PRIVATE && continue
     result[julia_to_vue(field)] = Stipple.render(f, field)
   end
