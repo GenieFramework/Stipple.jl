@@ -11,7 +11,7 @@ using Stipple
 import Genie.Renderer.Html: HTMLString, normal_element
 import JSON.JSONText
 
-export root, elem, vm, @iif, @elsiif, @els, @text, @bind, @data, @on, @showif
+export root, elem, vm, @iif, @elsiif, @els, @recur, @text, @bind, @data, @on, @showif
 
 #===#
 
@@ -200,6 +200,22 @@ julia> span("Might want to keep an eye on this", class="notice", @els(:notice))
 """
 macro els(expr)
   :( "v-else='$($(esc(expr)))'" )
+end
+
+"""
+Generates `v-for` directive to render a list of items based on an array.
+<https://vuejs.org/v2/guide/list.html#Mapping-an-Array-to-Elements-with-v-for>
+
+### Example
+
+```julia
+julia> p(" {{todo}} ", class="warning", @recur(:"todo in todos"))
+"<p v-for='todo in todos'>\n {{todo}} \n</p>\n"
+```
+
+"""
+macro recur(expr)
+  :( "v-for='$($(esc(expr)))'" )
 end
 
 """
