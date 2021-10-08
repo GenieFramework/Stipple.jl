@@ -11,7 +11,7 @@ using Stipple
 import Genie.Renderer.Html: HTMLString, normal_element
 import JSON.JSONText
 
-export root, elem, vm, @iif, @elsiif, @els, @text, @bind, @data, @on, @showif
+export root, elem, vm, @iif, @elsiif, @els, @recur, @text, @bind, @data, @on, @showif
 
 #===#
 
@@ -203,6 +203,22 @@ macro els(expr)
 end
 
 """
+Generates `v-for` directive to render a list of items based on an array.
+<https://vuejs.org/v2/guide/list.html#Mapping-an-Array-to-Elements-with-v-for>
+
+### Example
+
+```julia
+julia> p(" {{todo}} ", class="warning", @recur(:"todo in todos"))
+"<p v-for='todo in todos'>\n {{todo}} \n</p>\n"
+```
+
+"""
+macro recur(expr)
+  :( "v-for='$($(esc(expr)))'" )
+end
+
+"""
     `@text(expr)`
 
 Creates a `v-text` or a `text-content.prop` Vue biding to the element's `textContent` property.
@@ -291,6 +307,24 @@ macro on(args, expr)
   :( "v-on:$(string($(esc(args))))='$(replace($(esc(expr)),"'" => raw"\'"))'" )
 end
 
+
+"""
+    `@showif(expr, [type])`
+
+v-show will always be rendered and remain in the DOM; v-show only toggles the display CSS property of the element.
+<https://vuejs.org/v2/guide/conditional.html#v-show>
+
+Difference between @showif and @iif when to use either
+
+v-if has higher toggle costs while v-show has higher initial render costs
+
+### Example
+
+```julia
+julia> h1("Hello!", @showif(:ok))
+"<h1 v-show="ok">Hello!</h1>"
+```
+"""
 macro showif(expr)
   :( "v-show='$($(esc(expr)))'" )
 end
