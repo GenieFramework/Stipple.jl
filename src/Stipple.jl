@@ -129,7 +129,6 @@ Observables.listeners(r::Reactive{T}, args...; kwargs...) where T = Observables.
     Observables.appendinputs!(r::Reactive{T}, obsfuncs) where T = Observables.appendinputs!(getfield(r, :o), obsfuncs)
 end
 
-# workaround for `map!()`, as long as Observables.MapUpdater is not patched to handle AbstractObservables (probably Observables <= v0.4.0)
 import Base.map!
 @inline Base.map!(f::F, r::Reactive, os...; update::Bool=true) where F = Base.map!(f::F, getfield(r, :o), os...; update=update)
 
