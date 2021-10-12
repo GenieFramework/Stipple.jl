@@ -122,6 +122,14 @@ function Base.setproperty!(r::Reactive{T}, field::Symbol, val) where T
   end
 end
 
+function Base.hash(r::T) where {T<:Reactive}
+  hash((( getfield(r, f) for f in fieldnames(typeof(r)) ) |> collect |> Tuple))
+end
+
+function Base.:(==)(a::T, b::R) where {T<:Reactive,R<:Reactive}
+  hash(a) == hash(b)
+end
+
 Observables.observe(r::Reactive{T}, args...; kwargs...) where T = Observables.observe(getfield(r, :o), args...; kwargs...)
 Observables.listeners(r::Reactive{T}, args...; kwargs...) where T = Observables.listeners(getfield(r, :o), args...; kwargs...)
 
@@ -199,6 +207,14 @@ mutable struct Settings
   private_pattern
 end
 Settings(; readonly_pattern = r"_$", private_pattern = r"__$") = Settings(readonly_pattern, private_pattern)
+
+function Base.hash(r::T) where {T<:ReactiveModel}
+  hash((( getfield(r, f) for f in fieldnames(typeof(r)) ) |> collect |> Tuple))
+end
+
+function Base.:(==)(a::T, b::R) where {T<:ReactiveModel,R<:ReactiveModel}
+  hash(a) == hash(b)
+end
 
 #===#
 
