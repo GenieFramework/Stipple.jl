@@ -25,15 +25,17 @@ function theme(; core_theme::Bool = true) :: String
   output = ""
 
   if core_theme
-    Genie.Router.route("/css/stipple/stipplecore.css") do
-      Genie.Renderer.WebRenderable(
-        read(joinpath(@__DIR__, "..", "..", "files", "css", "stipplecore.css"), String),
-        :css) |> Genie.Renderer.respond
+    if ! Genie.Assets.external_assets()
+      Genie.Router.route(Genie.Assets.asset_path(package="Stipple.jl", version="master", type="css", file="stipplecore")) do
+        Genie.Renderer.WebRenderable(
+          read(Genie.Assets.asset_file(cwd=abspath(joinpath(@__DIR__, "..", "..")), type="css", file="stipplecore"), String),
+          :css) |> Genie.Renderer.respond
+      end
     end
 
     output *= string(
       Stipple.Elements.stylesheet("https://fonts.googleapis.com/css?family=Material+Icons"),
-      Stipple.Elements.stylesheet("$(Genie.config.base_path)css/stipple/stipplecore.css")
+      Stipple.Elements.stylesheet(Genie.Assets.asset_path(package="Stipple.jl", version="master", type="css", file="stipplecore"))
     )
   end
 
