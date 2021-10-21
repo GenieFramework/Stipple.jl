@@ -890,7 +890,7 @@ const DEPS = Function[]
 Registers the `routes` for all the required JavaScript dependencies (scripts).
 """
 function deps_routes(channel::String = Genie.config.webchannels_default_route) :: Nothing
-  if ! Genie.Assets.external_assets()
+  if ! Genie.Assets.external_assets(assets_config)
     VUEJS = Genie.Configuration.isprod() ? "vue.min" : "vue"
 
     Genie.Router.route(
@@ -929,7 +929,7 @@ end
 Outputs the HTML code necessary for injecting the dependencies in the page (the <script> tags).
 """
 function deps(channel::String = Genie.config.webchannels_default_route;
-              core_theme::Bool = true, use_cdn::Bool = Genie.Assets.external_assets()) :: String
+              core_theme::Bool = true, use_cdn::Bool = Genie.Assets.external_assets(assets_config)) :: String
 
   string(
     (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_support(channel) : Genie.Assets.webthreads_support(channel)),
@@ -937,10 +937,10 @@ function deps(channel::String = Genie.config.webchannels_default_route;
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.min" : "vue"))),
     join([f() for f in DEPS], "\n"),
 
-    core_theme && Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="stipplecore"), defer= !Genie.Assets.external_assets()),
+    core_theme && Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="stipplecore"), defer= !Genie.Assets.external_assets(assets_config)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), defer=true),
 
-    if ! Genie.Assets.external_assets()
+    if ! Genie.Assets.external_assets(assets_config)
       Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, path=channel, file=Stipple.JS_SCRIPT_NAME),
                                   defer=true, onload="Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));")
     else

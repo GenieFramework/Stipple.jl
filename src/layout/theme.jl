@@ -1,3 +1,4 @@
+using Stipple
 
 export theme
 
@@ -25,8 +26,8 @@ function theme(; core_theme::Bool = true) :: String
   output = ""
 
   if core_theme
-    if ! Genie.Assets.external_assets()
-      Genie.Router.route(Genie.Assets.asset_path(package="Stipple.jl", version="master", type="css", file="stipplecore")) do
+    if ! Genie.Assets.external_assets(Stipple.assets_config)
+      Genie.Router.route(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore")) do
         Genie.Renderer.WebRenderable(
           read(Genie.Assets.asset_file(cwd=abspath(joinpath(@__DIR__, "..", "..")), type="css", file="stipplecore"), String),
           :css) |> Genie.Renderer.respond
@@ -34,8 +35,8 @@ function theme(; core_theme::Bool = true) :: String
     end
 
     output *= string(
-      Stipple.Elements.stylesheet("https://fonts.googleapis.com/css?family=Material+Icons"),
-      Stipple.Elements.stylesheet(Genie.Assets.asset_path(package="Stipple.jl", version="master", type="css", file="stipplecore"))
+      stylesheet("https://fonts.googleapis.com/css?family=Material+Icons"),
+      stylesheet(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore"))
     )
   end
 

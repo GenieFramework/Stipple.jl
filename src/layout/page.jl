@@ -19,7 +19,7 @@ function page(elemid, args...; partial::Bool = false, title::String = "", class:
               channel::String = Genie.config.webchannels_default_route , head_content::String = "",
               prepend::Union{String,Vector} = "", append::Union{String,Vector} = [],
               core_theme::Bool = true, kwargs...)
-  Stipple.Layout.layout(
+  layout(
     [
       join(prepend)
       Genie.Renderer.Html.div(id = elemid, args...; class = class, kwargs...)

@@ -15,7 +15,7 @@ Requires = "ae029012-a4dd-5104-9daa-d747884805df"
 
 [compat]
 FilePathsBase = "0.9"
-Genie = "2, 3"
+Genie = "^3.4"
 JSON = "0.21"
 Observables = "0.3, 0.4"
 Requires = "1"

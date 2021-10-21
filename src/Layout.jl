@@ -5,8 +5,7 @@ Utilities for rendering the general layout of a Stipple app, such as of a data d
 """
 module Layout
 
-import Genie
-using Stipple
+using Genie
 
 export layout
 
