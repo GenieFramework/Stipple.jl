@@ -647,7 +647,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
 
   Genie.Router.channel("/$(channel)/watchers") do
     payload = Genie.Requests.payload(:payload)["payload"]
-    client = Genie.Requests.wsclient()
+    client = transport == Genie.WebChannels ? Genie.Requests.wsclient() : Genie.Requests.wtclient()
 
     # if only elements of the array change, oldval and newval are identical
     ! isa(payload["newval"], Array) && ! isa(payload["newval"], Dict) && payload["newval"] == payload["oldval"] && return "OK"
@@ -676,7 +676,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
   end
 
   ep = Genie.Assets.asset_path(assets_config, :js, path=channel, file=endpoint)
-  Genie.Router.route("/$(ep)", named = STIPPLE_ROUTE_NAME) do
+  Genie.Router.route(ep, named = STIPPLE_ROUTE_NAME) do
     Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, endpoint = ep, channel = "", debounce = debounce) |> Genie.Renderer.Js.js
   end
 
@@ -896,24 +896,24 @@ function deps_routes(channel::String = Genie.config.webchannels_default_route) :
     Genie.Router.route(
       Genie.Assets.asset_path(assets_config, :js, file=VUEJS), named = :get_vuejs) do
         Genie.Renderer.WebRenderable(
-          read(Genie.Assets.asset_file(cwd=abspath(joinpath(@__DIR__, "..")), type="js", file=VUEJS), String), :javascript) |> Genie.Renderer.respond
+          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file=VUEJS)), :javascript) |> Genie.Renderer.respond
     end
 
     Genie.Router.route(
       Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), named = :get_vuefiltersjs) do
       Genie.Renderer.WebRenderable(
-        read(Genie.Assets.asset_file(cwd=abspath(joinpath(@__DIR__, "..")), type="js", file="vue_filters"), String), :javascript) |> Genie.Renderer.respond
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="vue_filters")), :javascript) |> Genie.Renderer.respond
     end
 
     Genie.Router.route(
       Genie.Assets.asset_path(assets_config, :js, file="underscore-min"), named = :get_underscorejs) do
       Genie.Renderer.WebRenderable(
-        read(Genie.Assets.asset_file(cwd=abspath(joinpath(@__DIR__, "..")), type="js", file="underscore-min"), String), :javascript) |> Genie.Renderer.respond
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="underscore-min")), :javascript) |> Genie.Renderer.respond
     end
 
     Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, file="stipplecore"), named = :get_stipplecorejs) do
       Genie.Renderer.WebRenderable(
-        read(Genie.Assets.asset_file(cwd=abspath(joinpath(@__DIR__, "..")), type="js", file="stipplecore"), String), :javascript) |> Genie.Renderer.respond
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="stipplecore")), :javascript) |> Genie.Renderer.respond
     end
   end
 
@@ -929,7 +929,7 @@ end
 Outputs the HTML code necessary for injecting the dependencies in the page (the <script> tags).
 """
 function deps(channel::String = Genie.config.webchannels_default_route;
-              core_theme::Bool = true, use_cdn::Bool = Genie.Assets.external_assets(assets_config)) :: String
+              core_theme::Bool = true) :: String
 
   string(
     (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_support(channel) : Genie.Assets.webthreads_support(channel)),
@@ -946,6 +946,7 @@ function deps(channel::String = Genie.config.webchannels_default_route;
     else
       Genie.Renderer.Html.script([
         Genie.Router.get_route(STIPPLE_ROUTE_NAME).action().body |> String
+        # replace(Genie.Router.get_route(STIPPLE_ROUTE_NAME).action().body |> String, raw"$"=>raw"\$")
         "Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));"
       ])
     end
