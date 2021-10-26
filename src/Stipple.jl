@@ -240,13 +240,6 @@ The name of the dynamically generated JavaScript file used for data sync.
 const JS_SCRIPT_NAME = "stipple"
 
 """
-    const STIPPLE_ROUTE_NAME
-
-The name of the route used for serving the dynamically generated JavaScript file used for data sync.
-"""
-const STIPPLE_ROUTE_NAME = Symbol("get_$JS_SCRIPT_NAME")
-
-"""
     `const JS_DEBOUNCE_TIME`
 
 Debounce time used to indicate the minimum frequency for sending data payloads to the backend (for example to batch send
@@ -621,6 +614,7 @@ function Base.parse(::Type{T}, v::T) where {T}
   v::T
 end
 
+
 """
     `function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model),
                     endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route,
@@ -638,7 +632,7 @@ hs_model = Stipple.init(HelloPie())
 function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model),
               endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route,
               debounce::Int = JS_DEBOUNCE_TIME, transport::Module = Genie.WebChannels,
-              parse_errors::Bool = false)::M where {M<:ReactiveModel}
+              parse_errors::Bool = false, core_theme::Bool = true)::M where {M<:ReactiveModel}
 
   global WEB_TRANSPORT = transport
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
@@ -675,13 +669,33 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     "OK"
   end
 
-  ep = Genie.Assets.asset_path(assets_config, :js, path=channel, file=endpoint)
-  Genie.Router.route(ep, named = STIPPLE_ROUTE_NAME) do
-    Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, endpoint = ep, channel = "", debounce = debounce) |> Genie.Renderer.Js.js
+  if ! Genie.Assets.external_assets(assets_config)
+    Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, path=channel, file=endpoint)) do
+      Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = "", debounce = debounce) |>
+        Genie.Renderer.Js.js
+    end
   end
+
+  push!(DEPS, stipple_deps(model, vue_app_name, channel, debounce, core_theme))
 
   setup(model, channel)
 end
+
+
+function stipple_deps(model, vue_app_name, channel, debounce, core_theme) :: Function
+  () -> begin
+    if ! Genie.Assets.external_assets(assets_config)
+      Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, path=channel, file=Stipple.JS_SCRIPT_NAME),
+                                  defer=true, onload="Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));")
+    else
+      Genie.Renderer.Html.script([
+        Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = "", debounce = debounce)
+        "Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));"
+      ])
+    end
+  end
+end
+
 
 """
     `function setup(model::M, channel = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}`
@@ -891,6 +905,7 @@ Registers the `routes` for all the required JavaScript dependencies (scripts).
 """
 function deps_routes(channel::String = Genie.config.webchannels_default_route) :: Nothing
   if ! Genie.Assets.external_assets(assets_config)
+
     VUEJS = Genie.Configuration.isprod() ? "vue.min" : "vue"
 
     Genie.Router.route(
@@ -915,6 +930,7 @@ function deps_routes(channel::String = Genie.config.webchannels_default_route) :
       Genie.Renderer.WebRenderable(
         Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="stipplecore")), :javascript) |> Genie.Renderer.respond
     end
+
   end
 
   (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_support(channel) : Genie.Assets.webthreads_support(channel))
@@ -928,28 +944,17 @@ end
 
 Outputs the HTML code necessary for injecting the dependencies in the page (the <script> tags).
 """
-function deps(channel::String = Genie.config.webchannels_default_route;
-              core_theme::Bool = true) :: String
+function deps(channel::String = Genie.config.webchannels_default_route; core_theme::Bool = true) :: String
 
   string(
     (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_support(channel) : Genie.Assets.webthreads_support(channel)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="underscore-min")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.min" : "vue"))),
-    join([f() for f in DEPS], "\n"),
 
     core_theme && Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="stipplecore"), defer= !Genie.Assets.external_assets(assets_config)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), defer=true),
 
-    if ! Genie.Assets.external_assets(assets_config)
-      Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, path=channel, file=Stipple.JS_SCRIPT_NAME),
-                                  defer=true, onload="Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));")
-    else
-      Genie.Renderer.Html.script([
-        Genie.Router.get_route(STIPPLE_ROUTE_NAME).action().body |> String
-        # replace(Genie.Router.get_route(STIPPLE_ROUTE_NAME).action().body |> String, raw"$"=>raw"\$")
-        "Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));"
-      ])
-    end
+    join([f() for f in DEPS], "\n")
   )
 end
 
