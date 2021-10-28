@@ -537,21 +537,17 @@ include("Layout.jl")
 
 function convertvalue(targetfield::Any, value)
   valtype = eltype(targetfield)
-  try
-    if valtype <: AbstractFloat && typeof(value) <: Integer
-      convert(valtype, value)
-    elseif valtype <: AbstractArray
-      a = if value isa AbstractArray
-        convert(Array{eltype(valtype)}, value)
-      else
-        eltype(valtype)[value]
-      end
+
+  if valtype <: AbstractFloat && typeof(value) <: Integer
+    convert(valtype, value)
+  elseif valtype <: AbstractArray
+    if value isa AbstractArray
+      convert(Array{eltype(valtype)}, value)
     else
-      Base.parse(valtype, value)
+      eltype(valtype)[value]
     end
-  catch ex
-    @error ex
-    value
+  else
+    parse(valtype, value)
   end
 end
 
@@ -684,13 +680,14 @@ end
 
 function stipple_deps(model, vue_app_name, channel, debounce, core_theme) :: Function
   () -> begin
+    ct = "Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));"
     if ! Genie.Assets.external_assets(assets_config)
       Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, path=channel, file=Stipple.JS_SCRIPT_NAME),
-                                  defer=true, onload="Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));")
+                                  defer=true, onload=ct)
     else
       Genie.Renderer.Html.script([
         Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = "", debounce = debounce)
-        "Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));"
+        ct
       ])
     end
   end
