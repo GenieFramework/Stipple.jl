@@ -98,7 +98,7 @@ This snippet illustrates how to build a UI where the button triggers a computati
 server side, using the input provided by the user, and outputting the result of the computation back to the user.
 
 ```julia
-using Genie, Genie.Renderer.Html, Stipple
+using Genie, Genie.Renderer.Html, Stipple, StippleUI
 
 Base.@kwdef mutable struct Model <: ReactiveModel
   process::R{Bool} = false
