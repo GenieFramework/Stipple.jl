@@ -181,17 +181,15 @@ export @kwredef
 function __init__()
   Genie.config.websockets_server = true
   @require OffsetArrays  = "6fe1bfb0-de20-5000-8ca7-80f57d26f881" function convertvalue(targetfield::Union{Ref{T}, Reactive{T}}, value) where T <: OffsetArrays.OffsetArray
-    valtype = eltype(targetfield)
-    a = if value isa AbstractArray
-      convert(Array{eltype(valtype)}, value)
-    else
-      eltype(valtype)[value]
-    end
+    a = stippleparse(eltype(targetfield), value)
+
+    # if value is not an OffsetArray use the offset of the current array
     if ! isa(value, OffsetArrays.OffsetArray)
       o = targetfield[].offsets
       OffsetArrays.OffsetArray(a, OffsetArrays.Origin(1 .+ o))
+    # otherwise use the existing value
     else
-      value
+      a
     end
   end
 end
@@ -536,19 +534,7 @@ include("Layout.jl")
 #===#
 
 function convertvalue(targetfield::Any, value)
-  valtype = eltype(targetfield)
-
-  if valtype <: AbstractFloat && typeof(value) <: Integer
-    convert(valtype, value)
-  elseif valtype <: AbstractArray
-    if value isa AbstractArray
-      convert(Array{eltype(valtype)}, value)
-    else
-      eltype(valtype)[value]
-    end
-  else
-    parse(valtype, value)
-  end
+  stippleparse(eltype(targetfield), value)
 end
 
 """
@@ -606,11 +592,26 @@ end
 
 #===#
 
-function Base.parse(::Type{T}, value::Dict) where T <: AbstractDict
+# wrapper around Base.parse to prevent type piracy
+stippleparse(::Type{T}, value) where T = Base.parse(T, value)
+
+function stippleparse(::Type{T}, value::Dict) where T <: AbstractDict
   convert(T, value)
 end
 
-function Base.parse(::Type{T}, v::T) where {T}
+function stippleparse(::Type{<:AbstractFloat}, value::T) where T <: Integer
+  convert(valtype, value)
+end
+
+function stippleparse(::Type{T1}, value::T2) where {T1 <: AbstractArray, T2 <: AbstractArray}
+  convert(T1, value)
+end
+
+function stippleparse(::Type{T}, value) where T <: AbstractArray
+  convert(T, eltype(T)[value])
+end
+
+function stippleparse(::Type{T}, v::T) where {T}
   v::T
 end
 
@@ -644,7 +645,6 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     client = transport == Genie.WebChannels ? Genie.Requests.wsclient() : Genie.Requests.wtclient()
 
     # if only elements of the array change, oldval and newval are identical
-    @info payload
     ! isa(payload["newval"], Array) && ! isa(payload["newval"], Dict) && payload["newval"] == payload["oldval"] && return "OK"
 
     field = Symbol(payload["field"])
