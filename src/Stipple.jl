@@ -606,6 +606,10 @@ end
 
 #===#
 
+function Base.parse(::Type{T}, value::Dict) where T <: AbstractDict
+  convert(T, value)
+end
+
 function Base.parse(::Type{T}, v::T) where {T}
   v::T
 end
@@ -640,6 +644,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     client = transport == Genie.WebChannels ? Genie.Requests.wsclient() : Genie.Requests.wtclient()
 
     # if only elements of the array change, oldval and newval are identical
+    @info payload
     ! isa(payload["newval"], Array) && ! isa(payload["newval"], Dict) && payload["newval"] == payload["oldval"] && return "OK"
 
     field = Symbol(payload["field"])
