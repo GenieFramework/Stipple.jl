@@ -672,7 +672,7 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     end
   end
 
-  push!(DEPS, stipple_deps(model, vue_app_name, channel, debounce, core_theme))
+  DEPS[@__MODULE__] = stipple_deps(model, vue_app_name, channel, debounce, core_theme)
 
   setup(model, channel)
 end
@@ -893,7 +893,8 @@ function replace_jsfunction(js::JSONText)
 end
 #===#
 
-const DEPS = Function[]
+import OrderedCollections
+const DEPS = OrderedCollections.OrderedDict{Module, Function}()
 
 """
     `function deps_routes(channel::String = Genie.config.webchannels_default_route) :: Nothing`
@@ -951,7 +952,7 @@ function deps(channel::String = Genie.config.webchannels_default_route; core_the
     core_theme && Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="stipplecore"), defer= !Genie.Assets.external_assets(assets_config)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), defer=true),
 
-    join([f() for f in DEPS], "\n")
+    join([f() for f in collect(values(DEPS))], "\n")
   )
 end
 

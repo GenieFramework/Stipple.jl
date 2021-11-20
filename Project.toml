@@ -1,7 +1,7 @@
 name = "Stipple"
 uuid = "4acbeb90-81a0-11ea-1966-bdaff8155998"
 authors = ["Adrian <e@essenciary.com>"]
-version = "0.16"
+version = "0.17.0"
 
 [deps]
 FilePathsBase = "48062228-2e41-5def-b9a4-89aafe57970f"
@@ -9,6 +9,7 @@ Genie = "c43c736e-a2d1-11e8-161f-af95117fbd1e"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 Observables = "510215fc-4207-5dde-b226-833fc4488ee2"
+OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
 Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
 Requires = "ae029012-a4dd-5104-9daa-d747884805df"
@@ -18,8 +19,9 @@ FilePathsBase = "0.9"
 Genie = "4"
 JSON = "0.21"
 Observables = "0.3, 0.4"
-Requires = "1"
+OrderedCollections = "1"
 Reexport = "1"
+Requires = "1"
 julia = "1.6"
 
 [extras]
