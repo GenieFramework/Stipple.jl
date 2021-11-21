@@ -599,6 +599,10 @@ function stippleparse(::Type{T}, value::Dict) where T <: AbstractDict
   convert(T, value)
 end
 
+function stippleparse(::Type{T}, value::Dict) where {Tval, T <: AbstractDict{Symbol, Tval}}
+  T(zip(Symbol.(string.(keys(value))), values(value)))
+end
+
 function stippleparse(::Type{<:AbstractFloat}, value::T) where T <: Integer
   convert(valtype, value)
 end
