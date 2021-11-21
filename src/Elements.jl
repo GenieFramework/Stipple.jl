@@ -49,7 +49,8 @@ It is called internally by `Stipple.init` which allows for the configuration of 
 """
 function vue_integration(model::M; vue_app_name::String = "StippleApp",
                           channel::String = Genie.config.webchannels_default_route,
-                          debounce::Int = Stipple.JS_DEBOUNCE_TIME)::String where {M<:ReactiveModel}
+                          debounce::Int = Stipple.JS_DEBOUNCE_TIME,
+                          parse::Bool = true)::String where {M<:ReactiveModel}
   vue_app = replace(JSON.json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
 
@@ -147,10 +148,14 @@ function vue_integration(model::M; vue_app_name::String = "StippleApp",
     $vue_app_name.\$forceUpdate();
   }
   """
-  ) |> repr
+  )
 
-
-  output[2:prevind(output, lastindex(output))]
+  if parse
+    output = repr(output)
+    output[2:prevind(output, lastindex(output))]
+  else
+    output
+  end
 end
 
 #===#

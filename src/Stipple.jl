@@ -628,7 +628,7 @@ hs_model = Stipple.init(HelloPie())
 function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model),
               endpoint::String = JS_SCRIPT_NAME, channel::String = Genie.config.webchannels_default_route,
               debounce::Int = JS_DEBOUNCE_TIME, transport::Module = Genie.WebChannels,
-              parse_errors::Bool = false, core_theme::Bool = true)::M where {M<:ReactiveModel}
+              parse_errors::Bool = false, core_theme::Bool = true, parse::Bool = true)::M where {M<:ReactiveModel}
 
   global WEB_TRANSPORT = transport
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
@@ -667,18 +667,18 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
 
   if ! Genie.Assets.external_assets(assets_config)
     Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, path=channel, file=endpoint)) do
-      Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = "", debounce = debounce) |>
+      Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = "", debounce = debounce, parse = true) |>
         Genie.Renderer.Js.js
     end
   end
 
-  DEPS[@__MODULE__] = stipple_deps(model, vue_app_name, channel, debounce, core_theme)
+  DEPS[@__MODULE__] = stipple_deps(model, vue_app_name, channel, debounce, core_theme, parse)
 
   setup(model, channel)
 end
 
 
-function stipple_deps(model, vue_app_name, channel, debounce, core_theme) :: Function
+function stipple_deps(model, vue_app_name, channel, debounce, core_theme, parse) :: Function
   () -> begin
     ct = "Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));"
     if ! Genie.Assets.external_assets(assets_config)
@@ -686,7 +686,7 @@ function stipple_deps(model, vue_app_name, channel, debounce, core_theme) :: Fun
                                   defer=true, onload=ct)
     else
       Genie.Renderer.Html.script([
-        Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = "", debounce = debounce)
+        Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = "", debounce = debounce, parse = parse)
         ct
       ])
     end
