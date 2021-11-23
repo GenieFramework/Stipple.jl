@@ -181,7 +181,7 @@ export @kwredef
 function __init__()
   Genie.config.websockets_server = true
   @require OffsetArrays  = "6fe1bfb0-de20-5000-8ca7-80f57d26f881" function convertvalue(targetfield::Union{Ref{T}, Reactive{T}}, value) where T <: OffsetArrays.OffsetArray
-    a = stippleparse(eltype(targetfield), value)
+    a = stipple_parse(eltype(targetfield), value)
 
     # if value is not an OffsetArray use the offset of the current array
     if ! isa(value, OffsetArrays.OffsetArray)
@@ -534,7 +534,7 @@ include("Layout.jl")
 #===#
 
 function convertvalue(targetfield::Any, value)
-  stippleparse(eltype(targetfield), value)
+  stipple_parse(eltype(targetfield), value)
 end
 
 """
@@ -593,29 +593,29 @@ end
 #===#
 
 # wrapper around Base.parse to prevent type piracy
-stippleparse(::Type{T}, value) where T = Base.parse(T, value)
+stipple_parse(::Type{T}, value) where T = Base.parse(T, value)
 
-function stippleparse(::Type{T}, value::Dict) where T <: AbstractDict
+function stipple_parse(::Type{T}, value::Dict) where T <: AbstractDict
   convert(T, value)
 end
 
-function stippleparse(::Type{T}, value::Dict) where {Tval, T <: AbstractDict{Symbol, Tval}}
+function stipple_parse(::Type{T}, value::Dict) where {Tval, T <: AbstractDict{Symbol, Tval}}
   T(zip(Symbol.(string.(keys(value))), values(value)))
 end
 
-function stippleparse(::Type{<:AbstractFloat}, value::T) where T <: Integer
+function stipple_parse(::Type{<:AbstractFloat}, value::T) where T <: Integer
   convert(valtype, value)
 end
 
-function stippleparse(::Type{T1}, value::T2) where {T1 <: AbstractArray, T2 <: AbstractArray}
+function stipple_parse(::Type{T1}, value::T2) where {T1 <: AbstractArray, T2 <: AbstractArray}
   convert(T1, value)
 end
 
-function stippleparse(::Type{T}, value) where T <: AbstractArray
+function stipple_parse(::Type{T}, value) where T <: AbstractArray
   convert(T, eltype(T)[value])
 end
 
-function stippleparse(::Type{T}, v::T) where {T}
+function stipple_parse(::Type{T}, v::T) where {T}
   v::T
 end
 
