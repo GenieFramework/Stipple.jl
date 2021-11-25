@@ -596,8 +596,12 @@ function stipple_parse(::Type{T}, value::Dict) where {Tval, T <: AbstractDict{Sy
   T(zip(Symbol.(string.(keys(value))), values(value)))
 end
 
-function stipple_parse(::Type{<:AbstractFloat}, value::T) where T <: Integer
-  convert(valtype, value)
+function stipple_parse(::Type{T1}, value::T2) where {T1 <: Number, T2 <: Number}
+  convert(T1, value)
+end
+
+function stipple_parse(::Type{T1}, value::T2) where {T1 <: Int, T2 <: Number}
+  round(T1, value)
 end
 
 function stipple_parse(::Type{T1}, value::T2) where {T1 <: AbstractArray, T2 <: AbstractArray}
@@ -660,7 +664,11 @@ function init(model::M; vue_app_name::S = Stipple.Elements.root(model),
     end
 
     newval = convertvalue(val, payload["newval"])
-    oldval = convertvalue(val, payload["oldval"])
+    oldval = try
+      convertvalue(val, payload["oldval"])
+    catch ex
+      val[]
+    end
 
     push!(model, field => newval, channel = channel, except = client)
     update!(model, field, newval, oldval)
