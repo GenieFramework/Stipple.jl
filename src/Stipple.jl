@@ -670,7 +670,11 @@ function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = St
     end
 
     newval = convertvalue(val, payload["newval"])
-    oldval = convertvalue(val, payload["oldval"])
+    oldval = try
+      convertvalue(val, payload["oldval"])
+    catch ex
+      val[]
+    end
 
     push!(model, field => newval, channel = channel, except = client)
     update!(model, field, newval, oldval)
