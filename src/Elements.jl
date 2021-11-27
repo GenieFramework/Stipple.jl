@@ -52,6 +52,7 @@ function vue_integration(model::M; vue_app_name::String = "StippleApp",
                           debounce::Int = Stipple.JS_DEBOUNCE_TIME)::String where {M<:ReactiveModel}
   vue_app = replace(JSON.json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
+  vue_app = replace(vue_app, "\"$channel\"" => "CHANNEL")
 
   output =
   string(
@@ -62,7 +63,7 @@ function vue_integration(model::M; vue_app_name::String = "StippleApp",
     ,
 
     join([
-      Stipple.watch(vue_app_name, field, channel, debounce, model) for field in fieldnames(typeof(model))
+      Stipple.watch(vue_app_name, field, "CHANNEL", debounce, model) for field in fieldnames(typeof(model))
         if !(
           !(getfield(model, field) isa Reactive) &&
             ( occursin(Stipple.SETTINGS.readonly_pattern, String(field)) || occursin(Stipple.SETTINGS.private_pattern, String(field)) )  ||
@@ -86,7 +87,7 @@ function vue_integration(model::M; vue_app_name::String = "StippleApp",
     $(
       if hasproperty(model, :subscriptionready)
         """
-        Genie.WebChannels.sendMessageTo('$(model.channel)', 'watchers', {'payload': {'field':'subscriptionready', 'newval': true, 'oldval': false}});
+        Genie.WebChannels.sendMessageTo(CHANNEL, 'watchers', {'payload': {'field':'subscriptionready', 'newval': true, 'oldval': false}});
         $vue_app_name.subscriptionready = true;
         """
       else

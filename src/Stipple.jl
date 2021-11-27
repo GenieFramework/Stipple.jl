@@ -15,7 +15,7 @@ existing Vue.js libraries.
 """
 module Stipple
 
-using Logging, Reexport, Requires
+using Logging, Mixers, Random, Reexport, Requires
 
 @reexport using Observables
 @reexport using Genie
@@ -214,6 +214,16 @@ end
 ```
 """
 abstract type ReactiveModel end
+
+
+export @reactors
+
+@pour reactors begin
+  channel::String = Genie.config.webchannels_default_route
+  subscriptionready::R{Bool} = false
+end
+
+
 mutable struct Settings
   readonly_pattern
   private_pattern
@@ -575,7 +585,9 @@ Sets up default Vue.js watchers so that when the value `fieldname` of type `fiel
 changed on the frontend, it is pushed over to the backend using `channel`, at a `debounce` minimum time interval.
 """
 function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounce::Int, model::M)::String where {M<:ReactiveModel}
-  js_channel = channel == "" ? "window.Genie.Settings.webchannels_default_route" : "'$channel'"
+  js_channel = isempty(channel) ?
+                "window.Genie.Settings.webchannels_default_route" :
+                (channel == "CHANNEL" ? "CHANNEL" : "'$channel'")
 
   output = """
     $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){
@@ -639,7 +651,7 @@ hs_model = Stipple.init(HelloPie())
 ```
 """
 function init(model::M; vue_app_name::S = Stipple.Elements.root(model),
-              endpoint::S = vue_app_name, channel::S = Genie.config.webchannels_default_route,
+              endpoint::S = vue_app_name, channel::S = uppercase(randstring(8)),
               debounce::Int = JS_DEBOUNCE_TIME, transport::Module = Genie.WebChannels,
               parse_errors::Bool = false, core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
 
@@ -684,8 +696,8 @@ function init(model::M; vue_app_name::S = Stipple.Elements.root(model),
   end
 
   if ! Genie.Assets.external_assets(assets_config)
-    Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, path = channel, file = endpoint)) do
-      # Stipple.Elements.vue_integration(typeof(model)(; channel = model.channel), vue_app_name = vue_app_name, channel = channel, debounce = debounce) |>
+    Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, # path = channel,
+                                              file = endpoint)) do
       Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = channel, debounce = debounce) |>
         Genie.Renderer.Js.js
     end
@@ -700,16 +712,20 @@ end
 function stipple_deps(model, vue_app_name, channel, debounce, core_theme) :: Function
   () -> begin
     ct = "Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));"
-    if ! Genie.Assets.external_assets(assets_config)
-      Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, path = channel, file = vue_app_name), defer=true, onload = ct)
-    else
-      Genie.Renderer.Html.script([
-        # (Stipple.Elements.vue_integration(typeof(model)(; channel = model.channel), vue_app_name = vue_app_name, channel = channel,
-        (Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = channel,
-                                          debounce = debounce) |> Genie.Renderer.Js.js).body |> String,
-        ct
-      ])
-    end
+    string(
+      Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"]),
+      if ! Genie.Assets.external_assets(assets_config)
+        Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js,
+                                  # path = channel,
+                                  file = vue_app_name), defer = true, onload = ct)
+      else
+        Genie.Renderer.Html.script([
+          (Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = channel,
+                                            debounce = debounce) |> Genie.Renderer.Js.js).body |> String,
+          ct
+        ])
+      end
+    )
   end
 end
 

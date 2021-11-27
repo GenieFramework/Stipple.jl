@@ -52,7 +52,7 @@ function layout(output::Union{String,Vector}; partial::Bool = false, title::Stri
     Genie.Renderer.Html.html([
       Genie.Renderer.Html.head([
         Genie.Renderer.Html.title(title)
-        Genie.Renderer.Html.meta(name="viewport", content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui")
+        Genie.Renderer.Html.meta(name="viewport", content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no")
         head_content
       ])
       Genie.Renderer.Html.body(content, class=class, style=style)
