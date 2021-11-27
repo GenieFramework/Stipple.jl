@@ -651,7 +651,8 @@ hs_model = Stipple.init(HelloPie())
 ```
 """
 function init(model::M; vue_app_name::S = Stipple.Elements.root(model),
-              endpoint::S = vue_app_name, channel::S = uppercase(randstring(8)),
+              endpoint::S = vue_app_name,
+              channel::String = Genie.config.webchannels_default_route,
               debounce::Int = JS_DEBOUNCE_TIME, transport::Module = Genie.WebChannels,
               parse_errors::Bool = false, core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
 

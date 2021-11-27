@@ -17,9 +17,9 @@ julia> page(:elemid, [
 ```
 """
 function page(elemid, args...; partial::Bool = false, title::String = "", class::String = "container", style::String = "",
-              channel::String = Genie.config.webchannels_default_route , head_content::String = "",
-              prepend::Union{String,Vector} = "", append::Union{String,Vector} = [],
-              core_theme::Bool = true, kwargs...)
+              channel::String = Genie.config.webchannels_default_route, head_content::String = "",
+              prepend::Union{S,Vector} = "", append::Union{T,Vector} = [],
+              core_theme::Bool = true, kwargs...) where {S<:AbstractString,T<:AbstractString}
   layout(
     [
       join(prepend)
