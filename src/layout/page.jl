@@ -1,4 +1,5 @@
 export page, row, cell
+import Stipple
 
 """
     `function page(elemid, args...; partial::Bool = false, title::String = "", class::String = "", style::String = "",
@@ -15,7 +16,7 @@ julia> page(:elemid, [
 "<!DOCTYPE html>\n<html><head><title></title><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui\" /></head><body class style><link href=\"https://fonts.googleapis.com/css?family=Material+Icons\" rel=\"stylesheet\" /><link href=\"https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;0,900;1,400&display=swap\" rel=\"stylesheet\" /><link href=\"/css/stipple/stipplecore.css\" rel=\"stylesheet\" /><link href=\"/css/stipple/quasar.min.css\" rel=\"stylesheet\" /><div id=elemid><span v-text='greeting'>Hello</span></div><script src=\"/js/channels.js?v=1.17.1\"></script><script src=\"/js/underscore-min.js\"></script><script src=\"/js/vue.js\"></script><script src=\"/js/quasar.umd.min.js\"></script>\n<script src=\"/js/apexcharts.min.js\"></script><script src=\"/js/vue-apexcharts.min.js\"></script><script src=\"/js/stipplecore.js\" defer></script><script src=\"/js/vue_filters.js\" defer></script></body></html>"
 ```
 """
-function page(elemid, args...; partial::Bool = false, title::String = "", class::String = "", style::String = "",
+function page(elemid, args...; partial::Bool = false, title::String = "", class::String = "container", style::String = "",
               channel::String = Genie.config.webchannels_default_route , head_content::String = "",
               prepend::Union{String,Vector} = "", append::Union{String,Vector} = [],
               core_theme::Bool = true, kwargs...)
@@ -27,6 +28,11 @@ function page(elemid, args...; partial::Bool = false, title::String = "", class:
     ],
     partial = partial, title = title, style = style, head_content = head_content, channel = channel,
     core_theme = core_theme)
+end
+function page(model::T, args...; kwargs...) where {T<:Stipple.ReactiveModel}
+  hasproperty(model, :channel) || throw(Stipple.MissingPropertyException(:channel, model))
+
+  page(vm(model), args...; channel = model.channel, kwargs...)
 end
 
 """

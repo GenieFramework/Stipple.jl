@@ -229,6 +229,13 @@ function Base.:(==)(a::T, b::R) where {T<:ReactiveModel,R<:ReactiveModel}
 end
 
 #===#
+struct MissingPropertyException{T<:ReactiveModel} <: Exception
+  property::Symbol
+  entity::T
+end
+Base.string(ex::MissingPropertyException) = "Entity $entity does not have required property $property"
+
+#===#
 
 """
     `const JS_DEBOUNCE_TIME`
@@ -481,9 +488,9 @@ function setindex_withoutwatchers!(field::Reactive{T}, val, keys::Int...; notify
 
     if notify(f)
       try
-        f(val)
+        Base.invokelatest(f, val)
       catch ex
-        isa(ex, MethodError) && string(ex.f) == string(f) ? Base.invokelatest(f, val) : rethrow(ex)
+        @error ex
       end
     end
 
@@ -678,6 +685,7 @@ function init(model::M; vue_app_name::S = Stipple.Elements.root(model),
 
   if ! Genie.Assets.external_assets(assets_config)
     Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, path = channel, file = endpoint)) do
+      # Stipple.Elements.vue_integration(typeof(model)(; channel = model.channel), vue_app_name = vue_app_name, channel = channel, debounce = debounce) |>
       Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = channel, debounce = debounce) |>
         Genie.Renderer.Js.js
     end
@@ -696,6 +704,7 @@ function stipple_deps(model, vue_app_name, channel, debounce, core_theme) :: Fun
       Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, path = channel, file = vue_app_name), defer=true, onload = ct)
     else
       Genie.Renderer.Html.script([
+        # (Stipple.Elements.vue_integration(typeof(model)(; channel = model.channel), vue_app_name = vue_app_name, channel = channel,
         (Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = channel,
                                           debounce = debounce) |> Genie.Renderer.Js.js).body |> String,
         ct
@@ -760,6 +769,19 @@ function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
                     except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
                     v = vals[2].r_mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
   push!(app, Symbol(julia_to_vue(vals[1])) => v, channel = channel, except = except)
+end
+
+function Base.push!(model::M) where {M<:ReactiveModel}
+  hasproperty(model, :channel) || throw(Stipple.MissingPropertyException(:channel, model))
+
+  for field in fieldnames(M)
+    f = getproperty(model, field)
+
+    (isa(f, Reactive) && f.r_mode != PRIVATE) || continue
+
+    @show "pushing $field to $(model.channel) as $(model.name)"
+    push!(model, field => f, channel = model.channel)
+  end
 end
 
 #===#
@@ -981,7 +1003,7 @@ end
 
 # add a method to Observables.on to accept inverted order of arguments similar to route()
 import Observables.on
-on(observable::Observables.AbstractObservable, f::Function; weak = false) = on(f, observable; weak = weak)
+on(observable::Observables.AbstractObservable, f::Function; weak = true) = on(f, observable; weak = weak)
 
 """
     `onbutton(f::Function, button::R{Bool}; async = false, weak = false)`

@@ -61,14 +61,14 @@ function vue_integration(model::M; vue_app_name::String = "StippleApp",
 
     ,
 
-    join([Stipple.watch(vue_app_name, field, channel, debounce, model)
-      for field in fieldnames(typeof(model))
-      if !(
-        !(getfield(model, field) isa Reactive) &&
-          ( occursin(Stipple.SETTINGS.readonly_pattern, String(field)) || occursin(Stipple.SETTINGS.private_pattern, String(field)) )  ||
-        getfield(model, field) isa Reactive &&
-          ( getfield(model, field).r_mode != PUBLIC || getfield(model, field).no_frontend_watcher )
-      )
+    join([
+      Stipple.watch(vue_app_name, field, channel, debounce, model) for field in fieldnames(typeof(model))
+        if !(
+          !(getfield(model, field) isa Reactive) &&
+            ( occursin(Stipple.SETTINGS.readonly_pattern, String(field)) || occursin(Stipple.SETTINGS.private_pattern, String(field)) )  ||
+          getfield(model, field) isa Reactive &&
+            ( getfield(model, field).r_mode != PUBLIC || getfield(model, field).no_frontend_watcher )
+        )
     ])
 
     ,
@@ -82,9 +82,22 @@ function vue_integration(model::M; vue_app_name::String = "StippleApp",
     }
   }
 
+  window.subscription_ready = function(){
+    $(
+      if hasproperty(model, :subscriptionready)
+        """
+        Genie.WebChannels.sendMessageTo('$(model.channel)', 'watchers', {'payload': {'field':'subscriptionready', 'newval': true, 'oldval': false}});
+        $vue_app_name.subscriptionready = true;
+        """
+      else
+        "consols.log('Subscription ready');"
+      end
+    )
+  }
+
   window.onload = function() {
-    console.log("Loading completed");
     $vue_app_name.\$forceUpdate();
+    console.log("Loading completed");
   }
   """
   )
