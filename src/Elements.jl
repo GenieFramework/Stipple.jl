@@ -49,73 +49,12 @@ It is called internally by `Stipple.init` which allows for the configuration of 
 """
 function vue_integration(model::M; vue_app_name::String = "StippleApp",
                           channel::String = Genie.config.webchannels_default_route,
-                          debounce::Int = Stipple.JS_DEBOUNCE_TIME,
-                          parse::Bool = true)::String where {M<:ReactiveModel}
+                          debounce::Int = Stipple.JS_DEBOUNCE_TIME)::String where {M<:ReactiveModel}
   vue_app = replace(JSON.json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
 
   output =
   string(
-    raw"""
-    const watcherMixin = {
-      methods: {
-        $withoutWatchers: function (cb, filter) {
-          let ww = (filter === null) ? this._watchers : [];
-
-          if (typeof(filter) == "string") {
-            this._watchers.forEach((w) => { if (w.expression == filter) {ww.push(w)} } )
-          } else { // if it is a true regex
-            this._watchers.forEach((w) => { if (w.expression.match(filter)) {ww.push(w)} } )
-          }
-
-          const watchers = ww.map((watcher) => ({ cb: watcher.cb, sync: watcher.sync }));
-
-          for (let index in ww) {
-            ww[index].cb = () => null;
-            ww[index].sync = true;
-          }
-
-          cb();
-
-          for (let index in ww) {
-            ww[index].cb = watchers[index].cb;
-            ww[index].sync = watchers[index].sync;
-          }
-
-        },
-
-        updateField: function (field, newVal) {
-          try {
-            this.$withoutWatchers(()=>{this[field]=newVal},"function(){return this." + field + "}");
-          } catch(ex) {
-            console.log(ex);
-          }
-        }
-      }
-    }
-    const reviveMixin = {
-      methods: {
-        revive_payload: function(obj) {
-          if (typeof obj === 'object') {
-            for (var key in obj) {
-              if ( (typeof obj[key] === 'object') && (obj[key]!=null) && !(obj[key].jsfunction) ) {
-                this.revive_payload(obj[key])
-              } else {
-                if ( (obj[key]!=null) && (obj[key].jsfunction) ) {
-                  obj[key] = Function(obj[key].jsfunction.arguments, obj[key].jsfunction.body)
-                  if (key=='stipplejs') { obj[key](); }
-                }
-              }
-            }
-          }
-          return obj;
-        }
-      }
-    }
-    """
-
-    ,
-
     "
     var $vue_app_name = new Vue($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ));
     "
@@ -150,12 +89,8 @@ function vue_integration(model::M; vue_app_name::String = "StippleApp",
   """
   )
 
-  if parse
-    output = repr(output)
-    output[2:prevind(output, lastindex(output))]
-  else
-    output
-  end
+  output = repr(output)
+  output[2:prevind(output, lastindex(output))]
 end
 
 #===#
