@@ -34,9 +34,9 @@ julia> layout([
 "<link href=\"https://fonts.googleapis.com/css?family=Material+Icons\" rel=\"stylesheet\" /><link href=\"https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;0,900;1,400&display=swap\" rel=\"stylesheet\" /><link href=\"/css/stipple/stipplecore.css\" rel=\"stylesheet\" /><link href=\"/css/stipple/quasar.min.css\" rel=\"stylesheet\" /><span v-text='greeting'>Hello</span><script src=\"/js/channels.js?v=1.17.1\"></script><script src=\"/js/underscore-min.js\"></script><script src=\"/js/vue.js\"></script><script src=\"/js/quasar.umd.min.js\"></script>\n<script src=\"/js/apexcharts.min.js\"></script><script src=\"/js/vue-apexcharts.min.js\"></script><script src=\"/js/stipplecore.js\" defer></script><script src=\"/js/vue_filters.js\" defer></script>"
 ```
 """
-function layout(output::Union{String,Vector}; partial::Bool = false, title::String = "", class::String = "", style::String = "",
+function layout(output::Union{S,Vector}; partial::Bool = false, title::String = "", class::String = "", style::String = "",
                 head_content::String = "", channel::String = Genie.config.webchannels_default_route,
-                core_theme::Bool = true) :: String
+                core_theme::Bool = true)::String where {S<:AbstractString}
 
   isa(output, Vector) && (output = join(output, '\n'))
 

@@ -21,6 +21,7 @@ using Logging, Mixers, Random, Reexport, Requires
 @reexport using Genie
 @reexport using Genie.Renderer.Html
 @reexport using JSON
+@reexport using Parameters
 
 include("NamedTuples.jl")
 using .NamedTuples
@@ -175,6 +176,7 @@ export PRIVATE, PUBLIC, READONLY, JSFUNCTION, NO_WATCHER, NO_BACKEND_WATCHER, NO
 export newapp
 export onbutton
 export @kwredef
+export init
 
 #===#
 
@@ -216,11 +218,15 @@ end
 abstract type ReactiveModel end
 
 
-export @reactors
+export @reactors, @reactive
 
 @pour reactors begin
   channel::String = Genie.config.webchannels_default_route
-  subscriptionready::R{Bool} = false
+  ready::R{Bool} = false
+end
+
+@mix @with_kw mutable struct reactive
+  @reactors
 end
 
 
