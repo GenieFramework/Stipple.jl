@@ -218,15 +218,20 @@ end
 abstract type ReactiveModel end
 
 
-export @reactors, @reactive
+export @reactors, @reactive, @reactive!
 
 @pour reactors begin
   channel::String = Genie.config.webchannels_default_route
-  ready::R{Bool} = false
+  isready::R{Bool} = false
 end
 
 @mix @with_kw mutable struct reactive
   @reactors
+end
+
+
+@mix @kwredef mutable struct reactive!
+    @reactors
 end
 
 

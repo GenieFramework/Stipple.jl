@@ -85,13 +85,13 @@ function vue_integration(model::M; vue_app_name::String = "StippleApp",
 
   window.subscription_ready = function(){
     $(
-      if hasproperty(model, :ready)
+      if hasproperty(model, :isready)
         """
-        Genie.WebChannels.sendMessageTo(CHANNEL, 'watchers', {'payload': {'field':'ready', 'newval': true, 'oldval': false}});
-        $vue_app_name.ready = true;
+        Genie.WebChannels.sendMessageTo(CHANNEL, 'watchers', {'payload': {'field':'isready', 'newval': true, 'oldval': false}});
+        $vue_app_name.isready = true;
         """
       else
-        "consols.log('Subscription ready');"
+        "console.log('Subscription ready');"
       end
     )
   }
