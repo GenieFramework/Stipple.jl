@@ -91,9 +91,10 @@ function vue_integration(model::M; vue_app_name::String = "StippleApp",
         $vue_app_name.isready = true;
         """
       else
-        "console.log('Subscription ready');"
+        ""
       end
     )
+    console.log('Subscription ready');
   }
 
   window.onload = function() {
