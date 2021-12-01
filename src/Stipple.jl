@@ -728,7 +728,6 @@ function stipple_deps(model, vue_app_name, channel, debounce, core_theme) :: Fun
       Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"]),
       if ! Genie.Assets.external_assets(assets_config)
         Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js,
-                                  # path = channel,
                                   file = vue_app_name), defer = true, onload = ct)
       else
         Genie.Renderer.Html.script([
@@ -1017,7 +1016,7 @@ function deps(channel::String = Genie.config.webchannels_default_route; core_the
 
     core_theme && Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="stipplecore"), defer= !Genie.Assets.external_assets(assets_config)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), defer=true),
-    Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="watchers"), defer=true),
+    Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="watchers")),
 
     join([f() for (key, f) in DEPS if isa(key, Module) || key == channel], "\n")
   )

@@ -19,7 +19,7 @@ julia> page(:elemid, [
 function page(elemid, args...; partial::Bool = false, title::String = "", class::String = "container", style::String = "",
               channel::String = Genie.config.webchannels_default_route, head_content::String = "",
               prepend::Union{S,Vector} = "", append::Union{T,Vector} = [],
-              core_theme::Bool = true, kwargs...) where {S<:AbstractString,T<:AbstractString}
+              core_theme::Bool = true, kwargs...)::ParsedHTMLString where {S<:AbstractString,T<:AbstractString}
   layout(
     [
       join(prepend)
@@ -29,7 +29,7 @@ function page(elemid, args...; partial::Bool = false, title::String = "", class:
     partial = partial, title = title, style = style, head_content = head_content, channel = channel,
     core_theme = core_theme)
 end
-function page(model::T, args...; kwargs...) where {T<:Stipple.ReactiveModel}
+function page(model::T, args...; kwargs...)::ParsedHTMLString where {T<:Stipple.ReactiveModel}
   hasproperty(model, :channel) || throw(Stipple.MissingPropertyException(:channel, model))
 
   page(vm(model), args...; channel = model.channel, kwargs...)

@@ -40,5 +40,5 @@ function theme(; core_theme::Bool = true) :: String
     )
   end
 
-  string(output, join([f() for f in THEMES], "\n"))
+  string(output, join([f() for f in THEMES], "\n")) |> ParsedHTMLString
 end

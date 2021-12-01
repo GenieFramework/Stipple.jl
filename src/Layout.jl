@@ -36,7 +36,7 @@ julia> layout([
 """
 function layout(output::Union{S,Vector}; partial::Bool = false, title::String = "", class::String = "", style::String = "",
                 head_content::String = "", channel::String = Genie.config.webchannels_default_route,
-                core_theme::Bool = true)::String where {S<:AbstractString}
+                core_theme::Bool = true)::ParsedHTMLString where {S<:AbstractString}
 
   isa(output, Vector) && (output = join(output, '\n'))
 
