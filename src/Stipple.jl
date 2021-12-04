@@ -451,7 +451,7 @@ client_data(;kwargs...) = Dict{String, Any}([String(k) => v for (k, v) in kwargs
 
 #===#
 
-const COMPONENTS = Dict()
+COMPONENTS = Dict()
 
 """
     `function register_components(model::Type{M}, keysvals::AbstractVector) where {M<:ReactiveModel}`
@@ -468,6 +468,12 @@ Stipple.register_components(HelloPie, StippleCharts.COMPONENTS)
 function register_components(model::Type{M}, keysvals::AbstractVector) where {M<:ReactiveModel}
   haskey(COMPONENTS, model) || (COMPONENTS[model] = Any[])
   push!(COMPONENTS[model], keysvals...)
+end
+
+function register_components(model::Type{M}, args...) where {M<:ReactiveModel}
+  for a in args
+    register_components(model, a)
+  end
 end
 
 """
@@ -710,8 +716,8 @@ function init(model::M; vue_app_name::S = Stipple.Elements.root(model),
   if ! Genie.Assets.external_assets(assets_config)
     Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, # path = channel,
                                               file = endpoint)) do
-      Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = channel, debounce = debounce) |>
-        Genie.Renderer.Js.js
+      Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = channel, debounce = debounce,
+                                        core_theme = core_theme) |> Genie.Renderer.Js.js
     end
   end
 
@@ -723,17 +729,15 @@ end
 
 function stipple_deps(model, vue_app_name, channel, debounce, core_theme) :: Function
   () -> begin
-    ct = "Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));"
     string(
       Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"]),
       if ! Genie.Assets.external_assets(assets_config)
         Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js,
-                                  file = vue_app_name), defer = true, onload = ct)
+                                  file = vue_app_name), defer = true)
       else
         Genie.Renderer.Html.script([
-          (Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = channel,
-                                            debounce = debounce) |> Genie.Renderer.Js.js).body |> String,
-          ct
+          (Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = channel, core_theme = core_theme,
+                                            debounce = debounce) |> Genie.Renderer.Js.js).body |> String
         ])
       end
     )
@@ -1014,7 +1018,7 @@ function deps(channel::String = Genie.config.webchannels_default_route; core_the
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="underscore-min")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.min" : "vue"))),
 
-    core_theme && Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="stipplecore"), defer= !Genie.Assets.external_assets(assets_config)),
+    core_theme && Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="stipplecore")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), defer=true),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="watchers")),
 
