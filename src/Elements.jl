@@ -12,6 +12,7 @@ import Genie.Renderer.Html: HTMLString, normal_element
 import JSON.JSONText
 
 export root, elem, vm, @iif, @elsiif, @els, @recur, @text, @bind, @data, @on, @showif
+export stylesheet
 
 #===#
 
@@ -291,6 +292,20 @@ end
 
 #===#
 
-include(joinpath("elements", "stylesheet.jl"))
+"""
+    `function stylesheet(href::String; args...) :: String`
+
+Generates the corresponding HTML `link` tag to reference the CSS stylesheet at `href`.
+
+### Example
+
+```julia
+julia> stylesheet("https://fonts.googleapis.com/css?family=Material+Icons")
+"<link href=\"https://fonts.googleapis.com/css?family=Material+Icons\" rel=\"stylesheet\" />"
+```
+"""
+function stylesheet(href::String; args...) :: ParsedHTMLString
+  Genie.Renderer.Html.link(href=href, rel="stylesheet", args...)
+end
 
 end

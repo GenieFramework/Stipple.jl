@@ -1,0 +1,20 @@
+site_name:        Stipple.jl
+repo_url:         https://github.com/GenieFramework/Stipple.jl
+site_description: Julia library for data dashboards and reactive UIs.
+site_author:      Adrian Salceanu
+
+theme: readthedocs
+
+extra_css:
+  - assets/Documenter.css
+
+markdown_extensions:
+  - extra
+  - tables
+  - fenced_code
+  - mdx_math
+
+docs_dir: 'build'
+
+pages:
+  - Home: index.md
