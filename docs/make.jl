@@ -5,7 +5,7 @@ push!(LOAD_PATH,  "../../src")
 using Stipple, Stipple.Elements, Stipple.Layout, Stipple.Typography
 
 makedocs(
-    sitename = "SearchLight - Concise, secure, cross-platform query builder and ORM for Julia",
+    sitename = "Stipple - data dashboards and reactive UIs for Julia",
     format = Documenter.HTML(prettyurls = false),
     pages = [
         "Home" => "index.md",
