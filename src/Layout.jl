@@ -164,7 +164,7 @@ function theme(; core_theme::Bool = true) :: String
     if ! Genie.Assets.external_assets(Stipple.assets_config)
       Genie.Router.route(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore")) do
         Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..", "..")), type="css", file="stipplecore")),
+          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", file="stipplecore")),
           :css) |> Genie.Renderer.respond
       end
     end
