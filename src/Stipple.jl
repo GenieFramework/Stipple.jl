@@ -20,14 +20,35 @@ using Logging, Mixers, Random, Reexport, Requires
 @reexport using Observables
 @reexport using Genie
 @reexport using Genie.Renderer.Html
-@reexport using JSON
+@reexport using JSON3
+@reexport using StructTypes
 @reexport using Parameters
 
 include("NamedTuples.jl")
 using .NamedTuples
 
-const JSONParser = JSON
-export JSONParser
+const JSONParser = JSON3
+const json = JSON3.write
+
+struct JSONText
+  s::String
+end
+
+@inline StructTypes.StructType(::Type{JSONText}) = JSON3.RawType()
+@inline StructTypes.construct(::Type{JSONText}, x::JSON3.RawValue) = JSONText(string(x))
+@inline JSON3.rawbytes(x::JSONText) = x.s
+
+macro json(expr)
+  expr.args[1].args[1] = :(StructTypes.$(expr.args[1].args[1]))
+  T = expr.args[1].args[2].args[2]
+  
+  quote
+    $(esc(:(StructTypes.StructType(::Type{($T)}) = StructTypes.CustomStruct())))
+    $(esc(expr))
+  end
+end
+
+export JSONParser, JSONText, json, @json
 
 # support for handling JS `undefined` values
 export Undefined, UNDEFINED
@@ -39,7 +60,7 @@ const UNDEFINED = Undefined()
 const UNDEFINED_PLACEHOLDER = "__undefined__"
 const UNDEFINED_VALUE = "undefined"
 
-JSON.lower(x::Undefined) = UNDEFINED_PLACEHOLDER
+@json lower(x::Undefined) = UNDEFINED_PLACEHOLDER
 Base.show(io::IO, x::Undefined) = Base.print(io, UNDEFINED_VALUE)
 
 const config = Genie.config
@@ -57,7 +78,7 @@ Stipple.assets_config.package = "Foo"
 """
 const assets_config = Genie.Assets.AssetsConfig(package = "Stipple.jl")
 
-function Genie.Renderer.Html.attrparser(k::Symbol, v::JSONParser.JSONText) :: String
+function Genie.Renderer.Html.attrparser(k::Symbol, v::JSONText) :: String
   if startswith(v.s, ":")
     ":$(k |> Genie.Renderer.Html.parseattr)=$(v.s[2:end]) "
   else
@@ -485,7 +506,7 @@ JSON representation of the Vue.js components registered for the `ReactiveModel` 
 function components(m::Type{M})::String where {M<:ReactiveModel}
   haskey(COMPONENTS, m) || return ""
 
-  replace(Dict(COMPONENTS[m]...) |> JSON.json, "\""=>"") |> string
+  replace(Dict(COMPONENTS[m]...) |> json, "\""=>"") |> string
 end
 
 function components(app::M)::String where {M<:ReactiveModel}
@@ -788,7 +809,7 @@ function Base.push!(app::M, vals::Pair{Symbol,T};
                     except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
   try
     WEB_TRANSPORT.broadcast(channel,
-                                    JSON.json(Dict( "key" => julia_to_vue(vals[1]),
+                                    json(Dict( "key" => julia_to_vue(vals[1]),
                                                     "value" => Stipple.render(vals[2], vals[1]))),
                                     except = except)
   catch

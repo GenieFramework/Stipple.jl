@@ -9,7 +9,6 @@ import Genie
 using Stipple
 
 import Genie.Renderer.Html: HTMLString, normal_element
-import JSON.JSONText
 
 export root, elem, vm, @iif, @elsiif, @els, @recur, @text, @bind, @data, @on, @showif
 export stylesheet
@@ -51,7 +50,7 @@ It is called internally by `Stipple.init` which allows for the configuration of 
 function vue_integration(model::M; vue_app_name::String = "StippleApp", core_theme::Bool = true,
                           channel::String = Genie.config.webchannels_default_route,
                           debounce::Int = Stipple.JS_DEBOUNCE_TIME)::String where {M<:ReactiveModel}
-  vue_app = replace(JSON.json(model |> Stipple.render), "\"{" => " {")
+  vue_app = replace(json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
   vue_app = replace(vue_app, "\"$channel\"" => "CHANNEL")
 
