@@ -195,7 +195,7 @@ WEB_TRANSPORT = Genie.WebChannels
 export R, Reactive, ReactiveModel, @R_str, @js_str, client_data
 export PRIVATE, PUBLIC, READONLY, JSFUNCTION, NO_WATCHER, NO_BACKEND_WATCHER, NO_FRONTEND_WATCHER
 export newapp
-export onbutton
+export onbutton, onevent
 export @kwredef
 export init
 
@@ -793,6 +793,10 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
     end
   end
 
+  onevent(model.isready) do 
+    hasproperty(model, :channel) && initpush!(model)
+  end
+
   model
 end
 
@@ -832,6 +836,22 @@ function Base.push!(model::M) where {M<:ReactiveModel}
     (isa(f, Reactive) && f.r_mode != PRIVATE) || continue
 
     @show "pushing $field to $(model.channel) as $(model.name)"
+    push!(model, field => f, channel = model.channel)
+  end
+end
+
+function initpush!(model::M) where {M<:ReactiveModel}
+  hasproperty(model, :channel) || throw(Stipple.MissingPropertyException(:channel, model))
+
+  for field in fieldnames(M)
+    f = getproperty(model, field)
+    newmodel = M()
+
+    ( (isa(f, Reactive) && f.r_mode == PRIVATE ) || 
+      occursin(SETTINGS.private_pattern, String(field)) ||
+      Observables.to_value(f) == Observables.to_value(getproperty(newmodel, field)) ) && continue
+
+    @info "pushing $field to $(model.channel) as $(Observables.to_value(getfield(model, field)))"
     push!(model, field => f, channel = model.channel)
   end
 end
@@ -1095,6 +1115,8 @@ onbutton(f::Function, button::R{Bool}; async = false, kwargs...) = on(button; kw
 end
 
 onbutton(button::R{Bool}, f::Function; kwargs...) = onbutton(f, button; kwargs...)
+
+const onevent = onbutton
 
 """
     `@js_str -> JSONText`
