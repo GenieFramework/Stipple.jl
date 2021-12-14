@@ -742,11 +742,11 @@ function init(m::Type{M};
     end
 
     newval = convertvalue(val, payload["newval"])
-    oldval = try
-      convertvalue(val, payload["oldval"])
-    catch ex
-      val[]
-    end
+    oldval = try
+      convertvalue(val, payload["oldval"])
+    catch ex
+      val[]
+    end
 
     push!(model, field => newval; channel = channel, except = client)
     update!(model, field, newval, oldval)
@@ -1175,13 +1175,18 @@ end
 
 function isprivate(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
   val = getfield(model, field)
-  val isa Reactive && (val.r_mode != PUBLIC || val.no_frontend_watcher)
+  val isa Reactive && (val.r_mode != PUBLIC || val.no_frontend_watcher) && return true
+  ! isa(val, Reactive) && occursin(Stipple.SETTINGS.private_pattern, String(field)) && return true
+
+  false
 end
 
 
 function isreadonly(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
   val = getfield(model, field)
-  ! isa(val, Reactive) || occursin(Stipple.SETTINGS.readonly_pattern, String(field)) || occursin(Stipple.SETTINGS.private_pattern, String(field))
+  ! isa(val, Reactive) && occursin(Stipple.SETTINGS.readonly_pattern, String(field)) && return true
+
+  false
 end
 
 function ispublic(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
