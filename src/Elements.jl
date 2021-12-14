@@ -47,9 +47,11 @@ const vm = root
 Generates the JS/Vue.js code which handles the 2-way data sync between Julia and JavaScript/Vue.js.
 It is called internally by `Stipple.init` which allows for the configuration of all the parameters.
 """
-function vue_integration(model::M; vue_app_name::String = "StippleApp", core_theme::Bool = true,
+function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_theme::Bool = true,
                           channel::String = Genie.config.webchannels_default_route,
                           debounce::Int = Stipple.JS_DEBOUNCE_TIME)::String where {M<:ReactiveModel}
+  model = Base.invokelatest(m)
+
   vue_app = replace(json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
   vue_app = replace(vue_app, "\"$channel\"" => "CHANNEL")
@@ -63,15 +65,9 @@ function vue_integration(model::M; vue_app_name::String = "StippleApp", core_the
 
     ,
 
-    join([
-      Stipple.watch(vue_app_name, field, "CHANNEL", debounce, model) for field in fieldnames(typeof(model))
-        if !(
-          !(getfield(model, field) isa Reactive) &&
-            ( occursin(Stipple.SETTINGS.readonly_pattern, String(field)) || occursin(Stipple.SETTINGS.private_pattern, String(field)) )  ||
-          getfield(model, field) isa Reactive &&
-            ( getfield(model, field).r_mode != PUBLIC || getfield(model, field).no_frontend_watcher )
-        )
-    ])
+    join([Stipple.watch(vue_app_name, field, "CHANNEL", debounce, model)
+            for field in fieldnames(m)
+              if Stipple.ispublic(field, model)])
 
     ,
 

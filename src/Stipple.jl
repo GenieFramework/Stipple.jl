@@ -41,7 +41,7 @@ end
 macro json(expr)
   expr.args[1].args[1] = :(StructTypes.$(expr.args[1].args[1]))
   T = expr.args[1].args[2].args[2]
-  
+
   quote
     $(esc(:(StructTypes.StructType(::Type{($T)}) = StructTypes.CustomStruct())))
     $(esc(expr))
@@ -92,13 +92,14 @@ mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   r_mode::Int
   no_backend_watcher::Bool
   no_frontend_watcher::Bool
-  Reactive{T}() where {T} = new{T}(Observable{T}(), 0, false, false)
-  Reactive{T}(o, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, 0, no_bw, no_fw)
+
+  Reactive{T}() where {T} = new{T}(Observable{T}(), PUBLIC, false, false)
+  Reactive{T}(o, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, PUBLIC, no_bw, no_fw)
   Reactive{T}(o, mode::Int, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, mode, no_bw, no_fw)
   Reactive{T}(o, mode::Int, updatemode::Int) where {T} = new{T}(o, mode, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0)
 
   # Construct an Reactive{Any} without runtime dispatch
-  Reactive{Any}(@nospecialize(o)) = new{Any}(Observable{Any}(o), 0, false, false)
+  Reactive{Any}(@nospecialize(o)) = new{Any}(Observable{Any}(o), PUBLIC, false, false)
 end
 
 Reactive(r::T, arg1, args...) where T = convert(Reactive{T}, (r, arg1, args...))
@@ -107,10 +108,10 @@ Reactive(r::T) where T = convert(Reactive{T}, r)
 Base.convert(::Type{T}, x::T) where {T<:Reactive} = x  # resolves ambiguity with convert(::Type{T}, x::T) in base/essentials.jl
 Base.convert(::Type{T}, x) where {T<:Reactive} = T(x)
 
-Base.convert(::Type{Reactive{T}}, (r, m)::Tuple{T, Int}) where T = m < 16 ? Reactive{T}(Observable(r), m, 0) : Reactive{T}(Observable(r), 0, m)
-Base.convert(::Type{Reactive{T}}, (r, w)::Tuple{T, Bool}) where T = Reactive{T}(Observable(r), 0, w, false)
+Base.convert(::Type{Reactive{T}}, (r, m)::Tuple{T, Int}) where T = m < 16 ? Reactive{T}(Observable(r), m, PUBLIC) : Reactive{T}(Observable(r), PUBLIC, m)
+Base.convert(::Type{Reactive{T}}, (r, w)::Tuple{T, Bool}) where T = Reactive{T}(Observable(r), PUBLIC, w, false)
 Base.convert(::Type{Reactive{T}}, (r, m, nw)::Tuple{T, Int, Bool}) where T = Reactive{T}(Observable(r), m, nw, false)
-Base.convert(::Type{Reactive{T}}, (r, nbw, nfw)::Tuple{T, Bool, Bool}) where T = Reactive{T}(Observable(r), 0, nbw, nfw)
+Base.convert(::Type{Reactive{T}}, (r, nbw, nfw)::Tuple{T, Bool, Bool}) where T = Reactive{T}(Observable(r), PUBLIC, nbw, nfw)
 Base.convert(::Type{Reactive{T}}, (r, m, nbw, nfw)::Tuple{T, Int, Bool, Bool}) where T = Reactive{T}(Observable(r), m, nbw, nfw)
 Base.convert(::Type{Reactive{T}}, (r, m, u)::Tuple{T, Int, Int}) where T = Reactive{T}(Observable(r), m, u)
 Base.convert(::Type{Observable{T}}, r::Reactive{T}) where T = getfield(r, :o)
@@ -242,8 +243,9 @@ abstract type ReactiveModel end
 export @reactors, @reactive, @reactive!
 
 @pour reactors begin
-  channel::String = Genie.config.webchannels_default_route
+  channel__::AbstractString = Stipple.channelfactory()
   isready::R{Bool} = false
+  isprocessing::R{Bool} = false
 end
 
 @mix @with_kw mutable struct reactive
@@ -538,6 +540,7 @@ function setindex_withoutwatchers!(field::Reactive{T}, val, keys::Int...; notify
       try
         Base.invokelatest(f, val)
       catch ex
+        @error "Error attempting to invoke $f with $val"
         @error ex
       end
     end
@@ -561,12 +564,14 @@ If keys are specified, only these listeners are exempted from triggering.
 """
 function setfield_withoutwatchers!(app::T, field::Symbol, val, keys...; notify=(x)->true) where T <: ReactiveModel
   f = getfield(app, field)
+
   if f isa Reactive
     setindex_withoutwatchers!(f, val, keys...; notify = notify)
   else
     setfield!(app, field, val)
   end
-  return app
+
+  app
 end
 
 #===#
@@ -674,6 +679,11 @@ function stipple_parse(::Type{T}, v::T) where {T}
 end
 
 
+function channelfactory(length::Int = 32)
+  randstring('A':'Z', length)
+end
+
+
 """
     `function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model),
                     endpoint::String = vue_app_name, channel::String = Genie.config.webchannels_default_route,
@@ -688,15 +698,27 @@ frontend and perform the 2-way backend-frontend data sync. Returns the instance 
 hs_model = Stipple.init(HelloPie())
 ```
 """
-function init(model::M; vue_app_name::S = Stipple.Elements.root(model),
+function init(m::Type{M};
+              vue_app_name::S = Stipple.Elements.root(m),
               endpoint::S = vue_app_name,
-              channel::String = Genie.config.webchannels_default_route,
-              debounce::Int = JS_DEBOUNCE_TIME, transport::Module = Genie.WebChannels,
-              parse_errors::Bool = false, core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
+              channel::Union{Any,Nothing} = nothing,
+              debounce::Int = JS_DEBOUNCE_TIME,
+              transport::Module = Genie.WebChannels,
+              parse_errors::Bool = false,
+              core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
 
   global WEB_TRANSPORT = transport
+  model = Base.invokelatest(m)
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
-  hasproperty(model, :channel) && (channel = getproperty(model, :channel))
+  ok_response = "OK"
+
+  channel = if channel !== nothing
+    model.channel__ = string(channel)
+  elseif hasproperty(model, :channel__)
+    getproperty(model, :channel__) |> string
+  else
+    model.channel__ = channelfactory()
+  end
 
   deps_routes(channel)
 
@@ -704,21 +726,19 @@ function init(model::M; vue_app_name::S = Stipple.Elements.root(model),
     payload = Genie.Requests.payload(:payload)["payload"]
     client = transport == Genie.WebChannels ? Genie.Requests.wsclient() : Genie.Requests.wtclient()
 
-    # if only elements of the array change, oldval and newval are identical
-    ! isa(payload["newval"], Array) && ! isa(payload["newval"], Dict) && payload["newval"] == payload["oldval"] && return "OK"
-
     field = Symbol(payload["field"])
 
     #check if field exists
-    hasfield(M, field) || return "OK"
+    hasfield(M, field) || return ok_response
+
     valtype = Dict(zip(fieldnames(M), M.types))[field]
     val = valtype <: Reactive ? getfield(model, field) : Ref{valtype}(getfield(model, field))
 
     # reject non-public types
     if val isa Reactive
-      val.r_mode == PUBLIC || return "OK"
+      val.r_mode == PUBLIC || return ok_response
     elseif occursin(SETTINGS.readonly_pattern, String(field)) || occursin(SETTINGS.private_pattern, String(field))
-      return "OK"
+      return ok_response
     end
 
     newval = convertvalue(val, payload["newval"])
@@ -728,27 +748,30 @@ function init(model::M; vue_app_name::S = Stipple.Elements.root(model),
       val[]
     end
 
-    push!(model, field => newval, channel = channel, except = client)
+    push!(model, field => newval; channel = channel, except = client)
     update!(model, field, newval, oldval)
 
-    "OK"
+    ok_response
   end
 
   if ! Genie.Assets.external_assets(assets_config)
     Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, # path = channel,
                                               file = endpoint)) do
-      Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = channel, debounce = debounce,
-                                        core_theme = core_theme) |> Genie.Renderer.Js.js
+      Stipple.Elements.vue_integration(m; vue_app_name, channel, debounce, core_theme) |> Genie.Renderer.Js.js
     end
   end
 
-  DEPS[channel] = stipple_deps(model, vue_app_name, channel, debounce, core_theme)
+  DEPS[channel] = stipple_deps(m, vue_app_name, channel, debounce, core_theme)
 
   setup(model, channel)
 end
+function init(m::M; kwargs...)::M where {M<:ReactiveModel, S<:AbstractString}
+  @warn "This method has been deprecated and will be removed soon. Please use `init(m::Type{M}, kwargs...)` instead."
+  init(M; kwargs...)
+end
 
 
-function stipple_deps(model, vue_app_name, channel, debounce, core_theme) :: Function
+function stipple_deps(m::Type{M}, vue_app_name, channel, debounce, core_theme)::Function where {M<:ReactiveModel}
   () -> begin
     string(
       Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"]),
@@ -757,8 +780,7 @@ function stipple_deps(model, vue_app_name, channel, debounce, core_theme) :: Fun
                                   file = vue_app_name), defer = true)
       else
         Genie.Renderer.Html.script([
-          (Stipple.Elements.vue_integration(model, vue_app_name = vue_app_name, channel = channel, core_theme = core_theme,
-                                            debounce = debounce) |> Genie.Renderer.Js.js).body |> String
+          (Stipple.Elements.vue_integration(m; vue_app_name, channel, core_theme, debounce) |> Genie.Renderer.Js.js).body |> String
         ])
       end
     )
@@ -809,8 +831,8 @@ function Base.push!(app::M, vals::Pair{Symbol,T};
                     except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
   try
     WEB_TRANSPORT.broadcast(channel,
-                                    json(Dict( "key" => julia_to_vue(vals[1]),
-                                                    "value" => Stipple.render(vals[2], vals[1]))),
+                                    json(Dict("key" => julia_to_vue(vals[1]),
+                                              "value" => Stipple.render(vals[2], vals[1]))),
                                     except = except)
   catch
   end
@@ -824,15 +846,10 @@ function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
 end
 
 function Base.push!(model::M) where {M<:ReactiveModel}
-  hasproperty(model, :channel) || throw(Stipple.MissingPropertyException(:channel, model))
-
   for field in fieldnames(M)
-    f = getproperty(model, field)
+    ispublic(field, model) || continue
 
-    (isa(f, Reactive) && f.r_mode != PRIVATE) || continue
-
-    @show "pushing $field to $(model.channel) as $(model.name)"
-    push!(model, field => f, channel = model.channel)
+    push!(model, field => getproperty(model, field), channel = model.channel__)
   end
 end
 
@@ -1154,5 +1171,22 @@ macro kwdef(expr)
     Genie.Configuration.isprod() ? Base.@kwdef($expr) : Stipple.@kwredef($expr)
   end)
 end
+
+
+function isprivate(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
+  val = getfield(model, field)
+  val isa Reactive && (val.r_mode != PUBLIC || val.no_frontend_watcher)
+end
+
+
+function isreadonly(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
+  val = getfield(model, field)
+  ! isa(val, Reactive) || occursin(Stipple.SETTINGS.readonly_pattern, String(field)) || occursin(Stipple.SETTINGS.private_pattern, String(field))
+end
+
+function ispublic(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
+  ! isprivate(field, model) && ! isreadonly(field, model)
+end
+
 
 end
