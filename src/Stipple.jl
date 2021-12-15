@@ -845,11 +845,13 @@ function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
   push!(app, Symbol(julia_to_vue(vals[1])) => v, channel = channel, except = except)
 end
 
-function Base.push!(model::M) where {M<:ReactiveModel}
+function Base.push!(model::M;
+                    channel::String = model.channel__,
+                    skip::Vector{Symbol} = Symbol[]) where {M<:ReactiveModel}
   for field in fieldnames(M)
-    ispublic(field, model) || continue
+    (ispublic(field, model) && !(field in skip)) || continue
 
-    push!(model, field => getproperty(model, field), channel = model.channel__)
+    push!(model, field => getproperty(model, field), channel = channel)
   end
 end
 
