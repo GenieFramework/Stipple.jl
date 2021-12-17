@@ -45,8 +45,8 @@ function layout(output::Union{S,Vector}; partial::Bool = false, title::String = 
   isa(output, Vector) && (output = join(output, '\n'))
 
   content = string(
-    theme(; core_theme = core_theme),
     output,
+    theme(; core_theme = core_theme),
     Stipple.deps(channel; core_theme = core_theme)
   )
 
@@ -84,6 +84,7 @@ function page(elemid, args...; partial::Bool = false, title::String = "", class:
               channel::String = Genie.config.webchannels_default_route, head_content::String = "",
               prepend::Union{S,Vector} = "", append::Union{T,Vector} = [],
               core_theme::Bool = true, kwargs...)::ParsedHTMLString where {S<:AbstractString,T<:AbstractString}
+
   layout(
     [
       join(prepend)
@@ -130,7 +131,9 @@ julia> row(cell(size=2, span("Hello")))
 "<div class=\"row\"><div class=\"col col-12 col-sm-2\"><span>Hello</span></div></div>"
 ```
 """
-function cell(args...; size::Int=0, kwargs...)
+function cell(args...; size::Union{Int,AbstractString} = 0, kwargs...)
+  isa(size, AbstractString) && (size = parse(Int, size))
+
   kwargs = NamedTuple(Dict{Symbol,Any}(kwargs...), :class, "col col-12 col-sm$(size > 0 ? "-$size" : "")")
 
   Genie.Renderer.Html.div(args...; kwargs...)
@@ -156,8 +159,6 @@ julia> push!(Stipple.Layout.THEMES, StippleUI.theme)
 ```
 """
 function theme(; core_theme::Bool = true) :: String
-  output = ""
-
   if core_theme
     if ! Genie.Assets.external_assets(Stipple.assets_config)
       Genie.Router.route(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore")) do
@@ -167,7 +168,7 @@ function theme(; core_theme::Bool = true) :: String
       end
     end
 
-    output *= string(
+    output = string(
       stylesheet("https://fonts.googleapis.com/css?family=Material+Icons"),
       stylesheet(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore"))
     )
