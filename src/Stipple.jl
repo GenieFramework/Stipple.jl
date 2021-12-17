@@ -826,33 +826,56 @@ end
 
 Pushes data payloads over to the frontend by broadcasting the `vals` through the `channel`.
 """
-function Base.push!(app::M, vals::Pair{Symbol,T};
-                    channel::String = Genie.config.webchannels_default_route,
-                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
+function Base.push!(app::M, (k,v)::Pair{Symbol,T};
+                    options::Dict{Symbol, Any} = Dict{Symbol, Any}(),
+                    channel::String = app.channel__,
+                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing,
+                    ) where {T,M<:ReactiveModel}
   try
-    WEB_TRANSPORT.broadcast(channel,
-                                    json(Dict("key" => julia_to_vue(vals[1]),
-                                              "value" => Stipple.render(vals[2], vals[1]))),
-                                    except = except)
+    val = if v isa Reactive
+      if v.r_mode == JSFUNCTION
+        replace_jsfunction(v[])
+        push!(options, :revive => true)
+      else 
+        v[]
+      end
+    else
+      v
+    end
+
+    dict = Dict(
+      "key" => julia_to_vue(k),
+      "value" => Stipple.render(val, k),
+      options...,
+    )
+    WEB_TRANSPORT.broadcast(channel, json(dict, except = except))
   catch
   end
 end
 
-function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
-                    channel::String = Genie.config.webchannels_default_route,
-                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
-                    v = vals[2].r_mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
-  push!(app, Symbol(julia_to_vue(vals[1])) => v, channel = channel, except = except)
-end
+# function Base.push!(app::M, (k,v))::Pair{Symbol,Reactive{T}};
+#                     options::Dict{Symbol, Any} = opts(),
+#                     channel::String = Genie.config.webchannels_default_route,
+#                     except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing,
+#                     mode::String = "normal",
+#                     keys::Vector{Symbol} = Symbol[]) where {T,M<:ReactiveModel}
+#   v = vals[2].r_mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
+#   push!(app, Symbol(julia_to_vue(vals[1])) => v; channel, except, mode, keys)
+# end
 
-function Base.push!(model::M;
+function Base.push!(model::M, fields::Vector{Symbol} = fieldnames(M);
                     channel::String = model.channel__,
                     skip::Vector{Symbol} = Symbol[]) where {M<:ReactiveModel}
-  for field in fieldnames(M)
+  for field in fields
     (ispublic(field, model) && !(field in skip)) || continue
 
     push!(model, field => getproperty(model, field), channel = channel)
   end
+end
+
+function Base.push!(model::M, field::Symbol;
+                    channel::String = model.channel__) where {M<:ReactiveModel}
+    push!(model, [field]; channel = channel)
 end
 
 #===#

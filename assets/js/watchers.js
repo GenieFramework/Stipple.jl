@@ -31,6 +31,24 @@ const watcherMixin = {
       } catch(ex) {
         console.log(ex);
       }
+    },
+
+    updateFieldAt: function (field, newVal, keys) {
+      try {
+        this.$withoutWatchers(() => {
+          var o = this[field]
+          for (var i = 0, n = keys.length; i < n-1; ++i) {
+            var k = keys[i];
+            if (k in o) {
+                o = o[k];
+            }
+          }
+          o[keys[i]]=newVal
+          this[field].__ob__.dep.notify()
+        },"function(){return this." + field + "}");
+      } catch(ex) {
+        console.log(ex);
+      }
     }
   }
 }
