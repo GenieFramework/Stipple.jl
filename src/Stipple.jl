@@ -892,16 +892,6 @@ function Base.push!(app::M, (k,v)::Pair{Symbol,T};
   end
 end
 
-# function Base.push!(app::M, (k,v))::Pair{Symbol,Reactive{T}};
-#                     options::Dict{Symbol, Any} = opts(),
-#                     channel::String = Genie.config.webchannels_default_route,
-#                     except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing,
-#                     mode::String = "normal",
-#                     keys::Vector{Symbol} = Symbol[]) where {T,M<:ReactiveModel}
-#   v = vals[2].r_mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
-#   push!(app, Symbol(julia_to_vue(vals[1])) => v; channel, except, mode, keys)
-# end
-
 function Base.push!(model::M, fields::Vector{Symbol} = fieldnames(M);
                     channel::String = model.channel__,
                     skip::Vector{Symbol} = Symbol[]) where {M<:ReactiveModel}
