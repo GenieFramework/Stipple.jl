@@ -117,7 +117,6 @@ Base.convert(::Type{Reactive{T}}, (r, m, u)::Tuple{T, Int, Int}) where T = React
 Base.convert(::Type{Observable{T}}, r::Reactive{T}) where T = getfield(r, :o)
 
 Base.getindex(r::Reactive{T}) where T = Base.getindex(getfield(r, :o))
-Base.setindex!(r::Reactive{T}) where T = Base.setindex!(getfield(r, :o))
 
 # pass indexing and property methods to referenced variable
 function Base.getindex(r::Reactive{T}, arg1, args...) where T
@@ -126,11 +125,51 @@ end
 
 function Base.setindex!(r::Reactive{T}, val, arg1, args...) where T
   setindex!(getfield(r, :o).val, val, arg1, args...)
-  Observables.notify!(r)
+  Observables.notify(r)
 end
 
 Base.setindex!(r::Reactive, val, ::typeof(!)) = getfield(r, :o).val = val
 Base.getindex(r::Reactive, ::typeof(!)) = getfield(r, :o).val
+
+# support nested indexing
+
+function getindex_nested(x, keys...)
+  foldl((x, key) -> Base.getindex(x, (isa(x, AbstractArray) ? key : [key])...), [keys...];
+      init = x)
+end
+
+function setindex_nested!(x, v, k1, keys...)
+  kk = [k1, keys...]
+  x = getindex_nested(x, kk[1:end-1]...)
+  setindex!(x, v,  (isa(x, AbstractArray) ? kk[end] : [kk[end]])...)
+end
+
+# nested indexing for non_notifying syntax (preceding `!`)
+Base.setindex!(r::Reactive, v, ::typeof(!), arg1, args...) = setindex_nested!(getfield(r, :o).val, v, arg1, args...)
+
+# nested indexing if more than two arguments are passed to a dictionary
+Base.getindex(r::Reactive{<:AbstractDict}, arg1, arg2, args...) = getindex_nested(getfield(r, :o).val, arg1, arg2, args...)
+
+# nested indexing if more arguments are passed to ann array than the number of its dimensions
+function Base.getindex(r::Reactive{<:AbstractArray{T, N}}, arg1, arg2, args...) where {T, N}
+  @info length(args)
+  if length(args) + 2 > N
+      getindex_nested(getfield(r, :o).val, arg1, arg2, args...)
+  else
+      getindex(getfield(r, :o).val, arg1, arg2, args...)
+  end
+end
+
+function Base.setindex!(r::Reactive{<:AbstractArray{T, N}}, arg1, arg2, args...) where {T, N}
+  @info length(args)
+  if length(args) + 2 > N
+      setindex_nested!(getfield(r, :o).val, arg1, arg2, args...)
+  else
+      setindex!(getfield(r, :o).val, arg1, arg2, args...)
+  end
+  # to be replaced by a notify(r, arg1, arg2, args...) which triggers an element-push
+  notify(r)
+end
 
 function Base.getproperty(r::Reactive{T}, field::Symbol) where T
   if field in (:o, :r_mode, :no_backend_watcher, :no_frontend_watcher) # fieldnames(Reactive)
@@ -154,7 +193,7 @@ function Base.setproperty!(r::Reactive{T}, field::Symbol, val) where T
       getfield(r, :o).val = val
     else
       setproperty!(getfield(r, :o).val, field, val)
-      Observables.notify!(r)
+      Observables.notify(r)
     end
   end
 end
