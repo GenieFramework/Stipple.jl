@@ -133,42 +133,60 @@ Base.getindex(r::Reactive, ::typeof(!)) = getfield(r, :o).val
 
 # support nested indexing
 
-function getindex_nested(x, keys...)
-  foldl((x, key) -> Base.getindex(x, (isa(x, AbstractArray) ? key : [key])...), [keys...];
-      init = x)
+# function getindex_nested(x, keys...)
+#   foldl((x, key) -> Base.getindex(x, (isa(x, AbstractArray) ? key : [key])...), [keys...];
+#       init = x)
+# end
+
+function key!(x, key, jskeys)
+  newkey, jskey = x isa AbstractArray ? (key, key .- first.(axes(x))) : ([key], key)
+  isnothing(jskeys) || push!(jskeys, jskey)
+  newkey
 end
 
-function setindex_nested!(x, v, k1, keys...)
+function getindex_nested!(x, keys...; jskeys::Union{Nothing, Vector} = nothing)
+  val = foldl((x, key) -> Base.getindex(x, key!(x, key, jskeys)...), [keys...];
+      init = x)
+  val
+end
+
+function setindex_nested!(x, v, k1, keys...; jskeys::Union{Nothing, Vector} = nothing)
   kk = [k1, keys...]
-  x = getindex_nested(x, kk[1:end-1]...)
-  setindex!(x, v,  (isa(x, AbstractArray) ? kk[end] : [kk[end]])...)
+  x = getindex_nested!(x, kk[1:end-1]...; jskeys)
+  setindex!(x, v,  key!(x, kk[end], jskeys)...)
 end
 
 # nested indexing for non_notifying syntax (preceding `!`)
 Base.setindex!(r::Reactive, v, ::typeof(!), arg1, args...) = setindex_nested!(getfield(r, :o).val, v, arg1, args...)
 
 # nested indexing if more than two arguments are passed to a dictionary
-Base.getindex(r::Reactive{<:AbstractDict}, arg1, arg2, args...) = getindex_nested(getfield(r, :o).val, arg1, arg2, args...)
+Base.getindex(r::Reactive{<:AbstractDict}, arg1, arg2, args...) = getindex_nested!(getfield(r, :o).val, arg1, arg2, args...)
 
 # nested indexing if more arguments are passed to ann array than the number of its dimensions
 function Base.getindex(r::Reactive{<:AbstractArray{T, N}}, arg1, arg2, args...) where {T, N}
   @info length(args)
   if length(args) + 2 > N
-      getindex_nested(getfield(r, :o).val, arg1, arg2, args...)
+      getindex_nested!(getfield(r, :o).val, arg1, arg2, args...)
   else
       getindex(getfield(r, :o).val, arg1, arg2, args...)
   end
 end
 
-function Base.setindex!(r::Reactive{<:AbstractArray{T, N}}, arg1, arg2, args...) where {T, N}
-  @info length(args)
+function Base.setindex!(r::Reactive{<:AbstractArray{T, N}}, v, arg1, arg2, args...) where {T, N}
   if length(args) + 2 > N
-      setindex_nested!(getfield(r, :o).val, arg1, arg2, args...)
+      jskeys = []
+      setindex_nested!(getfield(r, :o).val, v, arg1, arg2, args...; jskeys)
+      notify(r, v, jskeys)
   else
-      setindex!(getfield(r, :o).val, arg1, arg2, args...)
+      setindex!(getfield(r, :o).val, v, arg1, arg2, args...)
+      notify(r)
   end
-  # to be replaced by a notify(r, arg1, arg2, args...) which triggers an element-push
-  notify(r)
+end
+
+function Base.setindex!(r::Reactive{<:AbstractDict}, v, arg1, arg2, args...) where {T, N}
+    jskeys = []
+    setindex_nested!(getfield(r, :o).val, v, arg1, arg2, args...; jskeys)
+    notify(r, v, jskeys)
 end
 
 function Base.getproperty(r::Reactive{T}, field::Symbol) where T
@@ -849,8 +867,12 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
     end
     f.r_mode == PRIVATE || f.no_backend_watcher && continue
 
-    on(f) do _
-      push!(model, field => f, channel = channel)
+    on(f) do val, options...
+      if isempty(options)
+        push!(model, field => f, channel = channel)
+      else
+        push!(model, field => options[1], channel = channel, options = opts(mode = "dict", keys = options[2]))
+      end
     end
   end
 
@@ -892,7 +914,7 @@ function Base.push!(app::M, (k,v)::Pair{Symbol,T};
   end
 end
 
-function Base.push!(model::M, fields::Vector{Symbol} = fieldnames(M);
+function Base.push!(model::M, fields::Vector{Symbol} = [fieldnames(M)...];
                     channel::String = model.channel__,
                     skip::Vector{Symbol} = Symbol[]) where {M<:ReactiveModel}
   for field in fields
