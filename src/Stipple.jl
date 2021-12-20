@@ -139,11 +139,11 @@ Base.getindex(r::Reactive, ::typeof(!)) = getfield(r, :o).val
 # end
 
 import Base.notify
-function Base.notify(observable::Observables.AbstractObservable, options...)
+function Base.notify(observable::Observables.AbstractObservable, arg1, args...)
     val = observable[]
     for f in Observables.listeners(observable)
         try
-            Base.invokelatest(f, val, options...)
+            Base.invokelatest(f, val, arg1, args...)
         catch
             Base.invokelatest(f, val)
         end
@@ -169,6 +169,23 @@ function setindex_nested!(x, v, k1, keys...; jskeys::Union{Nothing, Vector} = no
   setindex!(x, v,  key!(x, kk[end], jskeys)...)
 end
 
+function setindex_nested!(r::Reactive{<:AbstractDict}, v, arg1, arg2, args...) where T
+    jskeys = []
+    setindex_nested!(getfield(r, :o).val, v, arg1, arg2, args...; jskeys)
+    notify(r, v, jskeys)
+end
+
+function setindex_nested!(r::Reactive{<:AbstractArray{T, N}}, v, arg1, args...) where {T, N}
+  jskeys = []
+  if length(args) + 1 > N
+    setindex_nested!(getfield(r, :o).val, v, arg1, args...; jskeys)
+    notify(r, v, jskeys)
+  else
+    setindex!(getfield(r, :o).val, v, arg1, args...)
+    notify(r, v, key!(x, v, jskeys))
+  end
+end
+
 # nested indexing for non_notifying syntax (preceding `!`)
 Base.setindex!(r::Reactive, v, ::typeof(!), arg1, args...) = setindex_nested!(getfield(r, :o).val, v, arg1, args...)
 
@@ -177,7 +194,6 @@ Base.getindex(r::Reactive{<:AbstractDict}, arg1, arg2, args...) = getindex_neste
 
 # nested indexing if more arguments are passed to ann array than the number of its dimensions
 function Base.getindex(r::Reactive{<:AbstractArray{T, N}}, arg1, arg2, args...) where {T, N}
-  @info length(args)
   if length(args) + 2 > N
       getindex_nested!(getfield(r, :o).val, arg1, arg2, args...)
   else
@@ -186,22 +202,11 @@ function Base.getindex(r::Reactive{<:AbstractArray{T, N}}, arg1, arg2, args...) 
 end
 
 function Base.setindex!(r::Reactive{<:AbstractArray{T, N}}, v, arg1, arg2, args...) where {T, N}
-  if length(args) + 2 > N
-      @info "nested"
-      jskeys = []
-      setindex_nested!(getfield(r, :o).val, v, arg1, arg2, args...; jskeys)
-      notify(r, v, jskeys)
-  else
-    @info "standard"
-    setindex!(getfield(r, :o).val, v, arg1, arg2, args...)
-      notify(r)
-  end
+  setindex_nested!(r, v, arg1, arg2, args...)
 end
 
 function Base.setindex!(r::Reactive{<:AbstractDict}, v, arg1, arg2, args...) where {T, N}
-    jskeys = []
-    setindex_nested!(getfield(r, :o).val, v, arg1, arg2, args...; jskeys)
-    notify(r, v, jskeys)
+  setindex_nested!(r, v, arg1, arg2, args...)
 end
 
 function Base.getproperty(r::Reactive{T}, field::Symbol) where T
