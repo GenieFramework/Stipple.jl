@@ -138,6 +138,19 @@ Base.getindex(r::Reactive, ::typeof(!)) = getfield(r, :o).val
 #       init = x)
 # end
 
+import Base.notify
+function Base.notify(observable::Observables.AbstractObservable, options...)
+    val = observable[]
+    for f in Observables.listeners(observable)
+        try
+            Base.invokelatest(f, val, options...)
+        catch
+            Base.invokelatest(f, val)
+        end
+    end
+    return
+end
+
 function key!(x, key, jskeys)
   newkey, jskey = x isa AbstractArray ? (key, key .- first.(axes(x))) : ([key], key)
   isnothing(jskeys) || push!(jskeys, jskey)
@@ -174,11 +187,13 @@ end
 
 function Base.setindex!(r::Reactive{<:AbstractArray{T, N}}, v, arg1, arg2, args...) where {T, N}
   if length(args) + 2 > N
+      @info "nested"
       jskeys = []
       setindex_nested!(getfield(r, :o).val, v, arg1, arg2, args...; jskeys)
       notify(r, v, jskeys)
   else
-      setindex!(getfield(r, :o).val, v, arg1, arg2, args...)
+    @info "standard"
+    setindex!(getfield(r, :o).val, v, arg1, arg2, args...)
       notify(r)
   end
 end
