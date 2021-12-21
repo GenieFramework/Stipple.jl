@@ -33,17 +33,48 @@ const watcherMixin = {
       }
     },
 
+    getindex: function (o, key) {
+      if (Array.isArray(o) & Array.isArray(key)) {
+        for (var i = 0, n = key.length; i < n; ++i) {
+          var k = key[i];
+          o = o[k]
+        }
+      } else {
+        if ((key in o) | Array.isArray(o)) {
+          o = o[key]
+        } else {
+          return
+        }
+      }
+      return o
+    },
+
+    setindex: function (o, val, key) {
+      if (Array.isArray(o) & Array.isArray(key)) {
+        for (var i = 0, n = key.length; i < n-1; ++i) {
+          var k = key[i];
+          o = o[k]
+        }
+        o[key[i]] = val
+      } else {
+        if ((key in o) | Array.isArray(o)) {
+          o[key] = val
+        } else {
+          return
+        }
+      }
+      return val
+    },
+    
     updateFieldAt: function (field, newVal, keys) {
       try {
         this.$withoutWatchers(() => {
           var o = this[field]
           for (var i = 0, n = keys.length; i < n-1; ++i) {
             var k = keys[i];
-            if (k in o) {
-                o = o[k];
-            }
+            o = this.getindex(o, k)
           }
-          o[keys[i]]=newVal
+          this.setindex(o, newVal, keys[i])
           this[field].__ob__.dep.notify()
         },"function(){return this." + field + "}");
       } catch(ex) {

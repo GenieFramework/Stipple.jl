@@ -124,8 +124,11 @@ function Base.getindex(r::Reactive{T}, arg1, args...) where T
 end
 
 function Base.setindex!(r::Reactive{T}, val, arg1, args...) where T
-  setindex!(getfield(r, :o).val, val, arg1, args...)
-  Observables.notify(r)
+  x = getfield(r, :o).val
+  jskeys = []
+  setindex!(x, val, arg1, args...)
+  key!(x, v, jskeys)
+  Observables.notify(r, v, jskeys)
 end
 
 Base.setindex!(r::Reactive, val, ::typeof(!)) = getfield(r, :o).val = val
@@ -151,10 +154,28 @@ function Base.notify(observable::Observables.AbstractObservable, arg1, args...)
     return
 end
 
+function linearindex(a::AbstractArray{T}, index::NTuple{N, Int}) where {T, N}
+  dims = size(a)
+  index0 = index .- first.(axes(a))
+  sum(cumprod([1, dims[1:end-1]...]) .* index0) + 1
+end
+
+function linearindex(a::AbstractArray{T, N}, index::Int) where {T, N}
+  if N == 1
+    index .- first(first(axes(a))) + 1
+  else
+    index
+  end
+end
+
+function key!(x::AbstractArray, key, jskeys)
+  isnothing(jskeys) || push!(jskeys, linearindex(x, key) - 1)
+  key
+end
+
 function key!(x, key, jskeys)
-  newkey, jskey = x isa AbstractArray ? (key, key .- first.(axes(x))) : ([key], key)
-  isnothing(jskeys) || push!(jskeys, jskey)
-  newkey
+  isnothing(jskeys) || push!(jskeys, key)
+  (key,)
 end
 
 function getindex_nested!(x, keys...; jskeys::Union{Nothing, Vector} = nothing)
@@ -181,9 +202,12 @@ function setindex_nested!(r::Reactive{<:AbstractArray{T, N}}, v, arg1, args...) 
     setindex_nested!(getfield(r, :o).val, v, arg1, args...; jskeys)
     notify(r, v, jskeys)
   else
-    setindex!(getfield(r, :o).val, v, arg1, args...)
-    notify(r, v, key!(x, v, jskeys))
+    x = getfield(r, :o).val
+    setindex!(x, v, arg1, args...)
+    key!(x, (arg1, args...), jskeys)
+    notify(r, v, jskeys)
   end
+  v
 end
 
 # nested indexing for non_notifying syntax (preceding `!`)
