@@ -1066,6 +1066,10 @@ function deps(channel::String = Genie.config.webchannels_default_route; core_the
   )
 end
 
+function deps(m::M; kwargs...) where {M<:ReactiveModel}
+  deps(m.channel__; kwargs...)
+end
+
 macro R_str(s)
   :(Symbol($s))
 end
