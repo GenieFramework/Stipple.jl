@@ -140,9 +140,10 @@ import Base.notify
 function Base.notify(observable::Observables.AbstractObservable, arg1, args...)
     val = observable[]
     for f in Observables.listeners(observable)
-        try
+        types = (typeof(val), typeof(arg1), typeof.(args)...)
+        if length(methods(f, types)) > 0
             Base.invokelatest(f, val, arg1, args...)
-        catch
+        else
             Base.invokelatest(f, val)
         end
     end
