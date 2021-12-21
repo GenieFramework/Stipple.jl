@@ -899,16 +899,15 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
 
     on(f) do _, options...
       if isempty(options)
-        @info "standard"
         push!(model, field => f, channel = channel)
       else
         unnested = options[1]
         x, key = unnested[end]
         v = x[key]
         jskeys = (p -> isa(p[1], AbstractArray) ? p[2] - first(first(axes(p[1][:]))) : p[2]).(unnested)
-        @info "keys: $(getindex.(unnested, 2))"
-        @info "jskeys: $jskeys"
-        @info "v: $v"
+        # @info "keys: $(getindex.(unnested, 2))"
+        # @info "jskeys: $jskeys"
+        # @info "v: $v"
         push!(model, field => v, channel = channel, options = opts(mode = "dict", keys = jskeys))
       end
     end
