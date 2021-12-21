@@ -117,7 +117,6 @@ Base.convert(::Type{Reactive{T}}, (r, m, u)::Tuple{T, Int, Int}) where T = React
 Base.convert(::Type{Observable{T}}, r::Reactive{T}) where T = getfield(r, :o)
 
 Base.getindex(r::Reactive{T}) where T = Base.getindex(getfield(r, :o))
-Base.setindex!(r::Reactive{T}) where T = Base.setindex!(getfield(r, :o))
 
 # pass indexing and property methods to referenced variable
 function Base.getindex(r::Reactive{T}, arg1, args...) where T
@@ -125,12 +124,114 @@ function Base.getindex(r::Reactive{T}, arg1, args...) where T
 end
 
 function Base.setindex!(r::Reactive{T}, val, arg1, args...) where T
-  setindex!(getfield(r, :o).val, val, arg1, args...)
-  Observables.notify!(r)
+  x = getfield(r, :o).val
+  jskeys = []
+  setindex!(x, val, arg1, args...)
+  key!(x, v, jskeys)
+  Observables.notify(r, v, jskeys)
 end
 
 Base.setindex!(r::Reactive, val, ::typeof(!)) = getfield(r, :o).val = val
 Base.getindex(r::Reactive, ::typeof(!)) = getfield(r, :o).val
+
+# support nested indexing
+
+# function getindex_nested(x, keys...)
+#   foldl((x, key) -> Base.getindex(x, (isa(x, AbstractArray) ? key : [key])...), [keys...];
+#       init = x)
+# end
+
+import Base.notify
+function Base.notify(observable::Observables.AbstractObservable, arg1, args...)
+    val = observable[]
+    for f in Observables.listeners(observable)
+        try
+            Base.invokelatest(f, val, arg1, args...)
+        catch
+            Base.invokelatest(f, val)
+        end
+    end
+    return
+end
+
+function linearindex(a::AbstractArray{T}, index::NTuple{N, Int}) where {T, N}
+  dims = size(a)
+  index0 = index .- first.(axes(a))
+  sum(cumprod([1, dims[1:end-1]...]) .* index0) + 1
+end
+
+function linearindex(a::AbstractArray{T, N}, index::Int) where {T, N}
+  if N == 1
+    index .- first(first(axes(a))) + 1
+  else
+    index
+  end
+end
+
+function key!(x::AbstractArray, key, jskeys)
+  isnothing(jskeys) || push!(jskeys, linearindex(x, key) - 1)
+  key
+end
+
+function key!(x, key, jskeys)
+  isnothing(jskeys) || push!(jskeys, key)
+  (key,)
+end
+
+function getindex_nested!(x, keys...; jskeys::Union{Nothing, Vector} = nothing)
+  val = foldl((x, key) -> Base.getindex(x, key!(x, key, jskeys)...), [keys...];
+      init = x)
+  val
+end
+
+function setindex_nested!(x, v, k1, keys...; jskeys::Union{Nothing, Vector} = nothing)
+  kk = [k1, keys...]
+  x = getindex_nested!(x, kk[1:end-1]...; jskeys)
+  setindex!(x, v,  key!(x, kk[end], jskeys)...)
+end
+
+function setindex_nested!(r::Reactive{<:AbstractDict}, v, arg1, arg2, args...) where T
+    jskeys = []
+    setindex_nested!(getfield(r, :o).val, v, arg1, arg2, args...; jskeys)
+    notify(r, v, jskeys)
+end
+
+function setindex_nested!(r::Reactive{<:AbstractArray{T, N}}, v, arg1, args...) where {T, N}
+  jskeys = []
+  if length(args) + 1 > N
+    setindex_nested!(getfield(r, :o).val, v, arg1, args...; jskeys)
+    notify(r, v, jskeys)
+  else
+    x = getfield(r, :o).val
+    setindex!(x, v, arg1, args...)
+    key!(x, (arg1, args...), jskeys)
+    notify(r, v, jskeys)
+  end
+  v
+end
+
+# nested indexing for non_notifying syntax (preceding `!`)
+Base.setindex!(r::Reactive, v, ::typeof(!), arg1, args...) = setindex_nested!(getfield(r, :o).val, v, arg1, args...)
+
+# nested indexing if more than two arguments are passed to a dictionary
+Base.getindex(r::Reactive{<:AbstractDict}, arg1, arg2, args...) = getindex_nested!(getfield(r, :o).val, arg1, arg2, args...)
+
+# nested indexing if more arguments are passed to ann array than the number of its dimensions
+function Base.getindex(r::Reactive{<:AbstractArray{T, N}}, arg1, arg2, args...) where {T, N}
+  if length(args) + 2 > N
+      getindex_nested!(getfield(r, :o).val, arg1, arg2, args...)
+  else
+      getindex(getfield(r, :o).val, arg1, arg2, args...)
+  end
+end
+
+function Base.setindex!(r::Reactive{<:AbstractArray{T, N}}, v, arg1, arg2, args...) where {T, N}
+  setindex_nested!(r, v, arg1, arg2, args...)
+end
+
+function Base.setindex!(r::Reactive{<:AbstractDict}, v, arg1, arg2, args...) where {T, N}
+  setindex_nested!(r, v, arg1, arg2, args...)
+end
 
 function Base.getproperty(r::Reactive{T}, field::Symbol) where T
   if field in (:o, :r_mode, :no_backend_watcher, :no_frontend_watcher) # fieldnames(Reactive)
@@ -154,7 +255,7 @@ function Base.setproperty!(r::Reactive{T}, field::Symbol, val) where T
       getfield(r, :o).val = val
     else
       setproperty!(getfield(r, :o).val, field, val)
-      Observables.notify!(r)
+      Observables.notify(r)
     end
   end
 end
@@ -810,8 +911,12 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
     end
     f.r_mode == PRIVATE || f.no_backend_watcher && continue
 
-    on(f) do _
-      push!(model, field => f, channel = channel)
+    on(f) do val, options...
+      if isempty(options)
+        push!(model, field => f, channel = channel)
+      else
+        push!(model, field => options[1], channel = channel, options = opts(mode = "dict", keys = options[2]))
+      end
     end
   end
 
@@ -826,33 +931,46 @@ end
 
 Pushes data payloads over to the frontend by broadcasting the `vals` through the `channel`.
 """
-function Base.push!(app::M, vals::Pair{Symbol,T};
-                    channel::String = Genie.config.webchannels_default_route,
-                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
+function Base.push!(app::M, (k,v)::Pair{Symbol,T};
+                    options::Dict{Symbol, Any} = Dict{Symbol, Any}(),
+                    channel::String = app.channel__,
+                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing,
+                    ) where {T,M<:ReactiveModel}
   try
-    WEB_TRANSPORT.broadcast(channel,
-                                    json(Dict("key" => julia_to_vue(vals[1]),
-                                              "value" => Stipple.render(vals[2], vals[1]))),
-                                    except = except)
+    val = if v isa Reactive
+      if v.r_mode == JSFUNCTION
+        replace_jsfunction(v[])
+        push!(options, :revive => true)
+      else 
+        v[]
+      end
+    else
+      v
+    end
+
+    dict = Dict(
+      "key" => julia_to_vue(k),
+      "value" => Stipple.render(val, k),
+      options...,
+    )
+    WEB_TRANSPORT.broadcast(channel, json(dict, except = except))
   catch
   end
 end
 
-function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
-                    channel::String = Genie.config.webchannels_default_route,
-                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
-                    v = vals[2].r_mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
-  push!(app, Symbol(julia_to_vue(vals[1])) => v, channel = channel, except = except)
-end
-
-function Base.push!(model::M;
+function Base.push!(model::M, fields::Vector{Symbol} = [fieldnames(M)...];
                     channel::String = model.channel__,
                     skip::Vector{Symbol} = Symbol[]) where {M<:ReactiveModel}
-  for field in fieldnames(M)
+  for field in fields
     (ispublic(field, model) && !(field in skip)) || continue
 
     push!(model, field => getproperty(model, field), channel = channel)
   end
+end
+
+function Base.push!(model::M, field::Symbol;
+                    channel::String = model.channel__) where {M<:ReactiveModel}
+    push!(model, [field]; channel = channel)
 end
 
 #===#
