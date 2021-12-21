@@ -123,23 +123,18 @@ function Base.getindex(r::Reactive{T}, arg1, args...) where T
   getindex(getfield(r, :o).val, arg1, args...)
 end
 
-function Base.setindex!(r::Reactive{T}, val, arg1, args...) where T
+function Base.setindex!(r::Reactive{T}, val, arg1) where T
+  unnested = Pair[]
   x = getfield(r, :o).val
-  jskeys = []
-  setindex!(x, val, arg1, args...)
-  key!(x, v, jskeys)
-  Observables.notify(r, v, jskeys)
+  setindex!(x, val, arg1)
+  key!(x, arg1; unnested)
+  notify(r, unnested)
 end
 
 Base.setindex!(r::Reactive, val, ::typeof(!)) = getfield(r, :o).val = val
 Base.getindex(r::Reactive, ::typeof(!)) = getfield(r, :o).val
 
 # support nested indexing
-
-# function getindex_nested(x, keys...)
-#   foldl((x, key) -> Base.getindex(x, (isa(x, AbstractArray) ? key : [key])...), [keys...];
-#       init = x)
-# end
 
 import Base.notify
 function Base.notify(observable::Observables.AbstractObservable, arg1, args...)
@@ -154,59 +149,47 @@ function Base.notify(observable::Observables.AbstractObservable, arg1, args...)
     return
 end
 
-function linearindex(a::AbstractArray{T}, index::NTuple{N, Int}) where {T, N}
-  dims = size(a)
-  index0 = index .- first.(axes(a))
-  sum(cumprod([1, dims[1:end-1]...]) .* index0) + 1
+function key!(x::AbstractArray, @nospecialize(key); unnested::Union{Nothing, Vector{Pair}} = nothing)
+  newkey =  LinearIndices(x)[key...]
+  isnothing(unnested) || push!(unnested, x => newkey)
+  newkey
 end
 
-function linearindex(a::AbstractArray{T, N}, index::Int) where {T, N}
-  if N == 1
-    index .- first(first(axes(a))) + 1
-  else
-    index
-  end
-end
-
-function key!(x::AbstractArray, key, jskeys)
-  isnothing(jskeys) || push!(jskeys, linearindex(x, key) - 1)
+function key!(@nospecialize(x), @nospecialize(key); unnested::Union{Nothing, Vector{Pair}} = nothing)
+  isnothing(unnested) || push!(unnested, x => key)
   key
 end
 
-function key!(x, key, jskeys)
-  isnothing(jskeys) || push!(jskeys, key)
-  (key,)
-end
-
-function getindex_nested!(x, keys...; jskeys::Union{Nothing, Vector} = nothing)
-  val = foldl((x, key) -> Base.getindex(x, key!(x, key, jskeys)...), [keys...];
+function getindex_nested!(@nospecialize(x), keys...; unnested::Union{Nothing, Vector{Pair}} = nothing)
+  val = foldl((x, key) -> Base.getindex(x, key!(x, key, unnested)), [keys...];
       init = x)
   val
 end
 
-function setindex_nested!(x, v, k1, keys...; jskeys::Union{Nothing, Vector} = nothing)
+function setindex_nested!(@nospecialize(x), @nospecialize(v), @nospecialize(k1), keys...; unnested::Union{Nothing, Vector{Pair}} = nothing)
   kk = [k1, keys...]
-  x = getindex_nested!(x, kk[1:end-1]...; jskeys)
-  setindex!(x, v,  key!(x, kk[end], jskeys)...)
+  x = getindex_nested!(x, kk[1:end-1]...; unnested)
+  setindex!(x, v, key!(x, kk[end], unnested))
 end
 
-function setindex_nested!(r::Reactive{<:AbstractDict}, v, arg1, arg2, args...) where T
-    jskeys = []
-    setindex_nested!(getfield(r, :o).val, v, arg1, arg2, args...; jskeys)
-    notify(r, v, jskeys)
-end
-
-function setindex_nested!(r::Reactive{<:AbstractArray{T, N}}, v, arg1, args...) where {T, N}
-  jskeys = []
-  if length(args) + 1 > N
-    setindex_nested!(getfield(r, :o).val, v, arg1, args...; jskeys)
-    notify(r, v, jskeys)
-  else
+function setindex_nested!(r::Reactive{<:AbstractDict}, @nospecialize(v), @nospecialize(arg1), args...) where T
+    unnested = Pair[]
     x = getfield(r, :o).val
+    setindex_nested!(x, v, arg1, args...; unnested)
+    notify(r, unnested)
+    v
+end
+
+function setindex_nested!(r::Reactive{<:AbstractArray{T, N}}, @nospecialize(v), @nospecialize(arg1), args...) where {T, N}
+  unnested = Pair[]
+  x = getfield(r, :o).val
+  if length(args) + 1 > N
+    setindex_nested!(x, v, arg1, args...; unnested)
+  else
     setindex!(x, v, arg1, args...)
-    key!(x, (arg1, args...), jskeys)
-    notify(r, v, jskeys)
+    key!(x, (arg1, args...), unnested)
   end
+  notify(r, unnested)
   v
 end
 
@@ -225,13 +208,14 @@ function Base.getindex(r::Reactive{<:AbstractArray{T, N}}, arg1, arg2, args...) 
   end
 end
 
-function Base.setindex!(r::Reactive{<:AbstractArray{T, N}}, v, arg1, arg2, args...) where {T, N}
+# function Base.setindex!(r::Reactive{<:AbstractArray{T, N}}, v, arg1, arg2, args...) where {T, N}
+function Base.setindex!(r::Reactive, v, arg1, arg2, args...) where {T, N}
   setindex_nested!(r, v, arg1, arg2, args...)
 end
 
-function Base.setindex!(r::Reactive{<:AbstractDict}, v, arg1, arg2, args...) where {T, N}
-  setindex_nested!(r, v, arg1, arg2, args...)
-end
+# function Base.setindex!(r::Reactive{<:AbstractDict}, v, arg1, arg2, args...) where {T, N}
+#   setindex_nested!(r, v, arg1, arg2, args...)
+# end
 
 function Base.getproperty(r::Reactive{T}, field::Symbol) where T
   if field in (:o, :r_mode, :no_backend_watcher, :no_frontend_watcher) # fieldnames(Reactive)
@@ -653,7 +637,8 @@ function setindex_withoutwatchers!(field::Reactive{T}, val, keys::Int...; notify
 end
 
 function Base.setindex!(r::Reactive{T}, val, args::Vector{Int}; notify=(x)->true) where T
-  setindex_withoutwatchers!(r, val, args...)
+  @warn "setindex!(r, val, skip::Vector{Int}) has been replaced by setindex_withoutwatchers!(r, val, args...)"
+  setindex_withoutwatchers!(r, val, args...; notify)
 end
 
 """
@@ -759,12 +744,12 @@ function stipple_parse(::Type{T}, value::Dict) where {Tval, T <: AbstractDict{Sy
   T(zip(Symbol.(string.(keys(value))), values(value)))
 end
 
-function stipple_parse(::Type{T1}, value::T2) where {T1 <: Number, T2 <: Number}
-  convert(T1, value)
+function stipple_parse(::Type{T1}, value::T2) where {T1 <: Number, T2 <: Number}
+  convert(T1, value)
 end
 
-function stipple_parse(::Type{T1}, value::T2) where {T1 <: Integer, T2 <: Number}
-  round(T1, value)
+function stipple_parse(::Type{T1}, value::T2) where {T1 <: Integer, T2 <: Number}
+  round(T1, value)
 end
 
 function stipple_parse(::Type{T1}, value::T2) where {T1 <: AbstractArray, T2 <: AbstractArray}
@@ -844,7 +829,7 @@ function init(m::Type{M};
 
     newval = convertvalue(val, payload["newval"])
     oldval = try
-      convertvalue(val, payload["oldval"])
+      convertvalue(val, payload["oldval"])
     catch ex
       val[]
     end
@@ -911,11 +896,19 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
     end
     f.r_mode == PRIVATE || f.no_backend_watcher && continue
 
-    on(f) do val, options...
+    on(f) do _, options...
       if isempty(options)
+        @info "standard"
         push!(model, field => f, channel = channel)
       else
-        push!(model, field => options[1], channel = channel, options = opts(mode = "dict", keys = options[2]))
+        unnested = options[1]
+        x, key = unnested[end]
+        v = x[key]
+        jskeys = (p -> isa(p[1], AbstractArray) ? p[2] - first(first(axes(p[1][:]))) : p[2]).(unnested)
+        @info "keys: $(getindex.(unnested, 2))"
+        @info "jskeys: $jskeys"
+        @info "v: $v"
+        push!(model, field => v, channel = channel, options = opts(mode = "dict", keys = jskeys))
       end
     end
   end
