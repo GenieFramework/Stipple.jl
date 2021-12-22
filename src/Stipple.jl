@@ -188,7 +188,7 @@ function setindex_nested!(r::Reactive{<:AbstractArray{T, N}}, @nospecialize(v), 
     setindex_nested!(x, v, arg1, args...; unnested)
   else
     setindex!(x, v, arg1, args...)
-    key!(x, (arg1, args...), unnested)
+    key!(x, (arg1, args...); unnested)
   end
   notify(r, unnested)
   v
