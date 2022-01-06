@@ -722,7 +722,7 @@ function init(m::Type{M};
 
   deps_routes(channel)
 
-  Genie.Router.channel("/$(channel)/watchers") do
+  Genie.Router.channel("/$channel/watchers") do
     payload = Genie.Requests.payload(:payload)["payload"]
     client = transport == Genie.WebChannels ? Genie.Requests.wsclient() : Genie.Requests.wtclient()
 
@@ -751,6 +751,10 @@ function init(m::Type{M};
     push!(model, field => newval; channel = channel, except = client)
     update!(model, field, newval, oldval)
 
+    ok_response
+  end
+
+  Genie.Router.channel("/$channel/keepalive") do
     ok_response
   end
 
@@ -1038,6 +1042,13 @@ function deps_routes(channel::AbstractString = Genie.config.webchannels_default_
         Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="watchers")), :javascript) |> Genie.Renderer.respond
     end
 
+    if Genie.config.webchannels_keepalive_frequency > 0 && WEB_TRANSPORT == Genie.WebChannels
+      Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, file="keepalive"), named = :get_keepalivejs) do
+        Genie.Renderer.WebRenderable(
+          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="keepalive")), :javascript) |> Genie.Renderer.respond
+      end
+    end
+
   end
 
   (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_support(channel) : Genie.Assets.webthreads_support(channel))
@@ -1061,6 +1072,11 @@ function deps(channel::String = Genie.config.webchannels_default_route; core_the
     core_theme && Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="stipplecore")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), defer=true),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="watchers")),
+
+    (
+      (Genie.config.webchannels_keepalive_frequency > 0 && WEB_TRANSPORT == Genie.WebChannels) ?
+        Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="keepalive"), defer=true) : ""
+    ),
 
     join([f() for (key, f) in DEPS if isa(key, Module) || key == channel], "\n")
   )

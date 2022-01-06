@@ -93,6 +93,14 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
         end
       )
       console.log('App ready');
+
+      try {
+        if (Genie.Settings.webchannels_keepalive_frequency > 0) {
+          setInterval(keepalive, Genie.Settings.webchannels_keepalive_frequency);
+        }
+      } catch (e) {
+        console.log('Error setting keepalive interval: ' + e);
+      }
     } else {
       console.log('App starting');
       setTimeout(app_ready, Genie.Settings.webchannels_timeout);
@@ -100,7 +108,6 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
   };
 
   window.onload = function() {
-    $vue_app_name.\$forceUpdate();
     console.log("Loading completed");
     app_ready();
   }

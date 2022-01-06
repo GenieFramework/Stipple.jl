@@ -1,7 +1,7 @@
 name = "Stipple"
 uuid = "4acbeb90-81a0-11ea-1966-bdaff8155998"
 authors = ["Adrian <e@essenciary.com>"]
-version = "0.19.3"
+version = "0.20"
 
 [deps]
 FilePathsBase = "48062228-2e41-5def-b9a4-89aafe57970f"
@@ -20,7 +20,7 @@ StructTypes = "856f2bd8-1eba-4b0a-8007-ebc267875bd4"
 
 [compat]
 FilePathsBase = "0.9"
-Genie = "4"
+Genie = "4.8"
 JSON3 = "1.9"
 Mixers = "0.1"
 Observables = "0.3, 0.4"
