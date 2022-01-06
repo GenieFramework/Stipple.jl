@@ -75,14 +75,8 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
 
   window.parse_payload = function(payload){
     if (payload.key) {
-      if (payload.revive) { 
-        window.$(vue_app_name).revive_payload(payload)
-      }
-      if (payload.mode=="dict") {
-        window.$(vue_app_name).updateFieldAt(payload.key, payload.value, payload.keys);
-      } else {
-        window.$(vue_app_name).updateField(payload.key, payload.value);
-      }
+      window.$(vue_app_name).revive_payload(payload)
+      window.$(vue_app_name).updateField(payload.key, payload.value);
     }
   }
 
