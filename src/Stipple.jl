@@ -128,7 +128,8 @@ function Base.setindex!(r::Reactive{T}, val, arg1) where T
   x = getfield(r, :o).val
   setindex!(x, val, arg1)
   key!(x, arg1; unnested)
-  notify(r, unnested)
+  # notify(r, unnested)
+  notify(r)
 end
 
 Base.setindex!(r::Reactive, val, ::typeof(!)) = getfield(r, :o).val = val
@@ -162,7 +163,7 @@ function key!(@nospecialize(x), @nospecialize(key); unnested::Union{Nothing, Vec
 end
 
 function getindex_nested!(@nospecialize(x), keys...; unnested::Union{Nothing, Vector{Pair}} = nothing)
-  val = foldl((x, key) -> Base.getindex(x, key!(x, key, unnested)), [keys...];
+  val = foldl((x, key) -> Base.getindex(x, key!(x, key; unnested = nothing)), [keys...];
       init = x)
   val
 end
@@ -170,14 +171,15 @@ end
 function setindex_nested!(@nospecialize(x), @nospecialize(v), @nospecialize(k1), keys...; unnested::Union{Nothing, Vector{Pair}} = nothing)
   kk = [k1, keys...]
   x = getindex_nested!(x, kk[1:end-1]...; unnested)
-  setindex!(x, v, key!(x, kk[end], unnested))
+  setindex!(x, v, key!(x, kk[end]; unnested))
 end
 
 function setindex_nested!(r::Reactive{<:AbstractDict}, @nospecialize(v), @nospecialize(arg1), args...) where T
     unnested = Pair[]
     x = getfield(r, :o).val
     setindex_nested!(x, v, arg1, args...; unnested)
-    notify(r, unnested)
+    # notify(r, unnested)
+    notify(r)
     v
 end
 
@@ -190,7 +192,8 @@ function setindex_nested!(r::Reactive{<:AbstractArray{T, N}}, @nospecialize(v), 
     setindex!(x, v, arg1, args...)
     key!(x, (arg1, args...); unnested)
   end
-  notify(r, unnested)
+  # notify(r, unnested)
+  notify(r)
   v
 end
 
@@ -936,8 +939,8 @@ function Base.push!(app::M, (k,v)::Pair{Symbol,T};
   try
     val = if v isa Reactive
       if v.r_mode == JSFUNCTION
-        replace_jsfunction(v[])
         push!(options, :revive => true)
+        replace_jsfunction(v[])
       else 
         v[]
       end
