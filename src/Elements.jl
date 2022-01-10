@@ -81,34 +81,47 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
   }
 
   function app_ready() {
-    if ((document.readyState === "complete" || document.readyState === "interactive") && Genie.WebChannels.socket.readyState === 1) {
+    if ((document.readyState === 'complete' || document.readyState === 'interactive') && Genie.WebChannels.socket.readyState === 1) {
       $(
         if hasproperty(model, :isready)
           """
-          Genie.WebChannels.sendMessageTo(CHANNEL, 'watchers', {'payload': {'field':'isready', 'newval': true, 'oldval': false}});
-          $vue_app_name.isready = true;
+          if (Genie.Settings.env == 'dev') {
+            console.info('Waiting 1s');
+          }
+
+          setTimeout(function(){
+            $vue_app_name.isready = true;
+            if (Genie.Settings.env == 'dev') {
+              console.info('App ready');
+            }
+          }, 1000); // let's give it a bit to process server side events
           """
         else
           ""
         end
       )
-      console.log('App ready');
 
       try {
         if (Genie.Settings.webchannels_keepalive_frequency > 0) {
           setInterval(keepalive, Genie.Settings.webchannels_keepalive_frequency);
         }
       } catch (e) {
-        console.log('Error setting keepalive interval: ' + e);
+        if (Genie.Settings.env == 'dev') {
+          console.error('Error setting keepalive interval: ' + e);
+        }
       }
     } else {
-      console.log('App starting');
+      if (Genie.Settings.env == 'dev') {
+        console.info('App starting');
+      }
       setTimeout(app_ready, Genie.Settings.webchannels_timeout);
     }
   };
 
   window.onload = function() {
-    console.log("Loading completed");
+    if (Genie.Settings.env == 'dev') {
+      console.info('Loading completed');
+    }
     app_ready();
   }
   """

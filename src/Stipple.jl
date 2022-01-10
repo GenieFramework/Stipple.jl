@@ -241,9 +241,23 @@ abstract type ReactiveModel end
 
 
 export @reactors, @reactive, @reactive!
+export ChannelName, getchannel
+
+const ChannelName = String
+
+
+function getchannel(m::T) where {T<:ReactiveModel}
+  getfield(m, :channel__)
+end
+
+
+function setchannel(m::T, value) where {T<:ReactiveModel}
+  setfield(m, :channel__, ChannelName(value))
+end
+
 
 @pour reactors begin
-  channel__::AbstractString = Stipple.channelfactory()
+  channel__::ChannelName = Stipple.channelfactory()
   isready::R{Bool} = false
   isprocessing::R{Bool} = false
 end
@@ -713,11 +727,11 @@ function init(m::Type{M};
   ok_response = "OK"
 
   channel = if channel !== nothing
-    model.channel__ = string(channel)
+    setchannel(model, channel)
   elseif hasproperty(model, :channel__)
-    getproperty(model, :channel__) |> string
+    getchannel(model)
   else
-    model.channel__ = channelfactory()
+    setchannel(model, channelfactory())
   end
 
   deps_routes(channel)
@@ -850,7 +864,7 @@ function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
 end
 
 function Base.push!(model::M;
-                    channel::String = model.channel__,
+                    channel::String = getchannel(model),
                     skip::Vector{Symbol} = Symbol[]) where {M<:ReactiveModel}
   for field in fieldnames(M)
     (ispublic(field, model) && !(field in skip)) || continue

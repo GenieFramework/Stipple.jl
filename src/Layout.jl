@@ -95,7 +95,7 @@ function page(elemid, args...; partial::Bool = false, title::String = "", class:
     core_theme = core_theme)
 end
 function page(model::T, args...; kwargs...)::ParsedHTMLString where {T<:Stipple.ReactiveModel}
-  page(vm(model), args...; channel = model.channel__, kwargs...)
+  page(vm(model), args...; channel = getchannel(model), kwargs...)
 end
 
 """

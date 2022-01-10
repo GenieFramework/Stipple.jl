@@ -29,7 +29,9 @@ const watcherMixin = {
       try {
         this.$withoutWatchers(()=>{this[field]=newVal},"function(){return this." + field + "}");
       } catch(ex) {
-        console.log(ex);
+        if (Genie.Settings.env == 'dev') {
+          console.error(ex);
+        }
       }
     }
   }

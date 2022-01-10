@@ -5,7 +5,9 @@
 */
 
 function keepalive() {
-  console.log("keepalive");
+  if (Genie.Settings.env == 'dev') {
+    console.info('Keeping connection alive');
+  }
   Genie.WebChannels.sendMessageTo(CHANNEL, 'keepalive', {
     'payload': {}
   });
