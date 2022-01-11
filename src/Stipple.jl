@@ -259,6 +259,7 @@ end
 @pour reactors begin
   channel__::ChannelName = Stipple.channelfactory()
   isready::R{Bool} = false
+  isreadydelay::R{Int} = 500
   isprocessing::R{Bool} = false
 end
 

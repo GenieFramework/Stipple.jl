@@ -65,9 +65,9 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
 
     ,
 
-    join([Stipple.watch(vue_app_name, field, "CHANNEL", debounce, model)
-            for field in fieldnames(m)
-              if Stipple.ispublic(field, model)])
+    join(
+      [Stipple.watch(vue_app_name, field, "CHANNEL", debounce, model) for field in fieldnames(m) if Stipple.ispublic(field, model)]
+    )
 
     ,
 
@@ -86,7 +86,7 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
         if hasproperty(model, :isready)
           """
           if (Genie.Settings.env == 'dev') {
-            console.info('Waiting 1s');
+            console.info('Waiting ' + $vue_app_name.isreadydelay + 'ms');
           }
 
           setTimeout(function(){
@@ -94,7 +94,7 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
             if (Genie.Settings.env == 'dev') {
               console.info('App ready');
             }
-          }, 1000); // let's give it a bit to process server side events
+          }, $vue_app_name.isreadydelay); // let's give it a bit to process server side events
           """
         else
           ""
