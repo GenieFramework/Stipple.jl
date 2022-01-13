@@ -120,26 +120,27 @@ This snippet illustrates how to build a UI where the button triggers a computati
 server side, using the input provided by the user, and outputting the result of the computation back to the user.
 
 ```julia
-using Genie, Genie.Renderer.Html, Stipple, StippleUI
+using Genie.Renderer.Html, Stipple, StippleUI
 
-Base.@kwdef mutable struct Model <: ReactiveModel
+@reactive mutable struct Model <: ReactiveModel
   process::R{Bool} = false
   output::R{String} = ""
   input::R{String} = ""
 end
 
-model = Stipple.init(Model())
-
-on(model.process) do _
-  if (model.process[])
-    model.output[] = model.input[] |> reverse
-    model.process[] = false
+function handlers(model)
+  on(model.process) do _
+    if (model.process[])
+      model.output[] = model.input[] |> reverse
+      model.process[] = false
+    end
   end
+
+  model
 end
 
-function ui()
-  page(
-    vm(model), class="container", [
+function ui(model)
+  page(model, class="container", [
       p([
         "Input "
         input("", @bind(:input), @on("keyup.enter", "process = true"))
@@ -154,12 +155,15 @@ function ui()
         span("", @text(:output))
       ])
     ]
-  ) |> html
+  )
 end
 
-route("/", ui)
+route("/") do
+  model = Model |> init |> handlers
+  html(ui(model), context = @__MODULE__)
+end
 
-up()
+isrunning(:webserver) || up()
 ```
 
 ## Choosing the transport layer: WebSockets or HTTP
@@ -184,19 +188,16 @@ Support for `WebThreads` and request logging disabling has been introduced in Ge
 ### First example changed to use `WebThreads`
 
 ```julia
-using Genie, Genie.Renderer.Html, Stipple
+using Genie.Renderer.Html, Stipple
 
 Genie.config.log_requests = false
 
-Base.@kwdef mutable struct Name <: ReactiveModel
+@reactive mutable struct Name <: ReactiveModel
   name::R{String} = "World!"
 end
 
-model = Stipple.init(Name(), transport = Genie.WebThreads)
-
-function ui()
-  page(
-    vm(model), class="container",
+function ui(model)
+  page(model, class="container",
     [
       h1([
         "Hello "
@@ -208,12 +209,15 @@ function ui()
         input("", placeholder="Type your name", @bind(:name))
       ])
     ]
-  ) |> html
+  )
 end
 
-route("/", ui)
+route("/") do
+  model = Stipple.init(Name(), transport = Genie.WebThreads)
+  html(ui(model), context = @__MODULE__)
+end
 
-up()
+isrunning(:webserver) || up()
 ```
 
 ## Demos
