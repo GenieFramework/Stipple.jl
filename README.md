@@ -1,12 +1,34 @@
-# Stipple
+<div align="center">
+  <a href="https://genieframework.com/">
+    <img
+      src="docs/content/img/stipple-logo+text.svg"
+      alt="Genie Logo"
+      height="64"
+    />
+  </a>
+  <br />
+  <p>
+    <h3>
+      <b>
+        Stipple.jl
+      </b>
+    </h3>
+  </p>
+  <p>
+    <ul> Reactive Data Apps in Pure Julia
+    </ul>
+  </p>
 
-Stipple is a reactive UI library for building interactive data applications in pure Julia.
-It uses [Genie.jl]((https://github.com/GenieFramework/Genie.jl)) (on the server side) and Vue.js (on the client).
+  [![current status](https://img.shields.io/badge/julia%20support-v1.6%20and%20up-dark%20green)](https://github.com/GenieFramework/Stipple.jl/blob/9530ccd4313d7a4e3da2351eb621152047bc5cbd/Project.toml#L32) [![Website](https://img.shields.io/website?url=https%3A%2F%2Fgenieframework.com&logo=genie)](https://www.genieframework.com/#stipple-section) [![Tests](https://img.shields.io/badge/build-passing-green)](https://github.com/GenieFramework/Stipple.jl/actions) [![Stipple Downloads](https://shields.io/endpoint?url=https://pkgs.genieframework.com/api/v1/badge/Stipple)](https://pkgs.genieframework.com?packages=Stipple) [![Tweet](https://img.shields.io/twitter/url?url=https%3A%2F%2Fgithub.com%2FGenieFramework%2FGenie.jl)](https://twitter.com/AppStipple)
 
-Stipple uses a high performance MVVM architecture, which automatically synchronizes the state two-way
-(server -> client and client -> server) sending only JSON data over the wire.
+  
+  <p>Stipple is a reactive UI library for building interactive data applications in pure Julia.
+It uses <a href="https://github.com/GenieFramework/Genie.jl">Genie.jl</a> (on the server side) and Vue.js (on the client). Stipple uses a high performance MVVM architecture, which automatically synchronizes the state two-way
+(server -> client and client -> server) sending only JSON data over the wire. The Stipple package provides the fundamental communication layer, extending <i><b>Genie's</b></i> HTML API with a reactive component.</p>
+</div>
 
-The Stipple package provides the fundamental communication layer, extending `Genie`'s HTML API with a reactive component.
+
+---
 
 The Stipple ecosystem also includes:
 
@@ -41,17 +63,14 @@ pkg> add Genie
 Now we can run the following code at the Julia REPL:
 
 ```julia
-using Genie, Genie.Renderer.Html, Stipple
+using Stipple
 
-Base.@kwdef mutable struct Name <: ReactiveModel
+@reactive mutable struct Name <: ReactiveModel
   name::R{String} = "World!"
 end
 
-model = Stipple.init(Name())
-
-function ui()
-  page(
-    vm(model), class="container", [
+function ui(model)
+  page( model, class="container", [
       h1([
         "Hello "
         span("", @text(:name))
@@ -62,10 +81,13 @@ function ui()
         input("", placeholder="Type your name", @bind(:name))
       ])
     ]
-  ) |> html
+  )
 end
 
-route("/", ui)
+route("/") do
+  model = Name |> init
+  html(ui(model), context = @__MODULE__)
+end
 
 up() # or `up(open_browser = true)` to automatically open a browser window/tab when launching the app
 ```
@@ -98,26 +120,27 @@ This snippet illustrates how to build a UI where the button triggers a computati
 server side, using the input provided by the user, and outputting the result of the computation back to the user.
 
 ```julia
-using Genie, Genie.Renderer.Html, Stipple, StippleUI
+using Genie.Renderer.Html, Stipple, StippleUI
 
-Base.@kwdef mutable struct Model <: ReactiveModel
+@reactive mutable struct Model <: ReactiveModel
   process::R{Bool} = false
   output::R{String} = ""
   input::R{String} = ""
 end
 
-model = Stipple.init(Model())
-
-on(model.process) do _
-  if (model.process[])
-    model.output[] = model.input[] |> reverse
-    model.process[] = false
+function handlers(model)
+  on(model.process) do _
+    if (model.process[])
+      model.output[] = model.input[] |> reverse
+      model.process[] = false
+    end
   end
+
+  model
 end
 
-function ui()
-  page(
-    vm(model), class="container", [
+function ui(model)
+  page(model, class="container", [
       p([
         "Input "
         input("", @bind(:input), @on("keyup.enter", "process = true"))
@@ -132,12 +155,15 @@ function ui()
         span("", @text(:output))
       ])
     ]
-  ) |> html
+  )
 end
 
-route("/", ui)
+route("/") do
+  model = Model |> init |> handlers
+  html(ui(model), context = @__MODULE__)
+end
 
-up()
+isrunning(:webserver) || up()
 ```
 
 ## Choosing the transport layer: WebSockets or HTTP
@@ -162,19 +188,16 @@ Support for `WebThreads` and request logging disabling has been introduced in Ge
 ### First example changed to use `WebThreads`
 
 ```julia
-using Genie, Genie.Renderer.Html, Stipple
+using Genie.Renderer.Html, Stipple
 
 Genie.config.log_requests = false
 
-Base.@kwdef mutable struct Name <: ReactiveModel
+@reactive mutable struct Name <: ReactiveModel
   name::R{String} = "World!"
 end
 
-model = Stipple.init(Name(), transport = Genie.WebThreads)
-
-function ui()
-  page(
-    vm(model), class="container",
+function ui(model)
+  page(model, class="container",
     [
       h1([
         "Hello "
@@ -186,12 +209,15 @@ function ui()
         input("", placeholder="Type your name", @bind(:name))
       ])
     ]
-  ) |> html
+  )
 end
 
-route("/", ui)
+route("/") do
+  model = Stipple.init(Name(), transport = Genie.WebThreads)
+  html(ui(model), context = @__MODULE__)
+end
 
-up()
+isrunning(:webserver) || up()
 ```
 
 ## Demos
