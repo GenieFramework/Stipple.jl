@@ -776,7 +776,7 @@ function init(m::Type{M};
   if ! Genie.Assets.external_assets(assets_config)
     Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, # path = channel,
                                               file = endpoint)) do
-      Stipple.Elements.vue_integration(m; vue_app_name, channel, debounce, core_theme) |> Genie.Renderer.Js.js
+      Stipple.Elements.vue_integration(m; vue_app_name, channel, debounce, core_theme, transport) |> Genie.Renderer.Js.js
     end
   end
 

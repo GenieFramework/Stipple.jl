@@ -49,7 +49,8 @@ It is called internally by `Stipple.init` which allows for the configuration of 
 """
 function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_theme::Bool = true,
                           channel::String = Genie.config.webchannels_default_route,
-                          debounce::Int = Stipple.JS_DEBOUNCE_TIME)::String where {M<:ReactiveModel}
+                          debounce::Int = Stipple.JS_DEBOUNCE_TIME,
+                          transport::Module = Genie.WebChannels)::String where {M<:ReactiveModel}
   model = Base.invokelatest(m)
 
   vue_app = replace(json(model |> Stipple.render), "\"{" => " {")
@@ -81,35 +82,35 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
   }
 
   function app_ready() {
-    if ((document.readyState === 'complete' || document.readyState === 'interactive') && Genie.WebChannels.socket.readyState === 1) {
-      $(
-        if hasproperty(model, :isready)
-          """
-          if (Genie.Settings.env == 'dev') {
-            console.info('Waiting ' + $vue_app_name.isreadydelay + 'ms');
-          }
+    if (
+      (document.readyState === 'complete' || document.readyState === 'interactive')
+        $(transport == Genie.WebChannels ? " && (Genie.WebChannels.socket.readyState === 1)" : "")
+      ) {
 
-          setTimeout(function(){
-            $vue_app_name.isready = true;
-            if (Genie.Settings.env == 'dev') {
-              console.info('App ready');
-            }
-          }, $vue_app_name.isreadydelay); // let's give it a bit to process server side events
-          """
-        else
-          ""
-        end
-      )
+      if (Genie.Settings.env == 'dev') {
+        console.info('Waiting ' + $vue_app_name.isreadydelay + 'ms');
+      }
 
+      setTimeout(function(){
+        $vue_app_name.isready = true;
+        if (Genie.Settings.env == 'dev') {
+          console.info('App ready');
+        }
+      }, $vue_app_name.isreadydelay); // let's give it a bit to process server side events
+
+      $(transport == Genie.WebChannels &&
+      "
       try {
         if (Genie.Settings.webchannels_keepalive_frequency > 0) {
           setInterval(keepalive, Genie.Settings.webchannels_keepalive_frequency);
         }
       } catch (e) {
         if (Genie.Settings.env == 'dev') {
-          console.error('Error setting keepalive interval: ' + e);
+          console.error('Error setting WebSocket keepalive interval: ' + e);
         }
       }
+      ")
+
     } else {
       if (Genie.Settings.env == 'dev') {
         console.info('App starting');
