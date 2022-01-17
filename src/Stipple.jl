@@ -252,7 +252,7 @@ end
 
 
 function setchannel(m::T, value) where {T<:ReactiveModel}
-  setfield(m, :channel__, ChannelName(value))
+  setfield!(m, :channel__, ChannelName(value))
 end
 
 
