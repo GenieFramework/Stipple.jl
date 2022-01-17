@@ -693,6 +693,10 @@ function stipple_parse(::Type{T}, v::T) where {T}
   v::T
 end
 
+function stipple_parse(::Type{Symbol}, s::String)
+  Symbol(s)
+end
+
 
 function channelfactory(length::Int = 32)
   randstring('A':'Z', length)
