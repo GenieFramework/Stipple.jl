@@ -159,6 +159,7 @@ julia> push!(Stipple.Layout.THEMES, StippleUI.theme)
 ```
 """
 function theme(; core_theme::Bool = true) :: String
+  output = ""
   if core_theme
     if ! Genie.Assets.external_assets(Stipple.assets_config)
       Genie.Router.route(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore")) do
@@ -168,7 +169,7 @@ function theme(; core_theme::Bool = true) :: String
       end
     end
 
-    output = string(
+    output *= string(
       stylesheet("https://fonts.googleapis.com/css?family=Material+Icons"),
       stylesheet(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore"))
     )
