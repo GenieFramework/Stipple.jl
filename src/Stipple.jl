@@ -36,7 +36,7 @@ end
 
 @inline StructTypes.StructType(::Type{JSONText}) = JSON3.RawType()
 @inline StructTypes.construct(::Type{JSONText}, x::JSON3.RawValue) = JSONText(string(x))
-@inline JSON3.rawbytes(x::JSONText) = x.s
+@inline JSON3.rawbytes(x::JSONText) = codeunits(x.s)
 
 macro json(expr)
   expr.args[1].args[1] = :(StructTypes.$(expr.args[1].args[1]))
