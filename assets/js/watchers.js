@@ -26,8 +26,13 @@ const watcherMixin = {
     },
 
     updateField: function (field, newVal) {
+      if (field=='js_app') { return }
       try {
         this.$withoutWatchers(()=>{this[field]=newVal},"function(){return this." + field + "}");
+        if (field=='js_model' && typeof(this[field])=='function') { 
+          this[field]()
+          this[field] = null
+        }
       } catch(ex) {
         if (Genie.Settings.env == 'dev') {
           console.error(ex);
@@ -46,8 +51,9 @@ const reviveMixin = {
             this.revive_payload(obj[key])
           } else {
             if ( (obj[key]!=null) && (obj[key].jsfunction) ) {
-              obj[key] = Function(obj[key].jsfunction.arguments, obj[key].jsfunction.body)
-              if (key=='stipplejs') { obj[key](); }
+              obj[key] = (obj[key].name) ? obj[key].name : Function(obj[key].jsfunction.arguments, obj[key].jsfunction.body)
+              // obj.key (not obj[key]) contains the key of the payload
+              if (obj.key=='js_app') { obj[key](); }
             }
           }
         }

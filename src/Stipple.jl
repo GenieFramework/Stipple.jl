@@ -1018,6 +1018,20 @@ function replace_jsfunction(js::JSONText)
     jsfunc = parse_jsfunction(js.s)
     isnothing(jsfunc) ? js : JSONText(json(opts(jsfunction=jsfunc)))
 end
+
+replace_jsfunction(s::AbstractString) = replace_jsfunction(JSONText(s))
+
+function jsfunction(s::AbstractString)
+  jsfunc = parse_jsfunction(s)
+  isnothing(jsfunc) && (jsfunc = parse_jsfunction("() => { $s() }") )
+  opts(jsfunction = jsfunc)
+end
+
+macro jsfunction_str(expr)
+  :( jsfunction($(esc(expr))) )
+end
+
+export jsfunction, @jsfunction_str
 #===#
 
 import OrderedCollections
