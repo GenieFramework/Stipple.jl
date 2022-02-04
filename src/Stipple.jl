@@ -48,7 +48,7 @@ macro json(expr)
   end
 end
 
-export JSONParser, JSONText, json, @json
+export JSONParser, JSONText, json, @json, jsfunction, @jsfunction_str
 
 # support for handling JS `undefined` values
 export Undefined, UNDEFINED
@@ -1023,12 +1023,23 @@ replace_jsfunction(s::AbstractString) = replace_jsfunction(JSONText(s))
 
 function jsfunction(s::AbstractString)
   jsfunc = parse_jsfunction(s)
-  isnothing(jsfunc) && (jsfunc = parse_jsfunction("() => { $s() }") )
+  isnothing(jsfunc) && (jsfunc = opts(arguments = "", body = s) )
   opts(jsfunction = jsfunc)
 end
 
 macro jsfunction_str(expr)
   :( jsfunction($(esc(expr))) )
+end
+
+'''
+"""
+    `function Base.run(model::ReactiveModel, jscode::String; context = :model)`
+
+Execute js code in the frontend. `context` can be `:model` or `:app`
+"""
+function Base.run(model::ReactiveModel, jscode::String; context = :model)
+  context ∈ (:model, :app) && push!(model, Symbol("js_", context) => jsfunction(jscode); channel = model.channel__)
+  nothing
 end
 
 export jsfunction, @jsfunction_str

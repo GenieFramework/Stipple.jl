@@ -26,7 +26,8 @@ const watcherMixin = {
     },
 
     updateField: function (field, newVal) {
-      if (field=='js_app') { return }
+      if (field=='js_app') { newVal(); return }
+
       try {
         this.$withoutWatchers(()=>{this[field]=newVal},"function(){return this." + field + "}");
         if (field=='js_model' && typeof(this[field])=='function') { 
@@ -52,8 +53,6 @@ const reviveMixin = {
           } else {
             if ( (obj[key]!=null) && (obj[key].jsfunction) ) {
               obj[key] = Function(obj[key].jsfunction.arguments, obj[key].jsfunction.body)
-              // obj.key (not obj[key]) contains the key of the payload
-              if (obj.key=='js_app') { obj[key](); }
             }
           }
         }
