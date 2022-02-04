@@ -51,7 +51,7 @@ const reviveMixin = {
             this.revive_payload(obj[key])
           } else {
             if ( (obj[key]!=null) && (obj[key].jsfunction) ) {
-              obj[key] = (obj[key].name) ? obj[key].name : Function(obj[key].jsfunction.arguments, obj[key].jsfunction.body)
+              obj[key] = Function(obj[key].jsfunction.arguments, obj[key].jsfunction.body)
               // obj.key (not obj[key]) contains the key of the payload
               if (obj.key=='js_app') { obj[key](); }
             }
