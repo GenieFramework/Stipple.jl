@@ -1021,28 +1021,37 @@ end
 
 replace_jsfunction(s::AbstractString) = replace_jsfunction(JSONText(s))
 
-function jsfunction(s::AbstractString)
-  jsfunc = parse_jsfunction(s)
-  isnothing(jsfunc) && (jsfunc = opts(arguments = "", body = s) )
+"""
+    `function jsfunction(jscode::String)`
+
+Build a dictionary that is converted to a js function in the frontend by the reviver.
+There is also a string macro version `jsfunction"<js code>"`
+"""
+function jsfunction(jscode::String)
+  jsfunc = parse_jsfunction(jscode)
+  isnothing(jsfunc) && (jsfunc = opts(arguments = "", body = jscode) )
   opts(jsfunction = jsfunc)
 end
 
+"""
+    `jsfunction"<js code>"`
+
+Build a dictionary that is converted to a js function in the frontend by the reviver.
+"""
 macro jsfunction_str(expr)
   :( jsfunction($(esc(expr))) )
 end
 
-'''
 """
     `function Base.run(model::ReactiveModel, jscode::String; context = :model)`
 
 Execute js code in the frontend. `context` can be `:model` or `:app`
 """
 function Base.run(model::ReactiveModel, jscode::String; context = :model)
-  context ∈ (:model, :app) && push!(model, Symbol("js_", context) => jsfunction(jscode); channel = model.channel__)
+  context ∈ (:model, :app) && push!(model, Symbol("js_", context) => jsfunction(jscode); channel = getchannel(model))
   nothing
 end
 
-export jsfunction, @jsfunction_str
 #===#
 
 import OrderedCollections
@@ -1127,7 +1136,7 @@ function deps(channel::String = Genie.config.webchannels_default_route; core_the
 end
 
 function deps(m::M; kwargs...) where {M<:ReactiveModel}
-  deps(m.channel__; kwargs...)
+  deps(getchannel(m); kwargs...)
 end
 
 macro R_str(s)
