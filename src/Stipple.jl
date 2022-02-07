@@ -704,17 +704,26 @@ end
 
 
 """
-    `function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model),
-                    endpoint::String = vue_app_name, channel::String = Genie.config.webchannels_default_route,
-                    debounce::Int = JS_DEBOUNCE_TIME, transport::Module = Genie.WebChannels)::M where {M<:ReactiveModel}`
+    `function init(model::M, ui::Union{String,Vector} = "";
+                    vue_app_name::String = Stipple.Elements.root(model),
+                    endpoint::String = vue_app_name,
+                    channel::String = Genie.config.webchannels_default_route,
+                    debounce::Int = JS_DEBOUNCE_TIME,
+                    transport::Module = Genie.WebChannels)::M,
+                    modeloptions::Dict{Symbol, Any} = Dict{Symbol, Any}(),
+                    kwargs...)::M where {M<:ReactiveModel}`
+
 
 Initializes the reactivity of the model `M` by setting up the custom JavaScript for integrating with the Vue.js
 frontend and perform the 2-way backend-frontend data sync. Returns the instance of the model.
-
+Model fields can be initialized via extra keyword arguments or, in case of overlap with init-keywords, via the keyword.
 ### Example
 
 ```julia
 hs_model = Stipple.init(HelloPie())
+hs_model = Stipple.init(HelloPie(), name = "Earth")
+hs_model = Stipple.init(HelloPie(), debounce = 10, modeloptions = Stipple.opts(debounce = 20))
+
 ```
 """
 function init(m::Type{M};
@@ -724,10 +733,12 @@ function init(m::Type{M};
               debounce::Int = JS_DEBOUNCE_TIME,
               transport::Module = Genie.WebChannels,
               parse_errors::Bool = false,
-              core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
+              core_theme::Bool = true,
+              modeloptions::Dict{Symbol, Any} = Dict{Symbol, Any}(),
+              kwargs...)::M where {M<:ReactiveModel, S<:AbstractString}
 
   global WEB_TRANSPORT = transport
-  model = Base.invokelatest(m)
+  model = Base.invokelatest(m; modeloptions..., kwargs...)
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
   ok_response = "OK"
 
