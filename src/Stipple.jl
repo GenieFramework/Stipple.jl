@@ -872,8 +872,8 @@ function Base.push!(model::M;
                     channel::String = getchannel(model),
                     skip::Vector{Symbol} = Symbol[]) where {M<:ReactiveModel}
   for field in fieldnames(M)
-    (ispublic(field, model) && !(field in skip)) || continue
-
+    (isprivate(field, model) || field in skip) && continue
+    
     push!(model, field => getproperty(model, field), channel = channel)
   end
 end
@@ -1216,7 +1216,7 @@ end
 
 function isprivate(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
   val = getfield(model, field)
-  val isa Reactive && (val.r_mode != PUBLIC || val.no_frontend_watcher) && return true
+  val isa Reactive && (val.r_mode == PRIVATE || val.no_frontend_watcher) && return true
   ! isa(val, Reactive) && occursin(Stipple.SETTINGS.private_pattern, String(field)) && return true
 
   false
@@ -1225,6 +1225,7 @@ end
 
 function isreadonly(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
   val = getfield(model, field)
+  val isa Reactive && (val.r_mode == READONLY) && return true
   ! isa(val, Reactive) && occursin(Stipple.SETTINGS.readonly_pattern, String(field)) && return true
 
   false
