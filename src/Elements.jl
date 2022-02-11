@@ -55,7 +55,7 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
 
   vue_app = replace(json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
-  vue_app = replace(vue_app, "\"$channel\"" => "CHANNEL")
+  vue_app = replace(vue_app, "\"$channel\"" => Stipple.channel_js_name)
 
   output =
   string(
@@ -67,7 +67,7 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
     ,
 
     join(
-      [Stipple.watch(vue_app_name, field, "CHANNEL", debounce, model) for field in fieldnames(m) if Stipple.ispublic(field, model)]
+      [Stipple.watch(vue_app_name, field, Stipple.channel_js_name, debounce, model) for field in fieldnames(m) if Stipple.ispublic(field, model)]
     )
 
     ,
@@ -87,13 +87,13 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
         $(transport == Genie.WebChannels ? " && (Genie.WebChannels.socket.readyState === 1)" : "")
       ) {
 
-      if (Genie.Settings.env == 'dev') {
+      if (Genie.Settings.env === 'dev') {
         console.info('Waiting ' + $vue_app_name.isreadydelay + 'ms');
       }
 
       setTimeout(function(){
         $vue_app_name.isready = true;
-        if (Genie.Settings.env == 'dev') {
+        if (Genie.Settings.env === 'dev') {
           console.info('App ready');
         }
       }, $vue_app_name.isreadydelay); // let's give it a bit to process server side events
@@ -105,14 +105,14 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
           setInterval(keepalive, Genie.Settings.webchannels_keepalive_frequency);
         }
       } catch (e) {
-        if (Genie.Settings.env == 'dev') {
+        if (Genie.Settings.env === 'dev') {
           console.error('Error setting WebSocket keepalive interval: ' + e);
         }
       }
       ")
 
     } else {
-      if (Genie.Settings.env == 'dev') {
+      if (Genie.Settings.env === 'dev') {
         console.info('App starting');
       }
       setTimeout(app_ready, Genie.Settings.webchannels_timeout);
@@ -120,7 +120,7 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
   };
 
   window.onload = function() {
-    if (Genie.Settings.env == 'dev') {
+    if (Genie.Settings.env === 'dev') {
       console.info('Loading completed');
     }
     app_ready();

@@ -24,6 +24,10 @@ using Logging, Mixers, Random, Reexport, Requires
 @reexport using StructTypes
 @reexport using Parameters
 
+export setchannel, getchannel
+
+include("ModelStorage.jl")
+
 include("NamedTuples.jl")
 using .NamedTuples
 
@@ -64,6 +68,8 @@ const UNDEFINED_VALUE = "undefined"
 Base.show(io::IO, x::Undefined) = Base.print(io, UNDEFINED_VALUE)
 
 const config = Genie.config
+
+const channel_js_name = "window.CHANNEL"
 
 """
     const assets_confg :: Genie.Assets.AssetsConfig
@@ -645,7 +651,7 @@ changed on the frontend, it is pushed over to the backend using `channel`, at a 
 function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounce::Int, model::M)::String where {M<:ReactiveModel}
   js_channel = isempty(channel) ?
                 "window.Genie.Settings.webchannels_default_route" :
-                (channel == "CHANNEL" ? "CHANNEL" : "'$channel'")
+                (channel == Stipple.channel_js_name ? Stipple.channel_js_name : "'$channel'")
 
   output = """
     $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){
@@ -778,8 +784,7 @@ function init(m::Type{M};
   end
 
   if ! Genie.Assets.external_assets(assets_config)
-    Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, # path = channel,
-                                              file = endpoint)) do
+    Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, file = endpoint)) do
       Stipple.Elements.vue_integration(m; vue_app_name, channel, debounce, core_theme, transport) |> Genie.Renderer.Js.js
     end
   end
@@ -789,7 +794,6 @@ function init(m::Type{M};
   setup(model, channel)
 end
 function init(m::M; kwargs...)::M where {M<:ReactiveModel, S<:AbstractString}
-  @warn "This method has been deprecated and will be removed soon. Please use `init(m::Type{M}, kwargs...)` instead."
   init(M; kwargs...)
 end
 
@@ -797,10 +801,9 @@ end
 function stipple_deps(m::Type{M}, vue_app_name, channel, debounce, core_theme)::Function where {M<:ReactiveModel}
   () -> begin
     string(
-      Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"]),
+      # Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"]),
       if ! Genie.Assets.external_assets(assets_config)
-        Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js,
-                                  file = vue_app_name), defer = true)
+        Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file = vue_app_name), defer = true)
       else
         Genie.Renderer.Html.script([
           (Stipple.Elements.vue_integration(m; vue_app_name, channel, core_theme, debounce) |> Genie.Renderer.Js.js).body |> String
@@ -1084,7 +1087,11 @@ Outputs the HTML code necessary for injecting the dependencies in the page (the 
 function deps(channel::String = Genie.config.webchannels_default_route; core_theme::Bool = true) :: String
 
   string(
-    (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_support(channel) : Genie.Assets.webthreads_support(channel)),
+    Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"]),
+    (WEB_TRANSPORT == Genie.WebChannels ?
+      Genie.Assets.channels_support(Genie.Assets.jsliteral(channel_js_name)) :
+        Genie.Assets.webthreads_support(Genie.Assets.jsliteral(channel_js_name))),
+    # (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_support(channel) : Genie.Assets.webthreads_support(channel)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="underscore-min")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.min" : "vue"))),
 
