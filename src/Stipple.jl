@@ -52,7 +52,7 @@ macro json(expr)
   end
 end
 
-export JSONParser, JSONText, json, @json
+export JSONParser, JSONText, json, @json, jsfunction, @jsfunction_str
 
 # support for handling JS `undefined` values
 export Undefined, UNDEFINED
@@ -875,8 +875,8 @@ function Base.push!(model::M;
                     channel::String = getchannel(model),
                     skip::Vector{Symbol} = Symbol[]) where {M<:ReactiveModel}
   for field in fieldnames(M)
-    (ispublic(field, model) && !(field in skip)) || continue
-
+    (isprivate(field, model) || field in skip) && continue
+    
     push!(model, field => getproperty(model, field), channel = channel)
   end
 end
@@ -1021,6 +1021,40 @@ function replace_jsfunction(js::JSONText)
     jsfunc = parse_jsfunction(js.s)
     isnothing(jsfunc) ? js : JSONText(json(opts(jsfunction=jsfunc)))
 end
+
+replace_jsfunction(s::AbstractString) = replace_jsfunction(JSONText(s))
+
+"""
+    `function jsfunction(jscode::String)`
+
+Build a dictionary that is converted to a js function in the frontend by the reviver.
+There is also a string macro version `jsfunction"<js code>"`
+"""
+function jsfunction(jscode::String)
+  jsfunc = parse_jsfunction(jscode)
+  isnothing(jsfunc) && (jsfunc = opts(arguments = "", body = jscode) )
+  opts(jsfunction = jsfunc)
+end
+
+"""
+    `jsfunction"<js code>"`
+
+Build a dictionary that is converted to a js function in the frontend by the reviver.
+"""
+macro jsfunction_str(expr)
+  :( jsfunction($(esc(expr))) )
+end
+
+"""
+    `function Base.run(model::ReactiveModel, jscode::String; context = :model)`
+
+Execute js code in the frontend. `context` can be `:model` or `:app`
+"""
+function Base.run(model::ReactiveModel, jscode::String; context = :model)
+  context ∈ (:model, :app) && push!(model, Symbol("js_", context) => jsfunction(jscode); channel = getchannel(model))
+  nothing
+end
+
 #===#
 
 import OrderedCollections
@@ -1109,7 +1143,7 @@ function deps(channel::String = Genie.config.webchannels_default_route; core_the
 end
 
 function deps(m::M; kwargs...) where {M<:ReactiveModel}
-  deps(m.channel__; kwargs...)
+  deps(getchannel(m); kwargs...)
 end
 
 macro R_str(s)
@@ -1223,7 +1257,7 @@ end
 
 function isprivate(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
   val = getfield(model, field)
-  val isa Reactive && (val.r_mode != PUBLIC || val.no_frontend_watcher) && return true
+  val isa Reactive && (val.r_mode == PRIVATE || val.no_frontend_watcher) && return true
   ! isa(val, Reactive) && occursin(Stipple.SETTINGS.private_pattern, String(field)) && return true
 
   false
@@ -1232,6 +1266,7 @@ end
 
 function isreadonly(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
   val = getfield(model, field)
+  val isa Reactive && (val.r_mode == READONLY) && return true
   ! isa(val, Reactive) && occursin(Stipple.SETTINGS.readonly_pattern, String(field)) && return true
 
   false
