@@ -801,7 +801,6 @@ end
 function stipple_deps(m::Type{M}, vue_app_name, channel, debounce, core_theme)::Function where {M<:ReactiveModel}
   () -> begin
     string(
-      # Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"]),
       if ! Genie.Assets.external_assets(assets_config)
         Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file = vue_app_name), defer = true)
       else
@@ -876,7 +875,7 @@ function Base.push!(model::M;
                     skip::Vector{Symbol} = Symbol[]) where {M<:ReactiveModel}
   for field in fieldnames(M)
     (isprivate(field, model) || field in skip) && continue
-    
+
     push!(model, field => getproperty(model, field), channel = channel)
   end
 end
