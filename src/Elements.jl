@@ -60,15 +60,41 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
   output =
   string(
     "
+
+  function initStipple(rootSelector){
     Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));
-    var $vue_app_name = new Vue($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ));
+    window.$vue_app_name = new Vue($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ));
+  } // end of initStipple
+
     "
 
     ,
 
+    "
+
+  function initWatchers(){
+    "
+
+    ,
     join(
-      [Stipple.watch(vue_app_name, field, Stipple.channel_js_name, debounce, model) for field in fieldnames(m) if Stipple.ispublic(field, model)]
+      [Stipple.watch(string("window.", vue_app_name), field, Stipple.channel_js_name, debounce, model) for field in fieldnames(m) if Stipple.ispublic(field, model)]
     )
+    ,
+
+    "
+  } // end of initWatchers
+
+    "
+
+    ,
+
+    "
+
+  // invoke init function
+  initStipple('#$vue_app_name');
+  initWatchers();
+
+    "
 
     ,
 
@@ -119,11 +145,13 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
     }
   };
 
-  window.onload = function() {
-    if (Genie.Settings.env === 'dev') {
-      console.info('Loading completed');
+  if ( window.autorun === undefined || window.autorun === true ) {
+    window.onload = function() {
+      if (Genie.Settings.env === 'dev') {
+        console.info('Loading completed');
+      }
+      app_ready();
     }
-    app_ready();
   }
   """
   )
