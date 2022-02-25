@@ -833,7 +833,7 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
         f.r_mode = PUBLIC
       end
     end
-    f.r_mode == PRIVATE || f.no_backend_watcher && continue
+    (f.r_mode == PRIVATE || f.no_backend_watcher) && continue
 
     on(f) do _
       push!(model, field => f, channel = channel)
