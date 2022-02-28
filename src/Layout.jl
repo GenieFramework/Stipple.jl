@@ -44,11 +44,11 @@ function layout(output::Union{S,Vector}; partial::Bool = false, title::String = 
 
   isa(output, Vector) && (output = join(output, '\n'))
 
-  content = string(
-    output,
-    theme(; core_theme = core_theme),
+  content = [
+    output
+    theme(; core_theme = core_theme)
     Stipple.deps(channel; core_theme = core_theme)
-  )
+  ]
 
   partial && return content
 
@@ -165,8 +165,9 @@ julia> StippleUI.theme()
 julia> push!(Stipple.Layout.THEMES, StippleUI.theme)
 ```
 """
-function theme(; core_theme::Bool = true) :: String
-  output = ""
+function theme(; core_theme::Bool = true) :: Vector{String}
+  output = String[]
+
   if core_theme
     if ! Genie.Assets.external_assets(Stipple.assets_config)
       Genie.Router.route(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore")) do
@@ -176,13 +177,17 @@ function theme(; core_theme::Bool = true) :: String
       end
     end
 
-    output *= string(
+    push!(output,
       stylesheet("https://fonts.googleapis.com/css?family=Material+Icons"),
       stylesheet(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore"))
     )
   end
 
-  string(output, join([f() for f in THEMES], "\n")) |> ParsedHTMLString
+  for f in THEMES
+    push!(output, f()...)
+  end
+
+  output
 end
 
 

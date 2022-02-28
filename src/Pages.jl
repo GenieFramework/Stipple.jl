@@ -28,7 +28,7 @@ pages() = _pages
 
 function Page(  route::Union{Route,String};
                 view::Union{Genie.Renderers.FilePath,String},
-                model::M = Stipple.init(EmptyModel),
+                model::Union{M,Function} = Stipple.init(EmptyModel),
                 layout::Union{Genie.Renderers.FilePath,String,Nothing} = nothing,
                 context::Module = @__MODULE__
               ) where {M<:ReactiveModel}
@@ -36,11 +36,11 @@ function Page(  route::Union{Route,String};
   view = isa(view, String) ? filepath(view) : view
   layout = isa(layout, String) ? filepath(layout) : layout
 
-  route.action = () -> html(view; layout = layout, context = context, model = model)
+  route.action = () -> html(view; layout, context, model = (isa(model,Function) ? Base.invokelatest(model) : model))
 
   Router.route(route)
 
-  push!(_pages, Page(route, view, typeof(model), layout))
+  push!(_pages, Page(route, view, typeof((isa(model,Function) ? Base.invokelatest(model) : model)), layout))
 end
 
 end

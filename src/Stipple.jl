@@ -789,7 +789,7 @@ function init(m::Type{M};
     end
   end
 
-  DEPS[channel] = stipple_deps(m, vue_app_name, channel, debounce, core_theme)
+  DEPS[@__MODULE__] = stipple_deps(m, vue_app_name, channel, debounce, core_theme)
 
   setup(model, channel)
 end
@@ -800,7 +800,7 @@ end
 
 function stipple_deps(m::Type{M}, vue_app_name, channel, debounce, core_theme)::Function where {M<:ReactiveModel}
   () -> begin
-    string(
+    [
       if ! Genie.Assets.external_assets(assets_config)
         Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file = vue_app_name), defer = true)
       else
@@ -808,7 +808,7 @@ function stipple_deps(m::Type{M}, vue_app_name, channel, debounce, core_theme)::
           (Stipple.Elements.vue_integration(m; vue_app_name, channel, core_theme, debounce) |> Genie.Renderer.Js.js).body |> String
         ])
       end
-    )
+    ]
   end
 end
 
@@ -1115,13 +1115,13 @@ end
 
 
 """
-    `function deps(channel::String = Genie.config.webchannels_default_route) :: String`
+    `function deps(channel::String = Genie.config.webchannels_default_route)`
 
 Outputs the HTML code necessary for injecting the dependencies in the page (the <script> tags).
 """
-function deps(channel::String = Genie.config.webchannels_default_route; core_theme::Bool = true) :: String
+function deps(channel::String = Genie.config.webchannels_default_route; core_theme::Bool = true) :: Vector{String}
 
-  string(
+  output = [
     Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"]),
     (WEB_TRANSPORT == Genie.WebChannels ?
       Genie.Assets.channels_support(Genie.Assets.jsliteral(channel_js_name)) :
@@ -1137,10 +1137,14 @@ function deps(channel::String = Genie.config.webchannels_default_route; core_the
     (
       (Genie.config.webchannels_keepalive_frequency > 0 && WEB_TRANSPORT == Genie.WebChannels) ?
         Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="keepalive"), defer=true) : ""
-    ),
+    )
+  ]
 
-    join([f() for (key, f) in DEPS if isa(key, Module) || key == channel], "\n")
-  )
+  for (key, f) in DEPS
+    push!(output, f()...)
+  end
+
+  output
 end
 
 function deps(m::M; kwargs...) where {M<:ReactiveModel}
