@@ -39,7 +39,7 @@ julia> layout([
 ```
 """
 function layout(output::Union{S,Vector}; partial::Bool = false, title::String = "", class::String = "", style::String = "",
-                head_content::String = "", channel::String = Genie.config.webchannels_default_route,
+                head_content::String = "", channel::String = Stipple.channel_js_name,
                 core_theme::Bool = true)::ParsedHTMLString where {S<:AbstractString}
 
   isa(output, Vector) && (output = join(output, '\n'))
@@ -97,12 +97,6 @@ function page(elemid::String = Genie.config.webchannels_default_route, args...;
 end
 function page(model::T, args...; kwargs...)::ParsedHTMLString where {T<:Stipple.ReactiveModel}
   page(root(model), args...; channel = getchannel(model), kwargs...)
-end
-
-# experiment to allow using Stipple UIs without having to pass an empty model if we're not ready to model yet
-function page(children::Vector{ParsedHTMLString}, args...; kwargs...)::ParsedHTMLString
-  Stipple.deps_routes()
-  page(Genie.config.webchannels_default_route, children, args...; kwargs...)
 end
 
 """

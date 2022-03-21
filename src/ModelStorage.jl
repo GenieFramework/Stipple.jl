@@ -21,11 +21,17 @@ function init_from_storage(m::Type{T})::T where T
     m |> Stipple.init
   end
 
-  on(model.isready) do _
+  session = Genie.Sessions.set!(model_id, model)
+
+  on(model.isready) do isready
+    isready || return
+
     if instance !== nothing
       for f in fieldnames(typeof(model))
         setfield!(model, f, getfield(instance, f))
       end
+
+      sleep(0.1)
 
       push!(model)
     end
@@ -33,9 +39,8 @@ function init_from_storage(m::Type{T})::T where T
 
   for f in fieldnames(typeof(model))
     if isa(getfield(model, f), Reactive)
-
       on(getfield(model, f)) do _
-        Genie.Sessions.set!(model_id, model)
+        Genie.Sessions.set!(session, model_id, model)
       end
     end
   end

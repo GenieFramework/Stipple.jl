@@ -563,6 +563,7 @@ function setindex_withoutwatchers!(field::Reactive{T}, val, keys::Int...; notify
       catch ex
         @error "Error attempting to invoke $f with $val"
         @error ex
+        Genie.Configuration.isdev() && rethrow(ex)
       end
     end
 
@@ -710,9 +711,14 @@ end
 
 
 """
-    `function init(model::M, ui::Union{String,Vector} = ""; vue_app_name::String = Stipple.Elements.root(model),
-                    endpoint::String = vue_app_name, channel::String = Genie.config.webchannels_default_route,
-                    debounce::Int = JS_DEBOUNCE_TIME, transport::Module = Genie.WebChannels)::M where {M<:ReactiveModel}`
+    `function init(m::Type{M};
+                    vue_app_name::S = Stipple.Elements.root(m),
+                    endpoint::S = vue_app_name,
+                    channel::Union{Any,Nothing} = nothing,
+                    debounce::Int = JS_DEBOUNCE_TIME,
+                    transport::Module = Genie.WebChannels,
+                    parse_errors::Bool = false,
+                    core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}`
 
 Initializes the reactivity of the model `M` by setting up the custom JavaScript for integrating with the Vue.js
 frontend and perform the 2-way backend-frontend data sync. Returns the instance of the model.
@@ -720,7 +726,7 @@ frontend and perform the 2-way backend-frontend data sync. Returns the instance 
 ### Example
 
 ```julia
-hs_model = Stipple.init(HelloPie())
+hs_model = Stipple.init(HelloPie)
 ```
 """
 function init(m::Type{M};
@@ -745,7 +751,7 @@ function init(m::Type{M};
     setchannel(model, channelfactory())
   end
 
-  deps_routes(channel)
+  deps_routes()
 
   Genie.Router.channel("/$channel/watchers") do
     payload = Genie.Requests.payload(:payload)["payload"]
@@ -794,7 +800,8 @@ function init(m::Type{M};
   setup(model, channel)
 end
 function init(m::M; kwargs...)::M where {M<:ReactiveModel, S<:AbstractString}
-  init(M; kwargs...)
+  # init(M; kwargs...)
+  error("This method has been removed -- please use `init($M; kwargs...)` instead")
 end
 
 
@@ -1066,7 +1073,7 @@ const DEPS = OrderedCollections.OrderedDict{Union{Module, String}, Function}()
 
 Registers the `routes` for all the required JavaScript dependencies (scripts).
 """
-function deps_routes(channel::AbstractString = Genie.config.webchannels_default_route) :: Nothing
+function deps_routes() :: Nothing
   if ! Genie.Assets.external_assets(assets_config)
 
     VUEJS = Genie.Configuration.isprod() ? "vue.min" : "vue"
@@ -1108,7 +1115,7 @@ function deps_routes(channel::AbstractString = Genie.config.webchannels_default_
 
   end
 
-  (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_support(channel) : Genie.Assets.webthreads_support(channel))
+  # (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_support(channel) : Genie.Assets.webthreads_support(channel))
 
   nothing
 end
@@ -1124,9 +1131,8 @@ function deps(channel::String = Genie.config.webchannels_default_route; core_the
   output = [
     Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"]),
     (WEB_TRANSPORT == Genie.WebChannels ?
-      Genie.Assets.channels_support(Genie.Assets.jsliteral(channel_js_name)) :
-        Genie.Assets.webthreads_support(Genie.Assets.jsliteral(channel_js_name))),
-    # (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_support(channel) : Genie.Assets.webthreads_support(channel)),
+      Genie.Assets.channels_support(channel) :
+        Genie.Assets.webthreads_support(channel)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="underscore-min")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.min" : "vue"))),
 

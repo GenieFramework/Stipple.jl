@@ -18,23 +18,27 @@ end
 
 mutable struct Page{M<:ReactiveModel}
   route::Route
-  view::Genie.Renderers.FilePath
+  view::Union{Genie.Renderers.FilePath,<:String}
   model::Type{M}
-  layout::Genie.Renderers.FilePath
+  layout::Union{Genie.Renderers.FilePath,Nothing}
 end
 
 const _pages = Page[]
 pages() = _pages
 
 function Page(  route::Union{Route,String};
-                view::Union{Genie.Renderers.FilePath,String},
-                model::Union{M,Function} = Stipple.init(EmptyModel),
-                layout::Union{Genie.Renderers.FilePath,String,Nothing} = nothing,
+                view::Union{Genie.Renderers.FilePath,<:String,ParsedHTMLString},
+                model::Union{M,Function,Nothing} = Stipple.init(EmptyModel),
+                layout::Union{Genie.Renderers.FilePath,<:String,Nothing} = nothing,
                 context::Module = @__MODULE__
               ) where {M<:ReactiveModel}
   route = isa(route, String) ? Route(; method = GET, path = route) : route
-  view = isa(view, String) ? filepath(view) : view
-  layout = isa(layout, String) ? filepath(layout) : layout
+  view = isa(view, String) ? filepath(view) :
+          isa(view, ParsedHTMLString) ? string(view) :
+            view
+  layout = isa(layout, String) ? filepath(layout) :
+            isa(layout, ParsedHTMLString) ? string(layout) :
+              layout
 
   route.action = () -> html(view; layout, context, model = (isa(model,Function) ? Base.invokelatest(model) : model))
 
