@@ -1063,6 +1063,22 @@ function Base.run(model::ReactiveModel, jscode::String; context = :model)
   nothing
 end
 
+"""
+    notify(model::ReactiveModel, message::AbstractString, type::Union{Symbol, String, Nothing} = nothing; kwargs...)
+
+Display a notification on the client, by using Quasar's `$q.notify`.
+Types are e.g. `:positive`, `:negative`, `:waring`, `:info`, `:ongoing`.
+All other arguments to `$q.notify` are supported via keyword arguments
+
+# Example
+`notify(model, "Hello world!", :positive, icon = :tag_faces, caption = "5 minutes ago")`
+"""
+function Base.notify(model::ReactiveModel, message::AbstractString, type::Union{Symbol, String, Nothing} = nothing; kwargs...)
+  d = opts(;type, message, kwargs...)
+  js_dict = strip(json(d), '"')
+  run(model, "this.\$q.notify($js_dict)")
+end
+
 #===#
 
 import OrderedCollections
