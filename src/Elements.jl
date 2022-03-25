@@ -108,21 +108,7 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
   }
 
   function app_ready() {
-    if (
-      (document.readyState === 'complete' || document.readyState === 'interactive')
-        $(transport == Genie.WebChannels ? " && (Genie.WebChannels.socket.readyState === 1)" : "")
-      ) {
-
-      if (Genie.Settings.env === 'dev') {
-        console.info('Waiting ' + $vue_app_name.isreadydelay + 'ms');
-      }
-
-      setTimeout(function(){
-        $vue_app_name.isready = true;
-        if (Genie.Settings.env === 'dev') {
-          console.info('App ready');
-        }
-      }, $vue_app_name.isreadydelay); // let's give it a bit to process server side events
+      $vue_app_name.isready = true;
 
       $(transport == Genie.WebChannels &&
       "
@@ -137,12 +123,9 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
       }
       ")
 
-    } else {
       if (Genie.Settings.env === 'dev') {
         console.info('App starting');
       }
-      setTimeout(app_ready, Genie.Settings.webchannels_timeout);
-    }
   };
 
   if ( window.autorun === undefined || window.autorun === true ) {
@@ -150,7 +133,10 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
       if (Genie.Settings.env === 'dev') {
         console.info('Loading completed');
       }
-      app_ready();
+
+      Genie.WebChannels.subscriptionHandlers.push(function(event) {
+        app_ready();
+      });
     }
   }
   """

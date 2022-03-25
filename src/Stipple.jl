@@ -265,7 +265,6 @@ end
 @pour reactors begin
   channel__::ChannelName = Stipple.channelfactory()
   isready::R{Bool} = false
-  isreadydelay::R{Int} = 500
   isprocessing::R{Bool} = false
 end
 
@@ -649,20 +648,20 @@ end
 Sets up default Vue.js watchers so that when the value `fieldname` of type `fieldtype` in model `vue_app_name` is
 changed on the frontend, it is pushed over to the backend using `channel`, at a `debounce` minimum time interval.
 """
-function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounce::Int, model::M)::String where {M<:ReactiveModel}
+function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounce::Int, model::M; jsfunction::String = "")::String where {M<:ReactiveModel}
   js_channel = isempty(channel) ?
                 "window.Genie.Settings.webchannels_default_route" :
                 (channel == Stipple.channel_js_name ? Stipple.channel_js_name : "'$channel'")
 
+  isempty(jsfunction) &&
+    (jsfunction = "Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});")
+
   output = """
-    $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){
-      Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});
-    }, $debounce), {deep: true});
+    $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true});
   """
   # in production mode vue does not fill `this.expression` in the watcher, so we do it manually
-  if Genie.Configuration.isprod()
-    output *= "$vue_app_name._watchers[$vue_app_name._watchers.length - 1].expression = 'function(){return this.$fieldname}'"
-  end
+  Genie.Configuration.isprod() &&
+    (output *= "$vue_app_name._watchers[$vue_app_name._watchers.length - 1].expression = 'function(){return this.$fieldname}'")
 
   output *= "\n\n"
 end
@@ -717,7 +716,6 @@ end
                     channel::Union{Any,Nothing} = nothing,
                     debounce::Int = JS_DEBOUNCE_TIME,
                     transport::Module = Genie.WebChannels,
-                    parse_errors::Bool = false,
                     core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}`
 
 Initializes the reactivity of the model `M` by setting up the custom JavaScript for integrating with the Vue.js
@@ -735,7 +733,6 @@ function init(m::Type{M};
               channel::Union{Any,Nothing} = nothing,
               debounce::Int = JS_DEBOUNCE_TIME,
               transport::Module = Genie.WebChannels,
-              parse_errors::Bool = false,
               core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
 
   global WEB_TRANSPORT = transport
@@ -852,6 +849,8 @@ end
 
 #===#
 
+const max_retry_times = 10
+
 """
     `Base.push!(app::M, vals::Pair{Symbol,T}; channel::String,
                 except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt}) where {T,M<:ReactiveModel}`
@@ -860,31 +859,34 @@ Pushes data payloads over to the frontend by broadcasting the `vals` through the
 """
 function Base.push!(app::M, vals::Pair{Symbol,T};
                     channel::String = Genie.config.webchannels_default_route,
-                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
+                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing)::Bool where {T,M<:ReactiveModel}
   try
-    WEB_TRANSPORT.broadcast(channel,
-                                    json(Dict("key" => julia_to_vue(vals[1]),
-                                              "value" => Stipple.render(vals[2], vals[1]))),
-                                    except = except)
-  catch
+    WEB_TRANSPORT.broadcast(channel, json(Dict("key" => julia_to_vue(vals[1]), "value" => Stipple.render(vals[2], vals[1]))), except = except)
+  catch ex
+    @error ex
   end
 end
 
 function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
                     channel::String = Genie.config.webchannels_default_route,
-                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing) where {T,M<:ReactiveModel}
+                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing)::Bool where {T,M<:ReactiveModel}
                     v = vals[2].r_mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
   push!(app, Symbol(julia_to_vue(vals[1])) => v, channel = channel, except = except)
 end
 
 function Base.push!(model::M;
                     channel::String = getchannel(model),
-                    skip::Vector{Symbol} = Symbol[]) where {M<:ReactiveModel}
+                    skip::Vector{Symbol} = Symbol[])::Bool where {M<:ReactiveModel}
+
+  result = true
+
   for field in fieldnames(M)
     (isprivate(field, model) || field in skip) && continue
 
-    push!(model, field => getproperty(model, field), channel = channel)
+    push!(model, field => getproperty(model, field), channel = channel) === false && (result = false)
   end
+
+  result
 end
 
 #===#
@@ -928,6 +930,7 @@ Renders the Julia `ReactiveModel` `app` as the corresponding Vue.js JavaScript c
 """
 function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dict{Symbol,Any} where {M<:ReactiveModel}
   result = Dict{String,Any}()
+
   for field in fieldnames(typeof(app))
     f = getfield(app, field)
 
@@ -1060,6 +1063,7 @@ Execute js code in the frontend. `context` can be `:model` or `:app`
 """
 function Base.run(model::ReactiveModel, jscode::String; context = :model)
   context ∈ (:model, :app) && push!(model, Symbol("js_", context) => jsfunction(jscode); channel = getchannel(model))
+
   nothing
 end
 
@@ -1130,8 +1134,6 @@ function deps_routes() :: Nothing
     end
 
   end
-
-  # (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_support(channel) : Genie.Assets.webthreads_support(channel))
 
   nothing
 end
