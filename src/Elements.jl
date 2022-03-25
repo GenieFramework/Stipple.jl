@@ -129,15 +129,9 @@ function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_t
   };
 
   if ( window.autorun === undefined || window.autorun === true ) {
-    window.onload = function() {
-      if (Genie.Settings.env === 'dev') {
-        console.info('Loading completed');
-      }
-
-      Genie.WebChannels.subscriptionHandlers.push(function(event) {
-        app_ready();
-      });
-    }
+    Genie.WebChannels.subscriptionHandlers.push(function(event) {
+      app_ready();
+    });
   }
   """
   )
