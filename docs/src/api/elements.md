@@ -2,9 +2,6 @@
 CurrentModule = Elements
 ```
 
-```@contents
-```
-
 ```@docs
 root
 elem

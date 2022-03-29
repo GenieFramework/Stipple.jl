@@ -2,9 +2,6 @@
 CurrentModule = Typography
 ```
 
-```@contents
-```
-
 ```@docs
 header
 ```
