@@ -8,7 +8,7 @@ module Typography
 import Genie
 
 """
-    `function header(args...; size::Int = 1, kwargs...)`
+    function header(args...; size::Int = 1, kwargs...)
 
 Generates code for HTML headers (H1 to H6) based on `size` which include styling for Twitter Bootstrap, the CSS
   framework used by Stipple.

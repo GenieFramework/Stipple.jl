@@ -227,7 +227,7 @@ end
 #===#
 
 """
-    `type ReactiveModel`
+    type ReactiveModel
 
 The abstract type that is inherited by Stipple models. Stipple models are used for automatic 2-way data sync and data
 exchange between the Julia backend and the JavaScript/Vue.js frontend.
@@ -302,7 +302,7 @@ Base.string(ex::MissingPropertyException) = "Entity $entity does not have requir
 #===#
 
 """
-    `const JS_DEBOUNCE_TIME`
+    const JS_DEBOUNCE_TIME
 
 Debounce time used to indicate the minimum frequency for sending data payloads to the backend (for example to batch send
 payloads when the user types into an text field, to avoid overloading the server).
@@ -313,7 +313,7 @@ const SETTINGS = Settings()
 #===#
 
 """
-    `function render`
+    function render
 
 Abstract function. Needs to be specialized by plugins. It is automatically invoked by `Stipple` to serialize a Julia
 data type (corresponding to the fields in the `ReactiveModel` instance) to JavaScript/JSON. In general the specialized
@@ -337,7 +337,7 @@ JSON.lower(x::Undefined) = "__undefined__"
 function render end
 
 """
-    `function update! :: {M<:ReactiveModel}`
+    function update! :: {M<:ReactiveModel}
 
 Abstract function used to update the values of the fields in the `ReactiveModel` based on the data from the frontend.
 Can be specialized for dedicated types, but it is usually not necessary. If specialized, it must return the update
@@ -356,14 +356,14 @@ end
 function update! end
 
 """
-    `function watch`
+    function watch
 
 Abstract function. Can be used by plugins to define custom Vue.js watch functions.
 """
 function watch end
 
 """
-    `function js_methods(app::T) where {T<:ReactiveModel}`
+    function js_methods(app::T) where {T<:ReactiveModel}
 
 Defines js functions for the `methods` section of the vue element.
 
@@ -385,7 +385,7 @@ function js_methods(app::T)::String where {T<:ReactiveModel}
 end
 
 """
-    `function js_computed(app::T) where {T<:ReactiveModel}`
+    function js_computed(app::T) where {T<:ReactiveModel}
 
 Defines js functions for the `computed` section of the vue element.
 These properties are updated every time on of the inner parameters changes its value.
@@ -407,7 +407,7 @@ end
 const jscomputed = js_computed
 
 """
-    `function js_watch(app::T) where {T<:ReactiveModel}`
+    function js_watch(app::T) where {T<:ReactiveModel}
 
 Defines js functions for the `watch` section of the vue element.
 These functions are called every time the respective property changes.
@@ -434,7 +434,7 @@ end
 const jswatch = js_watch
 
 """
-    `function js_created(app::T)::String where {T<:ReactiveModel}`
+    function js_created(app::T)::String where {T<:ReactiveModel}
 
 Defines js statements for the `created` section of the vue element.
 They are executed directly after the creation of the vue element.
@@ -454,7 +454,7 @@ end
 const jscreated = js_created
 
 """
-    `function js_mounted(app::T)::String where {T<:ReactiveModel}`
+    function js_mounted(app::T)::String where {T<:ReactiveModel}
 
 Defines js statements for the `mounted` section of the vue element.
 They are executed directly after the mounting of the vue element.
@@ -474,7 +474,7 @@ end
 const jsmounted = js_mounted
 
 """
-    `function client_data(app::T)::String where {T<:ReactiveModel}`
+    function client_data(app::T)::String where {T<:ReactiveModel}
 
 Defines additional data that will only be visible by the browser.
 
@@ -497,7 +497,7 @@ client_data(;kwargs...) = Dict{String, Any}([String(k) => v for (k, v) in kwargs
 COMPONENTS = Dict()
 
 """
-    `function register_components(model::Type{M}, keysvals::AbstractVector) where {M<:ReactiveModel}`
+    function register_components(model::Type{M}, keysvals::AbstractVector) where {M<:ReactiveModel}
 
 Utility function for adding Vue components that need to be registered with the Vue.js app.
 This is usually needed for registering components provided by Stipple plugins.
@@ -520,8 +520,8 @@ function register_components(model::Type{M}, args...) where {M<:ReactiveModel}
 end
 
 """
-    `function components(m::Type{M})::String where {M<:ReactiveModel}`
-    `function components(app::M)::String where {M<:ReactiveModel}`
+    function components(m::Type{M})::String where {M<:ReactiveModel}
+    function components(app::M)::String where {M<:ReactiveModel}
 
 JSON representation of the Vue.js components registered for the `ReactiveModel` `M`.
 """
@@ -538,8 +538,8 @@ end
 #===#
 
 """
-    `setindex_withoutwatchers!(field::Reactive, val; notify=(x)->true)`
-    `setindex_withoutwatchers!(field::Reactive, val, keys::Int...; notify=(x)->true)`
+    setindex_withoutwatchers!(field::Reactive, val; notify=(x)->true)
+    setindex_withoutwatchers!(field::Reactive, val, keys::Int...; notify=(x)->true)
 
 Change the content of a Reactive field without triggering the listeners.
 If keys are specified, only these listeners are exempted from triggering.
@@ -577,8 +577,8 @@ function Base.setindex!(r::Reactive{T}, val, args::Vector{Int}; notify=(x)->true
 end
 
 """
-    `setfield_withoutwatchers!(app::ReactiveModel, field::Symmbol, val; notify=(x)->true)``
-    `setfield_withoutwatchers!(app::ReactiveModel, field::Symmbol, val, keys...; notify=(x)->true)`
+    setfield_withoutwatchers!(app::ReactiveModel, field::Symmbol, val; notify=(x)->true)
+    setfield_withoutwatchers!(app::ReactiveModel, field::Symmbol, val, keys...; notify=(x)->true)
 
 Change the field of a ReactiveModel without triggering the listeners.
 If keys are specified, only these listeners are exempted from triggering.
@@ -612,9 +612,9 @@ function convertvalue(targetfield::Any, value)
 end
 
 """
-    `function update!(model::M, field::Symbol, newval::T, oldval::T)::M where {T,M<:ReactiveModel}`
-    `function update!(model::M, field::Reactive, newval::T, oldval::T)::M where {T,M<:ReactiveModel}`
-    `function update!(model::M, field::Any, newval::T, oldval::T)::M where {T,M<:ReactiveModel}`
+    function update!(model::M, field::Symbol, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
+    function update!(model::M, field::Reactive, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
+    function update!(model::M, field::Any, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
 
 Sets the value of `model.field` from `oldval` to `newval`. Returns the upated `model` instance.
 """
@@ -643,7 +643,7 @@ end
 #===#
 
 """
-    `function watch(vue_app_name::String, fieldtype::Any, fieldname::Symbol, channel::String, debounce::Int, model::M)::String where {M<:ReactiveModel}`
+    function watch(vue_app_name::String, fieldtype::Any, fieldname::Symbol, channel::String, debounce::Int, model::M)::String where {M<:ReactiveModel}
 
 Sets up default Vue.js watchers so that when the value `fieldname` of type `fieldtype` in model `vue_app_name` is
 changed on the frontend, it is pushed over to the backend using `channel`, at a `debounce` minimum time interval.
@@ -679,12 +679,12 @@ function stipple_parse(::Type{T}, value::Dict) where {Tval, T <: AbstractDict{Sy
   T(zip(Symbol.(string.(keys(value))), values(value)))
 end
 
-function stipple_parse(::Type{T1}, value::T2) where {T1 <: Number, T2 <: Number}
-  convert(T1, value)
+function stipple_parse(::Type{T1}, value::T2) where {T1 <: Number, T2 <: Number}
+  convert(T1, value)
 end
 
-function stipple_parse(::Type{T1}, value::T2) where {T1 <: Integer, T2 <: Number}
-  round(T1, value)
+function stipple_parse(::Type{T1}, value::T2) where {T1 <: Integer, T2 <: Number}
+  round(T1, value)
 end
 
 function stipple_parse(::Type{T1}, value::T2) where {T1 <: AbstractArray, T2 <: AbstractArray}
@@ -710,13 +710,13 @@ end
 
 
 """
-    `function init(m::Type{M};
-                    vue_app_name::S = Stipple.Elements.root(m),
-                    endpoint::S = vue_app_name,
-                    channel::Union{Any,Nothing} = nothing,
-                    debounce::Int = JS_DEBOUNCE_TIME,
-                    transport::Module = Genie.WebChannels,
-                    core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}`
+    function init(m::Type{M};
+                  vue_app_name::S = Stipple.Elements.root(m),
+                  endpoint::S = vue_app_name,
+                  channel::Union{Any,Nothing} = nothing,
+                  debounce::Int = JS_DEBOUNCE_TIME,
+                  transport::Module = Genie.WebChannels,
+                  core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
 
 Initializes the reactivity of the model `M` by setting up the custom JavaScript for integrating with the Vue.js
 frontend and perform the 2-way backend-frontend data sync. Returns the instance of the model.
@@ -818,7 +818,7 @@ end
 
 
 """
-    `function setup(model::M, channel = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}`
+    function setup(model::M, channel = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
 
 Configures the reactive handlers for the reactive properties of the model. Called internally.
 """
@@ -852,8 +852,8 @@ end
 const max_retry_times = 10
 
 """
-    `Base.push!(app::M, vals::Pair{Symbol,T}; channel::String,
-                except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt}) where {T,M<:ReactiveModel}`
+    Base.push!(app::M, vals::Pair{Symbol,T}; channel::String,
+                except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt}) where {T,M<:ReactiveModel}
 
 Pushes data payloads over to the frontend by broadcasting the `vals` through the `channel`.
 """
@@ -895,7 +895,7 @@ RENDERING_MAPPINGS = Dict{String,String}()
 mapping_keys() = collect(keys(RENDERING_MAPPINGS))
 
 """
-    `function rendering_mappings(mappings = Dict{String,String})`
+    function rendering_mappings(mappings = Dict{String,String})
 
 Registers additional `mappings` as Julia to Vue properties mappings  (eg `foobar` to `foo-bar`).
 """
@@ -904,7 +904,7 @@ function rendering_mappings(mappings = Dict{String,String})
 end
 
 """
-    `function julia_to_vue(field, mapping_keys = mapping_keys())`
+    function julia_to_vue(field, mapping_keys = mapping_keys())
 
 Converts Julia names to Vue names (eg `foobar` to `foo-bar`).
 """
@@ -924,7 +924,7 @@ function julia_to_vue(field, mapping_keys = mapping_keys()) :: String
 end
 
 """
-    `function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dict{Symbol,Any} where {M<:ReactiveModel}`
+    function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dict{Symbol,Any} where {M<:ReactiveModel}
 
 Renders the Julia `ReactiveModel` `app` as the corresponding Vue.js JavaScript code.
 """
@@ -955,7 +955,7 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
 end
 
 """
-    `function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) where {T}`
+    function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) where {T}
 
 Default rendering of value types. Specialize `Stipple.render` to define custom rendering for your types.
 """
@@ -964,7 +964,7 @@ function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) wher
 end
 
 """
-    `function Stipple.render(o::Reactive{T}, fieldname::Union{Symbol,Nothing} = nothing) where {T}`
+    function Stipple.render(o::Reactive{T}, fieldname::Union{Symbol,Nothing} = nothing) where {T}
 
 Default rendering of `Reactive` values. Specialize `Stipple.render` to define custom rendering for your type `T`.
 """
@@ -973,9 +973,8 @@ function Stipple.render(o::Reactive{T}, fieldname::Union{Symbol,Nothing} = nothi
 end
 
 """
-```
-function parse_jsfunction(s::AbstractString)
-```
+    function parse_jsfunction(s::AbstractString)
+
 Checks whether the string is a valid js function and returns a `Dict` from which a reviver function
 in the backend can construct a function.
 """
@@ -995,9 +994,8 @@ function parse_jsfunction(s::AbstractString)
 end
 
 """
-```
-function replace_jsfunction!(js::Union{Dict, JSONText})
-```
+    function replace_jsfunction!(js::Union{Dict, JSONText})
+
 Replaces all JSONText values that contain a valid js function by a `Dict` that codes the function for a reviver.
 For JSONText variables it encapsulates the dict in a JSONText to make the function type stable.
 """
@@ -1036,7 +1034,7 @@ end
 replace_jsfunction(s::AbstractString) = replace_jsfunction(JSONText(s))
 
 """
-    `function jsfunction(jscode::String)`
+    function jsfunction(jscode::String)
 
 Build a dictionary that is converted to a js function in the frontend by the reviver.
 There is also a string macro version `jsfunction"<js code>"`
@@ -1048,7 +1046,7 @@ function jsfunction(jscode::String)
 end
 
 """
-    `jsfunction"<js code>"`
+    jsfunction"<js code>"
 
 Build a dictionary that is converted to a js function in the frontend by the reviver.
 """
@@ -1057,7 +1055,7 @@ macro jsfunction_str(expr)
 end
 
 """
-    `function Base.run(model::ReactiveModel, jscode::String; context = :model)`
+    function Base.run(model::ReactiveModel, jscode::String; context = :model)
 
 Execute js code in the frontend. `context` can be `:model` or `:app`
 """
@@ -1073,7 +1071,7 @@ import OrderedCollections
 const DEPS = OrderedCollections.OrderedDict{Union{Module, String}, Function}()
 
 """
-    `function deps_routes(channel::String = Genie.config.webchannels_default_route) :: Nothing`
+    function deps_routes(channel::String = Genie.config.webchannels_default_route) :: Nothing
 
 Registers the `routes` for all the required JavaScript dependencies (scripts).
 """
@@ -1124,7 +1122,7 @@ end
 
 
 """
-    `function deps(channel::String = Genie.config.webchannels_default_route)`
+    function deps(channel::String = Genie.config.webchannels_default_route)
 
 Outputs the HTML code necessary for injecting the dependencies in the page (the <script> tags).
 """
@@ -1170,7 +1168,7 @@ import Observables.on
 on(observable::Observables.AbstractObservable, f::Function; weak = true) = on(f, observable; weak = weak)
 
 """
-    `onbutton(f::Function, button::R{Bool}; async = false, weak = false)`
+    onbutton(f::Function, button::R{Bool}; async = false, weak = false)
 
 Links a function to a reactive boolean parameter, typically a representing a button of an app.
 After the function is called, the parameter is set back to false. The `async` keyword
@@ -1209,7 +1207,7 @@ end
 onbutton(button::R{Bool}, f::Function; kwargs...) = onbutton(f, button; kwargs...)
 
 """
-    `@js_str -> JSONText`
+    @js_str -> JSONText
 
 Construct a JSONText, such as `js"button=false"`, without interpolation and unescaping
 (except for quotation marks `"`` which still has to be escaped). Avoiding escaping `"`` can be done by
@@ -1220,7 +1218,7 @@ macro js_str(expr)
 end
 
 """
-    `@kwredef(expr)`
+    @kwredef(expr)
 
 Helper function during development that is a one-to-one replacement for `@kwdef` but allows for redefinition of the struct.
 
@@ -1254,7 +1252,7 @@ macro kwredef(expr)
 end
 
 """
-    `Stipple.@kwdef`
+    Stipple.@kwdef
 
 Helper function for model definition that acts as a one-to-one replacement for `Base.@kwdef`.
 
