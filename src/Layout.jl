@@ -14,8 +14,8 @@ export theme
 const THEMES = Function[]
 
 """
-    `function layout(output::Union{String,Vector}; partial::Bool = false, title::String = "", class::String = "", style::String = "",
-                      head_content::String = "", channel::String = Genie.config.webchannels_default_route) :: String`
+    function layout(output::Union{String,Vector}; partial::Bool = false, title::String = "", class::String = "", style::String = "",
+                      head_content::String = "", channel::String = Genie.config.webchannels_default_route) :: String
 
 Utility for creating a basic web page structure, including doctype as well as <HTML>, <HEAD>, <TITLE>, <META viewport>,
   and <BODY> tags, together with the output content.
@@ -66,8 +66,8 @@ end
 
 
 """
-    `function page(elemid, args...; partial::Bool = false, title::String = "", class::String = "", style::String = "",
-                    channel::String = Genie.config.webchannels_default_route , head_content::String = "", kwargs...)`
+    function page(elemid, args...; partial::Bool = false, title::String = "", class::String = "", style::String = "",
+                    channel::String = Genie.config.webchannels_default_route , head_content::String = "", kwargs...)
 
 Generates the HTML code corresponding to an SPA (a single page application), defining the root element of the Vue app.
 
@@ -100,7 +100,7 @@ function page(model::T, args...; kwargs...)::ParsedHTMLString where {T<:Stipple.
 end
 
 """
-    `function row(args...; kwargs...)`
+    function row(args...; kwargs...)
 
 Creates a `div` HTML element with a CSS class named `row`. This works with Stipple's Twitter Bootstrap to create the
 responsive CSS grid of the web page. The `row` function creates rows which should include `cell`s.
@@ -119,7 +119,7 @@ function row(args...; kwargs...)
 end
 
 """
-    `function cell(args...; size::Int=0, kwargs...)`
+    function cell(args...; size::Int=0, kwargs...)
 
 Creates a `div` HTML element with CSS classes named `col col-12` and `col-sm-$size`.
 This works with Stipple's Twitter Bootstrap to create the responsive CSS grid of the web page. The `cell`s should be
@@ -142,7 +142,7 @@ end
 
 
 """
-    `function theme() :: String
+    function theme() :: String
 
 Provides theming support for Stipple apps and pages. It includes Stipple's default CSS files and additional elements,
   in the form of HTML tags, can be injected by pushing to the `Stipple.Layout.THEMES` collection.
