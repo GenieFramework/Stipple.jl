@@ -474,6 +474,26 @@ end
 const jsmounted = js_mounted
 
 """
+    `function js_destroyed(app::T)::String where {T<:ReactiveModel}`
+
+Defines js statements for the `destroyed` section of the vue element.
+They are executed directly after the deletion of the vue element.
+
+### Example
+
+```julia
+js_destroyed(app::MyDashboard) = \"\"\"
+    window.removeEventListener('keydown', this.keydown)
+\"\"\"
+```
+"""
+function js_destroyed(app::T)::String where {T<:ReactiveModel}
+  ""
+end
+
+const jsdestroyed = js_destroyed
+
+"""
     `function client_data(app::T)::String where {T<:ReactiveModel}`
 
 Defines additional data that will only be visible by the browser.
