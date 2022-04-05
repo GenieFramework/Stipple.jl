@@ -970,6 +970,7 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
   isempty(js_watch(app)     |> strip)   || push!(vue, :watch      => JSONText("{ $(js_watch(app)) }"))
   isempty(js_created(app)   |> strip)   || push!(vue, :created    => JSONText("function(){ $(js_created(app)); }"))
   isempty(js_mounted(app)   |> strip)   || push!(vue, :mounted    => JSONText("function(){ $(js_mounted(app)); }"))
+  isempty(js_destroyed(app) |> strip)   || push!(vue, :destroyed  => JSONText("function(){ $(js_destroyed(app)); }"))
 
   vue
 end
