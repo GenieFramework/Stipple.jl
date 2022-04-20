@@ -1,7 +1,7 @@
 module NamedTuples
 
 """
-    `function Core.NamedTuple(kwargs::Dict{Symbol,T})::NamedTuple where {T}`
+    function Core.NamedTuple(kwargs::Dict{Symbol,T})::NamedTuple where {T}
 
 Converts the `Dict` `kwargs` with keys of type `Symbol` to a `NamedTuple`.
 
@@ -17,7 +17,7 @@ function Core.NamedTuple(kwargs::Dict{Symbol,T})::NamedTuple where {T}
 end
 
 """
-    `function Core.NamedTuple(kwargs::Dict{Symbol,T}, property::Symbol, value::String)::NamedTuple where {T}`
+    function Core.NamedTuple(kwargs::Dict{Symbol,T}, property::Symbol, value::String)::NamedTuple where {T}
 
 Prepends `value` to `kwargs[property]` if defined or adds a new `kwargs[property] = value` and then converts the
 resulting `kwargs` dict to a `NamedTuple`.

@@ -2,9 +2,6 @@
 CurrentModule = Layout
 ```
 
-```@contents
-```
-
 ```@docs
 layout
 page

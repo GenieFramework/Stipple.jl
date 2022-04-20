@@ -2,9 +2,6 @@
 CurrentModule = Stipple
 ```
 
-```@contents
-```
-
 ```@docs
 Reactive
 ReactiveModel
