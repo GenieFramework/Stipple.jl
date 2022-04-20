@@ -210,6 +210,7 @@ export init
 
 function __init__()
   Genie.config.websockets_server = true
+
   @require OffsetArrays  = "6fe1bfb0-de20-5000-8ca7-80f57d26f881" function convertvalue(targetfield::Union{Ref{T}, Reactive{T}}, value) where T <: OffsetArrays.OffsetArray
     a = stipple_parse(eltype(targetfield), value)
 
@@ -222,6 +223,8 @@ function __init__()
       a
     end
   end
+
+  deps_routes(core_theme = true)
 end
 
 #===#
@@ -709,6 +712,9 @@ function channelfactory(length::Int = 32)
 end
 
 
+const MODELDEPID = "!!MODEL!!"
+
+
 """
     `function init(m::Type{M};
                     vue_app_name::S = Stipple.Elements.root(m),
@@ -748,68 +754,80 @@ function init(m::Type{M};
     setchannel(model, channelfactory())
   end
 
-  deps_routes()
-
-  Genie.Router.channel("/$channel/watchers") do
-    payload = Genie.Requests.payload(:payload)["payload"]
-    client = transport == Genie.WebChannels ? Genie.Requests.wsclient() : Genie.Requests.wtclient()
-
-    field = Symbol(payload["field"])
-
-    #check if field exists
-    hasfield(M, field) || return ok_response
-
-    valtype = Dict(zip(fieldnames(M), M.types))[field]
-    val = valtype <: Reactive ? getfield(model, field) : Ref{valtype}(getfield(model, field))
-
-    # reject non-public types
-    if val isa Reactive
-      val.r_mode == PUBLIC || return ok_response
-    elseif occursin(SETTINGS.readonly_pattern, String(field)) || occursin(SETTINGS.private_pattern, String(field))
-      return ok_response
-    end
-
-    newval = convertvalue(val, payload["newval"])
-    oldval = try
-      convertvalue(val, payload["oldval"])
-    catch ex
-      val[]
-    end
-
-    push!(model, field => newval; channel = channel, except = client)
-    update!(model, field, newval, oldval)
-
-    ok_response
+  if WEB_TRANSPORT == Genie.WebChannels
+    Genie.Assets.channels_subscribe(channel)
+  else
+    Genie.Assets.webthreads_subscribe(channel)
+    Genie.Assets.webthreads_push_pull(channel)
   end
 
-  Genie.Router.channel("/$channel/keepalive") do
-    ok_response
-  end
+  ch = "/$channel/watchers"
+  if ! Genie.Router.ischannel(Symbol(ch))
+    Genie.Router.channel(ch, named = Symbol(ch)) do
+      payload = Genie.Requests.payload(:payload)["payload"]
+      client = transport == Genie.WebChannels ? Genie.Requests.wsclient() : Genie.Requests.wtclient()
 
-  if ! Genie.Assets.external_assets(assets_config)
-    Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, file = endpoint)) do
-      Stipple.Elements.vue_integration(m; vue_app_name, channel, debounce, core_theme, transport) |> Genie.Renderer.Js.js
+      field = Symbol(payload["field"])
+
+      #check if field exists
+      hasfield(M, field) || return ok_response
+
+      valtype = Dict(zip(fieldnames(M), M.types))[field]
+      val = valtype <: Reactive ? getfield(model, field) : Ref{valtype}(getfield(model, field))
+
+      # reject non-public types
+      if val isa Reactive
+        val.r_mode == PUBLIC || return ok_response
+      elseif occursin(SETTINGS.readonly_pattern, String(field)) || occursin(SETTINGS.private_pattern, String(field))
+        return ok_response
+      end
+
+      newval = convertvalue(val, payload["newval"])
+      oldval = try
+        convertvalue(val, payload["oldval"])
+      catch ex
+        val[]
+      end
+
+      push!(model, field => newval; channel = channel, except = client)
+      update!(model, field, newval, oldval)
+
+      ok_response
     end
   end
 
-  DEPS[@__MODULE__] = stipple_deps(m, vue_app_name, channel, debounce, core_theme)
+  ch = "/$channel/keepalive"
+  if ! Genie.Router.ischannel(Symbol(ch))
+    Genie.Router.channel(ch, named = Symbol(ch)) do
+      ok_response
+    end
+  end
+
+  ! haskey(DEPS, MODELDEPID) && (DEPS[MODELDEPID] = stipple_deps(m, vue_app_name, debounce, core_theme, endpoint, transport))
 
   setup(model, channel)
 end
 function init(m::M; kwargs...)::M where {M<:ReactiveModel, S<:AbstractString}
-  # init(M; kwargs...)
   error("This method has been removed -- please use `init($M; kwargs...)` instead")
 end
 
 
-function stipple_deps(m::Type{M}, vue_app_name, channel, debounce, core_theme)::Function where {M<:ReactiveModel}
+function stipple_deps(m::Type{M}, vue_app_name, debounce, core_theme, endpoint, transport)::Function where {M<:ReactiveModel}
   () -> begin
+    if ! Genie.Assets.external_assets(assets_config)
+      if ! Genie.Router.isroute(Symbol(m))
+        Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, file = endpoint), named = Symbol(m)) do
+          Stipple.Elements.vue_integration(m; vue_app_name, debounce, core_theme, transport) |> Genie.Renderer.Js.js
+        end
+      end
+    end
+
     [
       if ! Genie.Assets.external_assets(assets_config)
         Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file = vue_app_name), defer = true)
       else
         Genie.Renderer.Html.script([
-          (Stipple.Elements.vue_integration(m; vue_app_name, channel, core_theme, debounce) |> Genie.Renderer.Js.js).body |> String
+          (Stipple.Elements.vue_integration(m; vue_app_name, core_theme, debounce) |> Genie.Renderer.Js.js).body |> String
         ])
       end
     ]
@@ -1070,28 +1088,26 @@ end
 #===#
 
 import OrderedCollections
-const DEPS = OrderedCollections.OrderedDict{Union{Module, String}, Function}()
+const DEPS = OrderedCollections.OrderedDict{Union{Any,AbstractString}, Function}()
 
 """
     `function deps_routes(channel::String = Genie.config.webchannels_default_route) :: Nothing`
 
 Registers the `routes` for all the required JavaScript dependencies (scripts).
 """
-function deps_routes() :: Nothing
+function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool = true) :: Nothing
   if ! Genie.Assets.external_assets(assets_config)
 
-    VUEJS = Genie.Configuration.isprod() ? "vue.min" : "vue"
-
-    Genie.Router.route(
-      Genie.Assets.asset_path(assets_config, :js, file=VUEJS), named = :get_vuejs) do
-        Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file=VUEJS)), :javascript) |> Genie.Renderer.respond
+    Genie.Router.route(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore")) do
+      Genie.Renderer.WebRenderable(
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", file="stipplecore")),
+        :css) |> Genie.Renderer.respond
     end
 
-    Genie.Router.route(
-      Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), named = :get_vuefiltersjs) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="vue_filters")), :javascript) |> Genie.Renderer.respond
+    if WEB_TRANSPORT == Genie.WebChannels
+      Genie.Assets.channels_route(Genie.Assets.jsliteral(channel))
+    else
+      Genie.Assets.webthreads_route(Genie.Assets.jsliteral(channel))
     end
 
     Genie.Router.route(
@@ -1100,9 +1116,24 @@ function deps_routes() :: Nothing
         Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="underscore-min")), :javascript) |> Genie.Renderer.respond
     end
 
-    Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, file="stipplecore"), named = :get_stipplecorejs) do
+    VUEJS = Genie.Configuration.isprod() ? "vue.min" : "vue"
+    Genie.Router.route(
+      Genie.Assets.asset_path(assets_config, :js, file=VUEJS), named = :get_vuejs) do
+        Genie.Renderer.WebRenderable(
+          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file=VUEJS)), :javascript) |> Genie.Renderer.respond
+    end
+
+    if core_theme
+      Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, file="stipplecore"), named = :get_stipplecorejs) do
+        Genie.Renderer.WebRenderable(
+          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="stipplecore")), :javascript) |> Genie.Renderer.respond
+      end
+    end
+
+    Genie.Router.route(
+      Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), named = :get_vuefiltersjs) do
       Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="stipplecore")), :javascript) |> Genie.Renderer.respond
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="vue_filters")), :javascript) |> Genie.Renderer.respond
     end
 
     Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, file="watchers"), named = :get_watchersjs) do
@@ -1123,21 +1154,29 @@ function deps_routes() :: Nothing
 end
 
 
+function injectdeps(output::Vector{AbstractString}) :: Vector{AbstractString}
+  for (key, f) in DEPS
+    key === MODELDEPID && continue
+    push!(output, f()...)
+  end
+
+  push!(output, DEPS[MODELDEPID]()...)
+
+  output
+end
+
+
 """
     `function deps(channel::String = Genie.config.webchannels_default_route)`
 
 Outputs the HTML code necessary for injecting the dependencies in the page (the <script> tags).
 """
 function deps(channel::String = Genie.config.webchannels_default_route; core_theme::Bool = true) :: Vector{String}
-
   output = [
     Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"]),
-    (WEB_TRANSPORT == Genie.WebChannels ?
-      Genie.Assets.channels_support(channel) :
-        Genie.Assets.webthreads_support(channel)),
+    (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_script_tag(channel) : Genie.Assets.webthreads_script_tag(channel)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="underscore-min")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.min" : "vue"))),
-
     core_theme && Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="stipplecore")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), defer=true),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="watchers")),
@@ -1148,15 +1187,15 @@ function deps(channel::String = Genie.config.webchannels_default_route; core_the
     )
   ]
 
-  for (key, f) in DEPS
-    push!(output, f()...)
-  end
-
-  output
+  injectdeps(output)
 end
 
 function deps(m::M; kwargs...) where {M<:ReactiveModel}
   deps(getchannel(m); kwargs...)
+end
+
+function deps!(m::Any, f::Function)
+  DEPS[m] = f
 end
 
 macro R_str(s)

@@ -8,7 +8,7 @@ module Layout
 using Genie, Stipple
 
 export layout
-export page, row, cell
+export page, app, row, cell
 
 export theme
 const THEMES = Function[]
@@ -38,16 +38,17 @@ julia> layout([
 "<link href=\"https://fonts.googleapis.com/css?family=Material+Icons\" rel=\"stylesheet\" /><link href=\"https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;0,900;1,400&display=swap\" rel=\"stylesheet\" /><link href=\"/css/stipple/stipplecore.css\" rel=\"stylesheet\" /><link href=\"/css/stipple/quasar.min.css\" rel=\"stylesheet\" /><span v-text='greeting'>Hello</span><script src=\"/js/channels.js?v=1.17.1\"></script><script src=\"/js/underscore-min.js\"></script><script src=\"/js/vue.js\"></script><script src=\"/js/quasar.umd.min.js\"></script>\n<script src=\"/js/apexcharts.min.js\"></script><script src=\"/js/vue-apexcharts.min.js\"></script><script src=\"/js/stipplecore.js\" defer></script><script src=\"/js/vue_filters.js\" defer></script>"
 ```
 """
-function layout(output::Union{S,Vector}; partial::Bool = false, title::String = "", class::String = "", style::String = "",
-                head_content::String = "", channel::String = Stipple.channel_js_name,
+function layout(output::Union{S,Vector};
+                partial::Bool = false, title::String = "", class::String = "", style::String = "", head_content::String = "",
+                channel::String = Stipple.channel_js_name,
                 core_theme::Bool = true)::ParsedHTMLString where {S<:AbstractString}
 
   isa(output, Vector) && (output = join(output, '\n'))
 
   content = [
     output
-    theme(; core_theme = core_theme)
-    Stipple.deps(channel; core_theme = core_theme)
+    theme(; core_theme)
+    Stipple.deps(channel; core_theme)
   ]
 
   partial && return content
@@ -98,6 +99,8 @@ end
 function page(model::T, args...; kwargs...)::ParsedHTMLString where {T<:Stipple.ReactiveModel}
   page(root(model), args...; channel = getchannel(model), kwargs...)
 end
+
+const app = page
 
 """
     `function row(args...; kwargs...)`
@@ -163,14 +166,6 @@ function theme(; core_theme::Bool = true) :: Vector{String}
   output = String[]
 
   if core_theme
-    if ! Genie.Assets.external_assets(Stipple.assets_config)
-      Genie.Router.route(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore")) do
-        Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", file="stipplecore")),
-          :css) |> Genie.Renderer.respond
-      end
-    end
-
     push!(output,
       stylesheet("https://fonts.googleapis.com/css?family=Material+Icons"),
       stylesheet(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore"))

@@ -42,20 +42,22 @@ const vm = root
 #===#
 
 """
-    `function vue_integration(model::M; vue_app_name::String, endpoint::String, channel::String, debounce::Int)::String where {M<:ReactiveModel}`
+    `function vue_integration(model::M; vue_app_name::String, endpoint::String, debounce::Int)::String where {M<:ReactiveModel}`
 
 Generates the JS/Vue.js code which handles the 2-way data sync between Julia and JavaScript/Vue.js.
 It is called internally by `Stipple.init` which allows for the configuration of all the parameters.
 """
-function vue_integration(m::Type{M}; vue_app_name::String = "StippleApp", core_theme::Bool = true,
-                          channel::String = Genie.config.webchannels_default_route,
+function vue_integration(m::Type{M};
+                          vue_app_name::String = "StippleApp",
+                          core_theme::Bool = true,
                           debounce::Int = Stipple.JS_DEBOUNCE_TIME,
                           transport::Module = Genie.WebChannels)::String where {M<:ReactiveModel}
+
   model = Base.invokelatest(m)
 
   vue_app = replace(json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
-  vue_app = replace(vue_app, "\"$channel\"" => Stipple.channel_js_name)
+  vue_app = replace(vue_app, "\"$(getchannel(model))\"" => Stipple.channel_js_name)
 
   output =
   string(
