@@ -3,17 +3,14 @@ module ModelStorage
 module Sessions
 
 using Stipple
-using Genie.Sessions
+import GenieSession
+import GenieSessionFileSession
 
 export init_from_storage
 
-function init()
-  Genie.Sessions.init()
-end
-
 function init_from_storage(m::Type{T})::T where T
   model_id = Symbol(m)
-  instance = Genie.Sessions.get(model_id, nothing)
+  instance = GenieSession.get(model_id, nothing)
 
   model = if instance !== nothing
     Stipple.init(m; channel = getchannel(instance))
@@ -21,7 +18,7 @@ function init_from_storage(m::Type{T})::T where T
     m |> Stipple.init
   end
 
-  session = Genie.Sessions.set!(model_id, model)
+  session = GenieSession.set!(model_id, model)
 
   on(model.isready) do isready
     isready || return
@@ -40,7 +37,7 @@ function init_from_storage(m::Type{T})::T where T
   for f in fieldnames(typeof(model))
     if isa(getfield(model, f), Reactive)
       on(getfield(model, f)) do _
-        Genie.Sessions.set!(session, model_id, model)
+        GenieSession.set!(session, model_id, model)
       end
     end
   end
