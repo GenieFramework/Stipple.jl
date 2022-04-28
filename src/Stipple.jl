@@ -803,7 +803,8 @@ function init(m::Type{M};
     end
   end
 
-  ! haskey(DEPS, MODELDEPID) && (DEPS[MODELDEPID] = stipple_deps(m, vue_app_name, debounce, core_theme, endpoint, transport))
+  # ! haskey(DEPS, MODELDEPID) && (DEPS[MODELDEPID] = stipple_deps(m, vue_app_name, debounce, core_theme, endpoint, transport))
+  haskey(DEPS, M) || (DEPS[M] = stipple_deps(m, vue_app_name, debounce, core_theme, endpoint, transport))
 
   setup(model, channel)
 end
@@ -1154,13 +1155,13 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
 end
 
 
-function injectdeps(output::Vector{AbstractString}) :: Vector{AbstractString}
+function injectdeps(output::Vector{AbstractString}, M::Type{<:ReactiveModel}) :: Vector{AbstractString}
   for (key, f) in DEPS
-    key === MODELDEPID && continue
+    key isa DataType && key <: ReactiveModel && continue
     push!(output, f()...)
   end
 
-  push!(output, DEPS[MODELDEPID]()...)
+  push!(output, DEPS[M]()...)
 
   output
 end
@@ -1171,7 +1172,8 @@ end
 
 Outputs the HTML code necessary for injecting the dependencies in the page (the <script> tags).
 """
-function deps(channel::String = Genie.config.webchannels_default_route; core_theme::Bool = true) :: Vector{String}
+function deps(m::M; core_theme::Bool = true) :: Vector{String} where {M<:ReactiveModel}
+  channel = getchannel(m)
   output = [
     Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"]),
     (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_script_tag(channel) : Genie.Assets.webthreads_script_tag(channel)),
@@ -1187,11 +1189,7 @@ function deps(channel::String = Genie.config.webchannels_default_route; core_the
     )
   ]
 
-  injectdeps(output)
-end
-
-function deps(m::M; kwargs...) where {M<:ReactiveModel}
-  deps(getchannel(m); kwargs...)
+  injectdeps(output, M)
 end
 
 function deps!(m::Any, f::Function)
