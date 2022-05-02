@@ -1286,7 +1286,9 @@ macro kwredef(expr)
   esc(quote
     Base.@kwdef $expr
     $T_old = $T_new
-    $curly ? $T_new.body.name.name = $(QuoteNode(T_old)) : $T_new.name.name = $(QuoteNode(T_old)) # fix the name
+    if VERSION < v"1.8-alpha"
+      $curly ? $T_new.body.name.name = $(QuoteNode(T_old)) : $T_new.name.name = $(QuoteNode(T_old)) # fix the name
+    end
   end)
 end
 
