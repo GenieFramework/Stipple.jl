@@ -10,18 +10,12 @@ export init_from_storage
 
 function init_from_storage(m::Type{T})::T where T
   model_id = Symbol(m)
-  instance = GenieSession.get(model_id, nothing)
-
-  model = if instance !== nothing
-    Stipple.init(m; channel = getchannel(instance))
-  else
-    m |> Stipple.init
-  end
-
-  session = GenieSession.set!(model_id, model)
+  model = m |> Stipple.init
 
   on(model.isready) do isready
     isready || return
+
+    instance = GenieSession.get(model_id, nothing)
 
     if instance !== nothing
       for f in fieldnames(typeof(model))
@@ -37,7 +31,7 @@ function init_from_storage(m::Type{T})::T where T
   for f in fieldnames(typeof(model))
     if isa(getfield(model, f), Reactive)
       on(getfield(model, f)) do _
-        GenieSession.set!(session, model_id, model)
+        GenieSession.set!(model_id, model)
       end
     end
   end
