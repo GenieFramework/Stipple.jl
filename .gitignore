@@ -1,3 +1,9 @@
+docs/build
+docs/Manifest.toml
 .DS_Store
-/Manifest.toml
 /dev/
+.tags
+.DS_Store
+.vscode
+test/build
+Manifest.toml
