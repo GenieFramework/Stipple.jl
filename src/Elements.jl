@@ -1,5 +1,5 @@
 """
-# Stipple.Elements
+    Stipple.Elements
 
 The `Elements` module provides utility methods for interfacing between Julia and Vue.js.
 """
@@ -16,7 +16,7 @@ export stylesheet
 #===#
 
 """
-    `function root(app::M)::String where {M<:ReactiveModel}`
+    function root(app::M)::String where {M<:ReactiveModel}
 
 Generates a valid JavaScript object name to be used as the name of the Vue app -- and its respective HTML container.
 """
@@ -29,7 +29,7 @@ function root(app::Type{M})::String where {M<:ReactiveModel}
 end
 
 """
-    `function elem(app::M)::String where {M<:ReactiveModel}`
+    function elem(app::M)::String where {M<:ReactiveModel}
 
 Generates a JS id `#` reference to the DOM element containing the Vue app template.
 """
@@ -42,7 +42,7 @@ const vm = root
 #===#
 
 """
-    `function vue_integration(model::M; vue_app_name::String, endpoint::String, debounce::Int)::String where {M<:ReactiveModel}`
+    function vue_integration(model::M; vue_app_name::String, endpoint::String, debounce::Int)::String where {M<:ReactiveModel}
 
 Generates the JS/Vue.js code which handles the 2-way data sync between Julia and JavaScript/Vue.js.
 It is called internally by `Stipple.init` which allows for the configuration of all the parameters.
@@ -145,7 +145,7 @@ end
 #===#
 
 """
-    `@iif(expr)`
+    @iif(expr)
 
 Generates `v-if` Vue.js code using `expr` as the condition.
 <https://vuejs.org/v2/api/#v-if>
@@ -162,7 +162,7 @@ macro iif(expr)
 end
 
 """
-    `@elsiif(expr)`
+    @elsiif(expr)
 
 Generates `v-else-if` Vue.js code using `expr` as the condition.
 <https://vuejs.org/v2/api/#v-else-if>
@@ -179,7 +179,7 @@ macro elsiif(expr)
 end
 
 """
-    `@els(expr)`
+    @els(expr)
 
 Generates `v-else` Vue.js code using `expr` as the condition.
 <https://vuejs.org/v2/api/#v-else>
@@ -212,7 +212,7 @@ macro recur(expr)
 end
 
 """
-    `@text(expr)`
+    @text(expr)
 
 Creates a `v-text` or a `text-content.prop` Vue biding to the element's `textContent` property.
 <https://vuejs.org/v2/api/#v-text>
@@ -235,7 +235,7 @@ macro text(expr)
 end
 
 """
-    `@bind(expr, [type])`
+    @bind(expr, [type])
 
 Binds a model parameter to a Vue component, generating a `v-model` property, optionally defining the parameter type.
 <https://vuejs.org/v2/api/#v-model>
@@ -259,7 +259,7 @@ macro bind(expr, type)
 end
 
 """
-    `@data(expr)`
+    @data(expr)
 
 Creates a Vue.js data binding for the elements that expect it.
 
@@ -285,7 +285,7 @@ macro data(expr)
 end
 
 """
-    `on(action, expr)`
+    on(action, expr)
 
 Defines a js routine that is called by the given `action` of the Vue component, e.g. `:click`, `:input`
 
@@ -302,7 +302,7 @@ end
 
 
 """
-    `@showif(expr, [type])`
+    @showif(expr, [type])
 
 v-show will always be rendered and remain in the DOM; v-show only toggles the display CSS property of the element.
 <https://vuejs.org/v2/guide/conditional.html#v-show>
@@ -325,7 +325,7 @@ end
 #===#
 
 """
-    `function stylesheet(href::String; args...) :: String`
+    function stylesheet(href::String; args...) :: String
 
 Generates the corresponding HTML `link` tag to reference the CSS stylesheet at `href`.
 
