@@ -253,17 +253,18 @@ export @reactors, @reactive, @reactive!
 export ChannelName, getchannel
 
 const ChannelName = String
-
+const CHANNELFIELDNAME = :channel__
 
 function getchannel(m::T) where {T<:ReactiveModel}
-  getfield(m, :channel__)
+  getfield(m, CHANNELFIELDNAME)
 end
 
 
 function setchannel(m::T, value) where {T<:ReactiveModel}
-  setfield!(m, :channel__, ChannelName(value))
+  setfield!(m, CHANNELFIELDNAME, ChannelName(value))
 end
 
+const AUTOFIELDS = [:isready, :isprocessing] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin
   channel__::ChannelName = Stipple.channelfactory()
@@ -657,7 +658,7 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
                 (channel == Stipple.channel_js_name ? Stipple.channel_js_name : "'$channel'")
 
   isempty(jsfunction) &&
-    (jsfunction = "Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});")
+    (jsfunction = "Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal, 'sesstoken': document.querySelector(\"meta[name='sesstoken']\")?.getAttribute('content')}});")
 
   output = """
     $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true});
@@ -713,6 +714,19 @@ end
 
 
 const MODELDEPID = "!!MODEL!!"
+const CHANNELPARAM = :CHANNEL__
+
+
+function sessionid(; encrypt::Bool = true) :: String
+  sessid = Stipple.ModelStorage.Sessions.GenieSession.session().id
+
+  encrypt ? Genie.Encryption.encrypt(sessid) : sessid
+end
+
+
+function sesstoken() :: ParsedHTMLString
+  meta(name = "sesstoken", content=sessionid())
+end
 
 
 """
@@ -736,7 +750,7 @@ hs_model = Stipple.init(HelloPie)
 function init(m::Type{M};
               vue_app_name::S = Stipple.Elements.root(m),
               endpoint::S = vue_app_name,
-              channel::Union{Any,Nothing} = nothing,
+              channel::Union{Any,Nothing} = params(CHANNELPARAM, nothing), # let's allow simply setting a channel
               debounce::Int = JS_DEBOUNCE_TIME,
               transport::Module = Genie.WebChannels,
               core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
@@ -748,7 +762,7 @@ function init(m::Type{M};
 
   channel = if channel !== nothing
     setchannel(model, channel)
-  elseif hasproperty(model, :channel__)
+  elseif hasproperty(model, CHANNELFIELDNAME)
     getchannel(model)
   else
     setchannel(model, channelfactory())
@@ -766,6 +780,13 @@ function init(m::Type{M};
     Genie.Router.channel(ch, named = Symbol(ch)) do
       payload = Genie.Requests.payload(:payload)["payload"]
       client = transport == Genie.WebChannels ? Genie.Requests.wsclient() : Genie.Requests.wtclient()
+
+      try
+        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) &&
+          Genie.Router.params!(Stipple.ModelStorage.Sessions.GenieSession.PARAMS_SESSION_KEY, Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
+      catch ex
+        @error ex
+      end
 
       field = Symbol(payload["field"])
 
@@ -991,9 +1012,8 @@ function Stipple.render(o::Reactive{T}, fieldname::Union{Symbol,Nothing} = nothi
 end
 
 """
-```
-function parse_jsfunction(s::AbstractString)
-```
+    function parse_jsfunction(s::AbstractString)
+
 Checks whether the string is a valid js function and returns a `Dict` from which a reviver function
 in the backend can construct a function.
 """
