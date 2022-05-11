@@ -13,10 +13,6 @@ function init_from_storage(m::Type{T}; channel::Union{Any,Nothing} = params(Stip
   instance = GenieSession.get(model_id, Stipple.init(m; channel, kwargs...))
   channel !== nothing && Stipple.setchannel(instance, channel) # allow explicit overriding of channel
 
-  @show instance
-  @show channel
-  @show instance.no_of_clusters[]
-
   # register reactive handlers to automatically save model on session when model changes
   for f in fieldnames(typeof(instance))
     if isa(getfield(instance, f), Reactive) # let's not handle isready here, it has a separate handler

@@ -1186,6 +1186,11 @@ function injectdeps(output::Vector{AbstractString}, M::Type{<:ReactiveModel}) ::
 end
 
 
+function channelscript(channel::String) :: String
+  Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"])
+end
+
+
 """
     function deps(channel::String = Genie.config.webchannels_default_route)
 
@@ -1194,7 +1199,7 @@ Outputs the HTML code necessary for injecting the dependencies in the page (the 
 function deps(m::M; core_theme::Bool = true) :: Vector{String} where {M<:ReactiveModel}
   channel = getchannel(m)
   output = [
-    Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"]),
+    channelscript(channel),
     (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_script_tag(channel) : Genie.Assets.webthreads_script_tag(channel)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="underscore-min")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.min" : "vue"))),
@@ -1343,8 +1348,34 @@ function isreadonly(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
   false
 end
 
+
 function ispublic(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
   ! isprivate(field, model) && ! isreadonly(field, model)
+end
+
+
+function attributes(kwargs::Union{Vector{<:Pair}, Base.Iterators.Pairs, Dict},
+                    mappings::Dict{String,String} = Dict{String,String}())::NamedTuple
+
+  attrs = Stipple.OptDict()
+  mapped = false
+
+  for (k,v) in kwargs
+    v === nothing && continue
+    mapped = false
+
+    if haskey(mappings, string(k))
+      k = mappings[string(k)]
+    end
+
+    attr_key = string((isa(v, Symbol) && ! startswith(string(k), ":") &&
+                ! ( startswith(string(k), "v-") || startswith(string(k), "v" * Genie.config.html_parser_char_dash) ) ? ":" : ""), "$k") |> Symbol
+    attr_val = isa(v, Symbol) && ! startswith(string(k), ":") ? Stipple.julia_to_vue(v) : v
+
+    attrs[attr_key] = attr_val
+  end
+
+  NamedTuple(attrs)
 end
 
 
