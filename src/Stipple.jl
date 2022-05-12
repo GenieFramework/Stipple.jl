@@ -750,7 +750,7 @@ hs_model = Stipple.init(HelloPie)
 function init(m::Type{M};
               vue_app_name::S = Stipple.Elements.root(m),
               endpoint::S = vue_app_name,
-              channel::Union{Any,Nothing} = params(CHANNELPARAM, nothing), # let's allow simply setting a channel
+              channel::Union{Any,Nothing} = params(CHANNELPARAM, (haskey(ENV, "CHANNEL__") ? (Genie.Router.params!(CHANNELPARAM, ENV["CHANNEL__"])) : nothing)), # let's allow simply setting a channel
               debounce::Int = JS_DEBOUNCE_TIME,
               transport::Module = Genie.WebChannels,
               core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
