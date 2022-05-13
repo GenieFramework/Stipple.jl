@@ -729,6 +729,11 @@ function sesstoken() :: ParsedHTMLString
 end
 
 
+function channeldefault() :: Union{String,Nothing}
+  params(CHANNELPARAM, (haskey(ENV, "$CHANNELPARAM") ? (Genie.Router.params!(CHANNELPARAM, ENV["$CHANNELPARAM"])) : nothing))
+end
+
+
 """
     function init(m::Type{M};
                     vue_app_name::S = Stipple.Elements.root(m),
@@ -750,7 +755,7 @@ hs_model = Stipple.init(HelloPie)
 function init(m::Type{M};
               vue_app_name::S = Stipple.Elements.root(m),
               endpoint::S = vue_app_name,
-              channel::Union{Any,Nothing} = params(CHANNELPARAM, (haskey(ENV, "CHANNEL__") ? (Genie.Router.params!(CHANNELPARAM, ENV["CHANNEL__"])) : nothing)), # let's allow simply setting a channel
+              channel::Union{Any,Nothing} = channeldefault(),
               debounce::Int = JS_DEBOUNCE_TIME,
               transport::Module = Genie.WebChannels,
               core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}

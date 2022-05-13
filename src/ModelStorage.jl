@@ -8,7 +8,9 @@ import GenieSessionFileSession
 
 export init_from_storage
 
-function init_from_storage(m::Type{T}; channel::Union{Any,Nothing} = params(Stipple.CHANNELPARAM, nothing), kwargs...)::T where T
+function init_from_storage(m::Type{T};
+                            channel::Union{Any,Nothing} = Stipple.channeldefault(),
+                            kwargs...)::T where T
   model_id = Symbol(m)
   instance = GenieSession.get(model_id, Stipple.init(m; channel, kwargs...))
   channel !== nothing && Stipple.setchannel(instance, channel) # allow explicit overriding of channel
