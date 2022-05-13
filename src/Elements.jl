@@ -90,16 +90,6 @@ function vue_integration(m::Type{M};
 
     ,
 
-    "
-
-  // invoke init function
-  initStipple('#$vue_app_name');
-  initWatchers();
-
-    "
-
-    ,
-
     """
 
   window.parse_payload = function(payload){
@@ -131,6 +121,9 @@ function vue_integration(m::Type{M};
   };
 
   if ( window.autorun === undefined || window.autorun === true ) {
+    initStipple('#$vue_app_name');
+    initWatchers();
+
     Genie.WebChannels.subscriptionHandlers.push(function(event) {
       app_ready();
     });
