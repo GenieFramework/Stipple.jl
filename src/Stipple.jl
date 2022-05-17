@@ -266,18 +266,18 @@ end
 
 
 @pour reactors begin
-  channel__::ChannelName = Stipple.channelfactory()
-  isready::R{Bool} = false
-  isprocessing::R{Bool} = false
+  channel__::Stipple.ChannelName = Stipple.channelfactory()
+  isready::Stipple.R{Bool} = false
+  isprocessing::Stipple.R{Bool} = false
 end
 
-@mix @with_kw mutable struct reactive
-  @reactors
+@mix Stipple.@with_kw mutable struct reactive
+  Stipple.@reactors
 end
 
 
-@mix @kwredef mutable struct reactive!
-    @reactors
+@mix Stipple.@kwredef mutable struct reactive!
+  Stipple.@reactors
 end
 
 
