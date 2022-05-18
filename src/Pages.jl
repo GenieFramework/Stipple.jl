@@ -13,7 +13,7 @@ using Stipple
 export Page
 export pages
 
-@reactive struct EmptyModel <: ReactiveModel
+@reactive mutable struct EmptyModel <: ReactiveModel
 end
 
 mutable struct Page{M<:ReactiveModel}
