@@ -82,7 +82,7 @@ Manages the configuration of the assets (path, version, etc). Overwrite in order
 Stipple.assets_config.package = "Foo"
 ```
 """
-const assets_config = Genie.Assets.AssetsConfig(package = "Stipple.jl")
+assets_config = Genie.Assets.AssetsConfig(package = "Stipple.jl")
 
 function Genie.Renderer.Html.attrparser(k::Symbol, v::JSONText) :: String
   if startswith(v.s, ":")
@@ -829,7 +829,6 @@ function init(m::Type{M};
     end
   end
 
-  # ! haskey(DEPS, MODELDEPID) && (DEPS[MODELDEPID] = stipple_deps(m, vue_app_name, debounce, core_theme, endpoint, transport))
   haskey(DEPS, M) || (DEPS[M] = stipple_deps(m, vue_app_name, debounce, core_theme, endpoint, transport))
 
   setup(model, channel)
@@ -843,7 +842,7 @@ function stipple_deps(m::Type{M}, vue_app_name, debounce, core_theme, endpoint, 
   () -> begin
     if ! Genie.Assets.external_assets(assets_config)
       if ! Genie.Router.isroute(Symbol(m))
-        Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, file = endpoint), named = Symbol(m)) do
+        Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file = endpoint), named = Symbol(m)) do
           Stipple.Elements.vue_integration(m; vue_app_name, debounce, core_theme, transport) |> Genie.Renderer.Js.js
         end
       end
@@ -1123,7 +1122,7 @@ Registers the `routes` for all the required JavaScript dependencies (scripts).
 function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool = true) :: Nothing
   if ! Genie.Assets.external_assets(assets_config)
 
-    Genie.Router.route(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore")) do
+    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, file="stipplecore")) do
       Genie.Renderer.WebRenderable(
         Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", file="stipplecore")),
         :css) |> Genie.Renderer.respond
@@ -1136,38 +1135,38 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
     end
 
     Genie.Router.route(
-      Genie.Assets.asset_path(assets_config, :js, file="underscore-min"), named = :get_underscorejs) do
+      Genie.Assets.asset_route(assets_config, :js, file="underscore-min"), named = :get_underscorejs) do
       Genie.Renderer.WebRenderable(
         Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="underscore-min")), :javascript) |> Genie.Renderer.respond
     end
 
     VUEJS = Genie.Configuration.isprod() ? "vue.min" : "vue"
     Genie.Router.route(
-      Genie.Assets.asset_path(assets_config, :js, file=VUEJS), named = :get_vuejs) do
+      Genie.Assets.asset_route(assets_config, :js, file=VUEJS), named = :get_vuejs) do
         Genie.Renderer.WebRenderable(
           Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file=VUEJS)), :javascript) |> Genie.Renderer.respond
     end
 
     if core_theme
-      Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, file="stipplecore"), named = :get_stipplecorejs) do
+      Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="stipplecore"), named = :get_stipplecorejs) do
         Genie.Renderer.WebRenderable(
           Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="stipplecore")), :javascript) |> Genie.Renderer.respond
       end
     end
 
     Genie.Router.route(
-      Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), named = :get_vuefiltersjs) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="vue_filters")), :javascript) |> Genie.Renderer.respond
+      Genie.Assets.asset_route(assets_config, :js, file="vue_filters"), named = :get_vuefiltersjs) do
+        Genie.Renderer.WebRenderable(
+          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="vue_filters")), :javascript) |> Genie.Renderer.respond
     end
 
-    Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, file="watchers"), named = :get_watchersjs) do
+    Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="watchers"), named = :get_watchersjs) do
       Genie.Renderer.WebRenderable(
         Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="watchers")), :javascript) |> Genie.Renderer.respond
     end
 
     if Genie.config.webchannels_keepalive_frequency > 0 && WEB_TRANSPORT == Genie.WebChannels
-      Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, file="keepalive"), named = :get_keepalivejs) do
+      Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="keepalive"), named = :get_keepalivejs) do
         Genie.Renderer.WebRenderable(
           Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="keepalive")), :javascript) |> Genie.Renderer.respond
       end
