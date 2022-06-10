@@ -82,7 +82,7 @@ Manages the configuration of the assets (path, version, etc). Overwrite in order
 Stipple.assets_config.package = "Foo"
 ```
 """
-assets_config = Genie.Assets.AssetsConfig(package = "Stipple.jl")
+const assets_config = Genie.Assets.AssetsConfig(package = "Stipple.jl")
 
 function Genie.Renderer.Html.attrparser(k::Symbol, v::JSONText) :: String
   if startswith(v.s, ":")
