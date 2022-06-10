@@ -223,8 +223,6 @@ function __init__()
       a
     end
   end
-
-  deps_routes(core_theme = true)
 end
 
 #===#
@@ -1385,5 +1383,6 @@ end
 
 include("Pages.jl")
 
+deps_routes(core_theme = true)
 
 end
