@@ -205,6 +205,7 @@ export newapp
 export onbutton
 export @kwredef
 export init
+export @mixin
 
 #===#
 
@@ -1304,6 +1305,23 @@ macro kwdef(expr)
   end)
 end
 
+"""
+    Stipple.@mixin
+"""
+macro mixin(expr, prefix = "", postfix = "")
+  x = eval(expr)
+  pre = eval(prefix)
+  post = eval(postfix)
+  T = x isa DataType ? x : typeof(x)
+  mix = x isa DataType ? x() : x
+  values = [Stipple.Observables.to_value(getfield(mix, f)) for f in fieldnames(T)]
+  output = quote end
+  for (f, type, v) in zip(Symbol.(pre, fieldnames(T), post), fieldtypes(T), values)
+      push!(output.args, :($(esc(f))::$type = $v) )
+  end
+
+  :($output)
+end
 
 function isprivate(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
   val = getfield(model, field)
