@@ -1364,15 +1364,19 @@ Base.@kwdef struct PlotWithEvents
     @mixin plot::PlotlyEvents
 end
 
+@reactive! mutable struct PlotlyDemo <: ReactiveModel
+  @mixin prefix::PlotWithEvents
+end
 
 julia> fieldnames(PlotlyDemo)
 (:plot, :plot_selected, :plot_hover, :plot_click, :plot_relayout, :channel__, :isready, :isprocessing)
+
+Note: The latest version of StipplePlotly exports `PlotlyEvents`, `PlotWithEvents`, `PBPlotWithEvents`
 ```
 """
 function register_mixin(context = @__MODULE__)
   Core.eval(context, :(
     macro mixin(expr, prefix = "", postfix = "", context = @__MODULE__)
-        @info context
         if hasproperty(expr, :head) && expr.head == :(::)
             prefix = string(expr.args[1])
             expr = expr.args[2]
