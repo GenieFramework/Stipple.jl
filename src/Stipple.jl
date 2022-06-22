@@ -1329,5 +1329,72 @@ end
 
 include("Pages.jl")
 
+"""
+    function register_mixin(context = @__MODULE__)
+
+register a macro `@mixin` that can be used for inserting structs or struct types
+in `ReactiveModel`s or other `Base.@kwdef` structs.
+
+There are two modes of usage:
+```
+@reactive! mutable struct PlotlyDemo <: ReactiveModel
+  @mixin PlotWithEvents "prefix_" "_postfix"
+end
+
+@reactive! mutable struct PlotlyDemo <: ReactiveModel
+  @mixin prefix::PlotWithEvents
+end
+```
+`prefix` and `postfix` both default to `""`
+### Example
+
+```
+register_mixin(@__MODULE__)
+
+const PlotlyEvent = Dict{String, Any}
+Base.@kwdef struct PlotlyEvents
+    _selected::R{PlotlyEvent} = PlotlyEvent()
+    _hover::R{PlotlyEvent} = PlotlyEvent()
+    _click::R{PlotlyEvent} = PlotlyEvent()
+    _relayout::R{PlotlyEvent} = PlotlyEvent()
+end
+
+Base.@kwdef struct PlotWithEvents
+    var""::R{Plot} = Plot()
+    @mixin plot::PlotlyEvents
+end
+
+
+julia> fieldnames(PlotlyDemo)
+(:plot, :plot_selected, :plot_hover, :plot_click, :plot_relayout, :channel__, :isready, :isprocessing)
+```
+"""
+function register_mixin(context = @__MODULE__)
+  Core.eval(context, :(
+    macro mixin(expr, prefix = "", postfix = "", context = @__MODULE__)
+        @info context
+        if hasproperty(expr, :head) && expr.head == :(::)
+            prefix = string(expr.args[1])
+            expr = expr.args[2]
+        end
+    
+        x = eval(expr)
+        pre = eval(prefix)
+        post = eval(postfix)
+        T = x isa DataType ? x : typeof(x)
+        mix = x isa DataType ? x() : x
+        values = [Stipple.Observables.to_value(getfield(mix, f)) for f in fieldnames(T)]
+        output = quote end
+        for (f, type, v) in zip(Symbol.(pre, fieldnames(T), post), fieldtypes(T), values)
+            push!(output.args, :($(esc(f))::$type = $v) )
+        end
+        
+        :($output)
+    end
+  ))
+  nothing
+end
+
+export register_mixin
 
 end
