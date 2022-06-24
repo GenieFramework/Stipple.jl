@@ -1084,6 +1084,35 @@ function Base.run(model::ReactiveModel, jscode::String; context = :model)
   nothing
 end
 
+"""
+  function Base.setindex!(model::ReactiveModel, val, index::AbstractString)
+
+Set model fields or subfields on the client.
+```
+model["plot.data[0].selectedpoints"] = [1, 3]
+model["table_selection"] = rowselection(model.table[], [2, 4])
+```
+Note:
+- Array indices are zero-based because the code is executed on the client side
+- Table indices are 1-based because they rely on the hidden "__id" columns, which is one-based
+"""
+function Base.setindex!(model::ReactiveModel, val, index::AbstractString)
+  run(model, "this.$index = $(strip(json(render(val)), '"'))")
+end
+
+"""
+  function Base.notify(model::ReactiveModel, field::JSONText)
+
+Notify model fields or subfields on the client side. Typically used after
+```
+model["plot.data[0].selectedpoints"] = [1, 3]
+notify(model, js"plot.data")
+```
+"""
+function Base.notify(model::ReactiveModel, field::JSONText)
+  run(model, "this.$(field.s).__ob__.dep.notify()")
+end
+
 #===#
 
 import OrderedCollections
