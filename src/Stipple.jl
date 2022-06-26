@@ -267,18 +267,18 @@ end
 const AUTOFIELDS = [:isready, :isprocessing] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin
-  channel__::ChannelName = Stipple.channelfactory()
-  isready::R{Bool} = false
-  isprocessing::R{Bool} = false
+  channel__::Stipple.ChannelName = Stipple.channelfactory()
+  isready::Stipple.R{Bool} = false
+  isprocessing::Stipple.R{Bool} = false
 end
 
-@mix @with_kw mutable struct reactive
-  @reactors
+@mix Stipple.@with_kw mutable struct reactive
+  Stipple.@reactors
 end
 
 
-@mix @kwredef mutable struct reactive!
-    @reactors
+@mix Stipple.@kwredef mutable struct reactive!
+  Stipple.@reactors
 end
 
 
@@ -1109,6 +1109,35 @@ function Base.run(model::ReactiveModel, jscode::String; context = :model)
   nothing
 end
 
+"""
+  function Base.setindex!(model::ReactiveModel, val, index::AbstractString)
+
+Set model fields or subfields on the client.
+```
+model["plot.data[0].selectedpoints"] = [1, 3]
+model["table_selection"] = rowselection(model.table[], [2, 4])
+```
+Note:
+- Array indices are zero-based because the code is executed on the client side
+- Table indices are 1-based because they rely on the hidden "__id" columns, which is one-based
+"""
+function Base.setindex!(model::ReactiveModel, val, index::AbstractString)
+  run(model, "this.$index = $(strip(json(render(val)), '"'))")
+end
+
+"""
+  function Base.notify(model::ReactiveModel, field::JSONText)
+
+Notify model fields or subfields on the client side. Typically used after
+```
+model["plot.data[0].selectedpoints"] = [1, 3]
+notify(model, js"plot.data")
+```
+"""
+function Base.notify(model::ReactiveModel, field::JSONText)
+  run(model, "this.$(field.s).__ob__.dep.notify()")
+end
+
 #===#
 
 import OrderedCollections
@@ -1384,5 +1413,77 @@ end
 
 
 include("Pages.jl")
+
+"""
+    function register_mixin(context = @__MODULE__)
+
+register a macro `@mixin` that can be used for inserting structs or struct types
+in `ReactiveModel`s or other `Base.@kwdef` structs.
+
+There are two modes of usage:
+```
+@reactive! mutable struct PlotlyDemo <: ReactiveModel
+  @mixin PlotWithEvents "prefix_" "_postfix"
+end
+
+@reactive! mutable struct PlotlyDemo <: ReactiveModel
+  @mixin prefix::PlotWithEvents
+end
+```
+`prefix` and `postfix` both default to `""`
+### Example
+
+```
+register_mixin(@__MODULE__)
+
+const PlotlyEvent = Dict{String, Any}
+Base.@kwdef struct PlotlyEvents
+    _selected::R{PlotlyEvent} = PlotlyEvent()
+    _hover::R{PlotlyEvent} = PlotlyEvent()
+    _click::R{PlotlyEvent} = PlotlyEvent()
+    _relayout::R{PlotlyEvent} = PlotlyEvent()
+end
+
+Base.@kwdef struct PlotWithEvents
+    var""::R{Plot} = Plot()
+    @mixin plot::PlotlyEvents
+end
+
+@reactive! mutable struct PlotlyDemo <: ReactiveModel
+  @mixin prefix::PlotWithEvents
+end
+
+julia> fieldnames(PlotlyDemo)
+(:plot, :plot_selected, :plot_hover, :plot_click, :plot_relayout, :channel__, :isready, :isprocessing)
+
+Note: The latest version of StipplePlotly exports `PlotlyEvents`, `PlotWithEvents`, `PBPlotWithEvents`
+```
+"""
+function register_mixin(context = @__MODULE__)
+  Core.eval(context, :(
+    macro mixin(expr, prefix = "", postfix = "", context = @__MODULE__)
+        if hasproperty(expr, :head) && expr.head == :(::)
+            prefix = string(expr.args[1])
+            expr = expr.args[2]
+        end
+
+        x = eval(expr)
+        pre = eval(prefix)
+        post = eval(postfix)
+        T = x isa DataType ? x : typeof(x)
+        mix = x isa DataType ? x() : x
+        values = [Stipple.Observables.to_value(getfield(mix, f)) for f in fieldnames(T)]
+        output = quote end
+        for (f, type, v) in zip(Symbol.(pre, fieldnames(T), post), fieldtypes(T), values)
+            push!(output.args, :($(esc(f))::$type = $v) )
+        end
+
+        :($output)
+    end
+  ))
+  nothing
+end
+
+export register_mixin
 
 end
