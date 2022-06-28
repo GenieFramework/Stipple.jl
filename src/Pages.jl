@@ -30,7 +30,8 @@ function Page(  route::Union{Route,String};
                 view::Union{Genie.Renderers.FilePath,<:String,ParsedHTMLString},
                 model::Union{M,Function,Nothing} = Stipple.init(EmptyModel),
                 layout::Union{Genie.Renderers.FilePath,<:String,Nothing} = nothing,
-                context::Module = @__MODULE__
+                context::Module = @__MODULE__,
+                kwargs...
               ) where {M<:ReactiveModel}
   route = isa(route, String) ? Route(; method = GET, path = route) : route
   view = isa(view, String) ? filepath(view) :
@@ -40,7 +41,7 @@ function Page(  route::Union{Route,String};
             isa(layout, ParsedHTMLString) ? string(layout) :
               layout
 
-  route.action = () -> html(view; layout, context, model = (isa(model,Function) ? Base.invokelatest(model) : model))
+  route.action = () -> html(view; layout, context, model = (isa(model,Function) ? Base.invokelatest(model) : model), kwargs...)
 
   Router.route(route)
 

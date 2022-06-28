@@ -1213,7 +1213,7 @@ function injectdeps(output::Vector{AbstractString}, M::Type{<:ReactiveModel}) ::
     push!(output, f()...)
   end
 
-  push!(output, DEPS[M]()...)
+  haskey(DEPS, M) && push!(output, DEPS[M]()...)
 
   output
 end
