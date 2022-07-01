@@ -1414,6 +1414,9 @@ end
 
 include("Pages.jl")
 
+_deepcopy(r::R{T}) where T = R(deepcopy(r.o.val), r.r_mode, r.no_backend_watcher, r.no_frontend_watcher)
+_deepcopy(x) = deepcopy(x)
+
 """
     function register_mixin(context = @__MODULE__)
 
@@ -1475,7 +1478,7 @@ function register_mixin(context = @__MODULE__)
         values = getfield.(Ref(mix), fieldnames(T))
         output = quote end
         for (f, type, v) in zip(Symbol.(pre, fieldnames(T), post), fieldtypes(T), values)
-            push!(output.args, :($(esc(f))::$type = $v) )
+            push!(output.args, :($(esc(f))::$type = Stipple._deepcopy($v)) )
         end
 
         :($output)
