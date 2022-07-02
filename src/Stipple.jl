@@ -1489,4 +1489,31 @@ end
 
 export register_mixin
 
+"""
+    function off!(o::Observable)
+
+remove all listeners from an observable
+"""
+function off!(o::Observable)
+  off.(Ref(o), o.listeners)
+end
+
+"""
+    function off!(o::Observable, index::Union{Vector{<:Integer}, Integer})
+
+Remove listener or listeners with a given index from an observable.
+"""
+function off!(o::Observable, index::Vector{<:Integer})
+  index = index[0 .< index .<= length(o.listeners)]
+  off.(Ref(o), o.listeners[index])
+end
+
+function off!(o::Observable, index::Integer)
+  0 < index <= length(o.listeners) && off(o, o.listeners[index])
+end
+
+off!(r::Reactive) = off!(r.o)
+
+export off!
+
 end
