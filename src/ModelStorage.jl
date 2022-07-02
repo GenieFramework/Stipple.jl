@@ -10,37 +10,39 @@ export init_from_storage
 
 function init_from_storage(m::Type{T};
                             channel::Union{Any,Nothing} = Stipple.channeldefault(),
-                            kwargs...)::T where T
+                            kwargs...)::T where T <: ReactiveModel
   model_id = Symbol(m)
-  instance = GenieSession.get(model_id, Stipple.init(m; channel, kwargs...))
-  channel !== nothing && Stipple.setchannel(instance, channel) # allow explicit overriding of channel
+  model = Stipple.init(m; channel, kwargs...)
+  stored_model = GenieSession.get(model_id, nothing)
+  isnothing(stored_model) || @info("\n\nloading stored model from session...\n\n")
 
-  # register reactive handlers to automatically save model on session when model changes
-  for f in fieldnames(typeof(instance))
-    if isa(getfield(instance, f), Reactive) # let's not handle isready here, it has a separate handler
-      on(getfield(instance, f)) do _
-        GenieSession.set!(model_id, instance)
+  for f in fieldnames(T)
+    field = getfield(model, f)
+    if field isa Reactive
+      # restore fields only if a stored model exists, if the field is not part of the internal fields and is not write protected
+      (
+        isnothing(stored_model) || f ∈ [:channels__, Stipple.AUTOFIELDS...] || Stipple.isreadonly(f, model) || Stipple.isprivate(f, model) ||
+        ! hasproperty(stored_model, f) || (field[!] = getfield(stored_model, f)[])
+      )
+      
+      # register reactive handlers to automatically save model on session when model changes
+      if f ∉ [:channels__, Stipple.AUTOFIELDS...]
+        on(field) do _
+          GenieSession.set!(model_id, model)
+        end
       end
+    else
+      isnothing(stored_model) || Stipple.isprivate(f, model) || Stipple.isreadonly(f, model) || ! hasproperty(stored_model, f) || setfield!(model, f, getfield(stored_model, f))
     end
   end
 
   # on isready push model data from session
-  on(instance.isready) do isready
+  on(model.isready) do isready
     isready || return
-
-    for f in fieldnames(typeof(instance))
-      f in Stipple.AUTOFIELDS && continue # let's not set the value of the auto fields (eg isready, isprocessing)
-      setfield!(instance, f, getfield(instance, f))
-    end
-
-    channel !== nothing && Stipple.setchannel(instance, channel) # allow explicit overriding of channel
-
-    sleep(0.1)
-
-    push!(instance)
+    push!(model)
   end
 
-  instance
+  model
 end
 
 end # module Sessions
