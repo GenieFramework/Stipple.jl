@@ -79,7 +79,8 @@ function vue_integration(m::Type{M};
 
     ,
     join(
-      [Stipple.watch(string("window.", vue_app_name), field, Stipple.channel_js_name, debounce, model) for field in fieldnames(m) if Stipple.ispublic(field, model)]
+      [Stipple.watch(string("window.", vue_app_name), field, Stipple.channel_js_name, debounce, model) for field in fieldnames(m)
+        if Stipple.has_frontend_watcher(field, model)]
     )
     ,
 

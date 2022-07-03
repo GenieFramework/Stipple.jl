@@ -867,24 +867,26 @@ end
 Configures the reactive handlers for the reactive properties of the model. Called internally.
 """
 function setup(model::M, channel = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
-  for field in fieldnames(M)
-    f = getproperty(model, field)
+  for f in fieldnames(M)
+    field = getproperty(model, f)
 
-    isa(f, Reactive) || continue
-
-    if f.r_mode == 0
+    isa(field, Reactive) || continue
+    
+    #make sure, mode is properly set
+    if field.r_mode == 0
       if occursin(SETTINGS.private_pattern, String(field))
-        f.r_mode = PRIVATE
+        field.r_mode = PRIVATE
       elseif occursin(SETTINGS.readonly_pattern, String(field))
-        f.r_mode = READONLY
+        field.r_mode = READONLY
       else
-        f.r_mode = PUBLIC
+        field.r_mode = PUBLIC
       end
     end
-    (f.r_mode == PRIVATE || f.no_backend_watcher) && continue
 
-    on(f) do _
-      push!(model, field => f, channel = channel)
+    has_backend_watcher(field) || continue
+
+    on(field) do _
+      push!(model, f => field, channel = channel)
     end
   end
 
@@ -1363,28 +1365,47 @@ macro kwdef(expr)
   end)
 end
 
+# checking properties of Reactive types
+@nospecialize
 
-function isprivate(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
-  val = getfield(model, field)
-  val isa Reactive && (val.r_mode == PRIVATE || val.no_frontend_watcher) && return true
-  ! isa(val, Reactive) && occursin(Stipple.SETTINGS.private_pattern, String(field)) && return true
+isprivate(field::Reactive) = field.r_mode == PRIVATE
 
-  false
+function isprivate(fieldname::Symbol, model::M)::Bool where {M<:ReactiveModel}
+  field = getfield(model, fieldname)
+  if field isa Reactive
+    isprivate(field)
+  else
+    occursin(Stipple.SETTINGS.private_pattern, String(fieldname))
+  end
 end
 
 
-function isreadonly(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
-  val = getfield(model, field)
-  val isa Reactive && (val.r_mode == READONLY) && return true
-  ! isa(val, Reactive) && occursin(Stipple.SETTINGS.readonly_pattern, String(field)) && return true
+isreadonly(field::Reactive) = field.r_mode == READONLY
 
-  false
+function isreadonly(fieldname::Symbol, model::M)::Bool where {M<:ReactiveModel}
+  field = getfield(model, fieldname)
+  if field isa Reactive
+    isreadonly(field)
+  else
+    occursin(Stipple.SETTINGS.readonly_pattern, String(fieldname))
+  end
 end
 
 
-function ispublic(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
-  ! isprivate(field, model) && ! isreadonly(field, model)
+has_frontend_watcher(field::Reactive) = ! (field.r_mode in [READONLY, PRIVATE] || field.no_frontend_watcher)
+
+function has_frontend_watcher(fieldname::Symbol, model::M)::Bool where {M<:ReactiveModel}
+  getfield(model, fieldname) isa Reactive && has_frontend_watcher(getfield(model, fieldname))
 end
+
+
+has_backend_watcher(field::Reactive) = ! (field.r_mode == PRIVATE || field.no_backend_watcher)
+
+function has_backend_watcher(fieldname::Symbol, model::M)::Bool where {M<:ReactiveModel}
+  getfield(model, fieldname) isa Reactive && has_backend_watcher(getfield(model, fieldname))
+end
+
+@specialize
 
 
 function attributes(kwargs::Union{Vector{<:Pair}, Base.Iterators.Pairs, Dict},
@@ -1489,31 +1510,75 @@ end
 
 export register_mixin
 
+export off!, nlistener
+
+"""
+    nlistener(@nospecialize(o::Observables.AbstractObservable)) = length(Observables.listeners(o))
+
+Number of listeners of the observable.
+
+"""
+nlistener(@nospecialize(o::Observable)) = length(Observables.listeners(o))
+
+"""
+    function off!(o::Observable, index::Union{Integer, AbstractRange, Vector})
+
+Remove listener or listeners with a given index from an observable.
+
+### Example
+```
+o = Observable(10)
+for i = 1:10
+    on(o) do o
+        println("Hello world, $i")
+    end
+end
+
+off!(o, 2:2:10)
+
+notify(o)
+# Hello world, 1
+# Hello world, 3
+# Hello world, 5
+# Hello world, 7
+# Hello world, 9
+
+off!(o, nlistener(o) - 1)
+
+julia> notify(o)
+# Hello world, 1
+# Hello world, 3
+# Hello world, 5
+# Hello world, 9
+```
+"""
+function off!(@nospecialize(o::Observables.AbstractObservable), index::Union{AbstractRange{<:Integer}, Vector{<:Integer}})
+  allunique(index) || (@info("All indices must be distinct"); return BitVector(zeros(len)))
+
+  len = length(index)
+  callbacks = Observables.listeners(o)
+  success = BitVector(zeros(len))
+
+  for (i, n) in enumerate(reverse(sort(index)))
+    if 0 < n <= length(callbacks)
+      for g in Observables.removehandler_callbacks
+        g(observable, callbacks[n])
+      end
+      deleteat!(callbacks, n)
+      success[len - i + 1] = true
+    end
+  end
+
+  success
+end
+
+off!(@nospecialize(o::Observables.AbstractObservable), index::Integer) = off!(o, [index])[1]
+
 """
     function off!(o::Observable)
 
-remove all listeners from an observable
+Remove all listeners from an observable.
 """
-function off!(o::Observable)
-  off.(Ref(o), o.listeners)
-end
-
-"""
-    function off!(o::Observable, index::Union{Vector{<:Integer}, Integer})
-
-Remove listener or listeners with a given index from an observable.
-"""
-function off!(o::Observable, index::Vector{<:Integer})
-  index = index[0 .< index .<= length(o.listeners)]
-  off.(Ref(o), o.listeners[index])
-end
-
-function off!(o::Observable, index::Integer)
-  0 < index <= length(o.listeners) && off(o, o.listeners[index])
-end
-
-off!(r::Reactive) = off!(r.o)
-
-export off!
+off!(@nospecialize(o::Observables.AbstractObservable)) = off!(o, 1:length(Observables.listeners(o)))
 
 end
