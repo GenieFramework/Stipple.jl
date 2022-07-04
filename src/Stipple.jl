@@ -26,6 +26,7 @@ using Logging, Mixers, Random, Reexport, Requires
 
 export setchannel, getchannel
 
+include("ParsingTools.jl")
 include("ModelStorage.jl")
 
 include("NamedTuples.jl")
