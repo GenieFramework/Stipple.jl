@@ -698,6 +698,10 @@ function stipple_parse(::Type{T}, value) where T <: AbstractArray
   convert(T, eltype(T)[value])
 end
 
+function stipple_parse(::Type{T}, value) where T <: AbstractRange
+  convert(T, value)
+end
+
 function stipple_parse(::Type{T}, v::T) where {T}
   v::T
 end
