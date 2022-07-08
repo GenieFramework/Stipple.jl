@@ -803,6 +803,18 @@ function init(m::Type{M};
     end
   end
 
+  ch = "/$channel/events"
+  if ! Genie.Router.ischannel(Symbol(ch))
+    Genie.Router.channel(ch, named = Symbol(ch)) do
+      # get event name
+      event = Genie.Requests.payload(:payload)["event"]
+      # form handler parameter & call event notifier
+      handler = Val(Symbol(get(event, "name", nothing)))
+      notify(model, handler)
+      return ok_response
+    end
+  end
+
   # ! haskey(DEPS, MODELDEPID) && (DEPS[MODELDEPID] = stipple_deps(m, vue_app_name, debounce, core_theme, endpoint, transport))
   haskey(DEPS, M) || (DEPS[M] = stipple_deps(m, vue_app_name, debounce, core_theme, endpoint, transport))
 
