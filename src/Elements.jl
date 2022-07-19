@@ -295,9 +295,29 @@ Defines a js routine that is called by the given `action` of the Vue component, 
 julia> input("", @bind(:input), @on("keyup.enter", "process = true"))
 "<input  v-model='input' v-on:keyup.enter='process = true' />"
 ```
+
+If `expr` is a symbol, there must exist `Stipple.notify` override, i.e. an event
+handler function for a corresponding event with the name `expr`.
+
+### Example
+
+```julia
+julia> Stipple.notify(model, ::Val{:my_click}) = println("clicked")
+
+julia> @on("click", :my_click)
+"v-on:click='handle_event(\$event, 'my_click')'"
+```
 """
 macro on(args, expr)
-  :( "v-on:$(string($(esc(args))))='$(replace($(esc(expr)),"'" => raw"\'"))'" )
+  quote
+    e = string($(esc(args)))
+    x = $(esc(expr))
+    if typeof(x) <: Symbol
+        "v-on:$e='handle_event(\$event, \"$x\")'"
+    else
+        "v-on:$(string($(esc(args))))='$(replace(x,"'" => raw"\'"))'"
+    end
+  end
 end
 
 
