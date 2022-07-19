@@ -387,6 +387,18 @@ function js_methods(app::T)::String where {T<:ReactiveModel}
   ""
 end
 
+function js_methods_events()::String
+"""
+  handle_event: function (event, handler) {
+    Genie.WebChannels.sendMessageTo(window.CHANNEL, 'events', {
+        'event': {
+            'name': handler
+        }
+    })
+  }
+"""
+end
+
 """
     function js_computed(app::T) where {T<:ReactiveModel}
 
@@ -976,11 +988,12 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
               :data => merge(result, client_data(app)))
 
   isempty(components(app)   |> strip)   || push!(vue, :components => components(app))
-  isempty(js_methods(app)   |> strip)   || push!(vue, :methods    => JSONText("{ $(js_methods(app)) }"))
   isempty(js_computed(app)  |> strip)   || push!(vue, :computed   => JSONText("{ $(js_computed(app)) }"))
   isempty(js_watch(app)     |> strip)   || push!(vue, :watch      => JSONText("{ $(js_watch(app)) }"))
   isempty(js_created(app)   |> strip)   || push!(vue, :created    => JSONText("function(){ $(js_created(app)); }"))
   isempty(js_mounted(app)   |> strip)   || push!(vue, :mounted    => JSONText("function(){ $(js_mounted(app)); }"))
+  methods = js_methods(app) |> strip
+  push!(vue, :methods    => JSONText("{ $((isempty(methods) ? "" : methods*",")*js_methods_events()) }"))
 
   vue
 end
