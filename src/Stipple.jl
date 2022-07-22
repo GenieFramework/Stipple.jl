@@ -26,6 +26,7 @@ using Logging, Mixers, Random, Reexport, Requires
 
 export setchannel, getchannel
 
+include("ParsingTools.jl")
 include("ModelStorage.jl")
 
 include("NamedTuples.jl")
@@ -683,16 +684,16 @@ function stipple_parse(::Type{T}, value::Dict) where {Tval, T <: AbstractDict{Sy
   T(zip(Symbol.(string.(keys(value))), values(value)))
 end
 
-function stipple_parse(::Type{T1}, value::T2) where {T1 <: Number, T2 <: Number}
-  convert(T1, value)
+function stipple_parse(::Type{T1}, value::T2) where {T1 <: Number, T2 <: Number}
+  convert(T1, value)
 end
 
-function stipple_parse(::Type{T1}, value::T2) where {T1 <: Integer, T2 <: Number}
-  round(T1, value)
+function stipple_parse(::Type{T1}, value::T2) where {T1 <: Integer, T2 <: Number}
+  round(T1, value)
 end
 
 function stipple_parse(::Type{T1}, value::T2) where {T1 <: AbstractArray, T2 <: AbstractArray}
-  convert(T1, value)
+  T1(stipple_parse.(eltype(T1), value))
 end
 
 function stipple_parse(::Type{T}, value) where T <: AbstractArray
@@ -810,7 +811,7 @@ function init(m::Type{M};
 
       newval = convertvalue(val, payload["newval"])
       oldval = try
-        convertvalue(val, payload["oldval"])
+        convertvalue(val, payload["oldval"])
       catch ex
         val[]
       end
