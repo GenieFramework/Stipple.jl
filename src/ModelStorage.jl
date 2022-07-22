@@ -14,7 +14,6 @@ function init_from_storage(m::Type{T};
   model_id = Symbol(m)
   model = Stipple.init(m; channel, kwargs...)
   stored_model = GenieSession.get(model_id, nothing)
-  isnothing(stored_model) || @info("\n\nloading stored model from session...\n\n")
 
   for f in fieldnames(T)
     field = getfield(model, f)
@@ -24,7 +23,7 @@ function init_from_storage(m::Type{T};
         isnothing(stored_model) || f ∈ [:channels__, Stipple.AUTOFIELDS...] || Stipple.isreadonly(f, model) || Stipple.isprivate(f, model) ||
         ! hasproperty(stored_model, f) || (field[!] = getfield(stored_model, f)[])
       )
-      
+
       # register reactive handlers to automatically save model on session when model changes
       if f ∉ [:channels__, Stipple.AUTOFIELDS...]
         on(field) do _
