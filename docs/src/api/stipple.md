@@ -28,10 +28,11 @@ stipple_parse
 init
 stipple_deps
 setup
-Base.push!
+Base.push!(m::M, vals::Pair{Symbol, T}; kwargs...) where {T, M <: ReactiveModel}
 rendering_mappings
 julia_to_vue
 parse_jsfunction
+replace_jsfunction!
 replace_jsfunction
 deps_routes
 deps

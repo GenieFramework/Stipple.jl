@@ -700,6 +700,10 @@ function stipple_parse(::Type{T}, value) where T <: AbstractArray
   convert(T, eltype(T)[value])
 end
 
+function stipple_parse(::Type{T}, value) where T <: AbstractRange
+  convert(T, value)
+end
+
 function stipple_parse(::Type{T}, v::T) where {T}
   v::T
 end
@@ -1046,8 +1050,7 @@ end
 Replaces all JSONText values that contain a valid js function by a `Dict` that codes the function for a reviver.
 For JSONText variables it encapsulates the dict in a JSONText to make the function type stable.
 """
-# fallback is identity function
-replace_jsfunction!(x) = x
+replace_jsfunction!(x) = x # fallback is identity function
 
 function replace_jsfunction!(d::Dict)
     for (k,v) in d
@@ -1065,6 +1068,9 @@ function replace_jsfunction!(v::Array)
   replace_jsfunction!.(v)
 end
 
+"""
+Replaces all JSONText values on a copy of the input, see [`replace_jsfunction!`](@ref).
+"""
 function replace_jsfunction(d::Dict)
   replace_jsfunction!(deepcopy(d))
 end
