@@ -26,6 +26,7 @@ using Logging, Mixers, Random, Reexport, Requires
 
 export setchannel, getchannel
 
+include("ParsingTools.jl")
 include("ModelStorage.jl")
 
 include("NamedTuples.jl")
@@ -253,17 +254,18 @@ export @reactors, @reactive, @reactive!
 export ChannelName, getchannel
 
 const ChannelName = String
-
+const CHANNELFIELDNAME = :channel__
 
 function getchannel(m::T) where {T<:ReactiveModel}
-  getfield(m, :channel__)
+  getfield(m, CHANNELFIELDNAME)
 end
 
 
 function setchannel(m::T, value) where {T<:ReactiveModel}
-  setfield!(m, :channel__, ChannelName(value))
+  setfield!(m, CHANNELFIELDNAME, ChannelName(value))
 end
 
+const AUTOFIELDS = [:isready, :isprocessing] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin
   channel__::Stipple.ChannelName = Stipple.channelfactory()
@@ -669,7 +671,7 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
                 (channel == Stipple.channel_js_name ? Stipple.channel_js_name : "'$channel'")
 
   isempty(jsfunction) &&
-    (jsfunction = "Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal}});")
+    (jsfunction = "Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal, 'sesstoken': document.querySelector(\"meta[name='sesstoken']\")?.getAttribute('content')}});")
 
   output = """
     $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true});
@@ -694,20 +696,24 @@ function stipple_parse(::Type{T}, value::Dict) where {Tval, T <: AbstractDict{Sy
   T(zip(Symbol.(string.(keys(value))), values(value)))
 end
 
-function stipple_parse(::Type{T1}, value::T2) where {T1 <: Number, T2 <: Number}
-  convert(T1, value)
+function stipple_parse(::Type{T1}, value::T2) where {T1 <: Number, T2 <: Number}
+  convert(T1, value)
 end
 
-function stipple_parse(::Type{T1}, value::T2) where {T1 <: Integer, T2 <: Number}
-  round(T1, value)
+function stipple_parse(::Type{T1}, value::T2) where {T1 <: Integer, T2 <: Number}
+  round(T1, value)
 end
 
 function stipple_parse(::Type{T1}, value::T2) where {T1 <: AbstractArray, T2 <: AbstractArray}
-  convert(T1, value)
+  T1(stipple_parse.(eltype(T1), value))
 end
 
 function stipple_parse(::Type{T}, value) where T <: AbstractArray
   convert(T, eltype(T)[value])
+end
+
+function stipple_parse(::Type{T}, value) where T <: AbstractRange
+  convert(T, value)
 end
 
 function stipple_parse(::Type{T}, v::T) where {T}
@@ -725,6 +731,24 @@ end
 
 
 const MODELDEPID = "!!MODEL!!"
+const CHANNELPARAM = :CHANNEL__
+
+
+function sessionid(; encrypt::Bool = true) :: String
+  sessid = Stipple.ModelStorage.Sessions.GenieSession.session().id
+
+  encrypt ? Genie.Encryption.encrypt(sessid) : sessid
+end
+
+
+function sesstoken() :: ParsedHTMLString
+  meta(name = "sesstoken", content=sessionid())
+end
+
+
+function channeldefault() :: Union{String,Nothing}
+  params(CHANNELPARAM, (haskey(ENV, "$CHANNELPARAM") ? (Genie.Router.params!(CHANNELPARAM, ENV["$CHANNELPARAM"])) : nothing))
+end
 
 
 """
@@ -748,7 +772,7 @@ hs_model = Stipple.init(HelloPie)
 function init(m::Type{M};
               vue_app_name::S = Stipple.Elements.root(m),
               endpoint::S = vue_app_name,
-              channel::Union{Any,Nothing} = nothing,
+              channel::Union{Any,Nothing} = channeldefault(),
               debounce::Int = JS_DEBOUNCE_TIME,
               transport::Module = Genie.WebChannels,
               core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
@@ -760,7 +784,7 @@ function init(m::Type{M};
 
   channel = if channel !== nothing
     setchannel(model, channel)
-  elseif hasproperty(model, :channel__)
+  elseif hasproperty(model, CHANNELFIELDNAME)
     getchannel(model)
   else
     setchannel(model, channelfactory())
@@ -779,6 +803,13 @@ function init(m::Type{M};
       payload = Genie.Requests.payload(:payload)["payload"]
       client = transport == Genie.WebChannels ? Genie.Requests.wsclient() : Genie.Requests.wtclient()
 
+      try
+        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) &&
+          Genie.Router.params!(Stipple.ModelStorage.Sessions.GenieSession.PARAMS_SESSION_KEY, Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
+      catch ex
+        @error ex
+      end
+
       field = Symbol(payload["field"])
 
       #check if field exists
@@ -796,7 +827,7 @@ function init(m::Type{M};
 
       newval = convertvalue(val, payload["newval"])
       oldval = try
-        convertvalue(val, payload["oldval"])
+        convertvalue(val, payload["oldval"])
       catch ex
         val[]
       end
@@ -827,7 +858,6 @@ function init(m::Type{M};
     end
   end
 
-  # ! haskey(DEPS, MODELDEPID) && (DEPS[MODELDEPID] = stipple_deps(m, vue_app_name, debounce, core_theme, endpoint, transport))
   haskey(DEPS, M) || (DEPS[M] = stipple_deps(m, vue_app_name, debounce, core_theme, endpoint, transport))
 
   setup(model, channel)
@@ -841,7 +871,7 @@ function stipple_deps(m::Type{M}, vue_app_name, debounce, core_theme, endpoint, 
   () -> begin
     if ! Genie.Assets.external_assets(assets_config)
       if ! Genie.Router.isroute(Symbol(m))
-        Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, file = endpoint), named = Symbol(m)) do
+        Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file = endpoint), named = Symbol(m)) do
           Stipple.Elements.vue_integration(m; vue_app_name, debounce, core_theme, transport) |> Genie.Renderer.Js.js
         end
       end
@@ -866,24 +896,26 @@ end
 Configures the reactive handlers for the reactive properties of the model. Called internally.
 """
 function setup(model::M, channel = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
-  for field in fieldnames(M)
-    f = getproperty(model, field)
+  for f in fieldnames(M)
+    field = getproperty(model, f)
 
-    isa(f, Reactive) || continue
-
-    if f.r_mode == 0
+    isa(field, Reactive) || continue
+    
+    #make sure, mode is properly set
+    if field.r_mode == 0
       if occursin(SETTINGS.private_pattern, String(field))
-        f.r_mode = PRIVATE
+        field.r_mode = PRIVATE
       elseif occursin(SETTINGS.readonly_pattern, String(field))
-        f.r_mode = READONLY
+        field.r_mode = READONLY
       else
-        f.r_mode = PUBLIC
+        field.r_mode = PUBLIC
       end
     end
-    (f.r_mode == PRIVATE || f.no_backend_watcher) && continue
 
-    on(f) do _
-      push!(model, field => f, channel = channel)
+    has_backend_watcher(field) || continue
+
+    on(field) do _
+      push!(model, f => field, channel = channel)
     end
   end
 
@@ -1153,7 +1185,7 @@ Registers the `routes` for all the required JavaScript dependencies (scripts).
 function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool = true) :: Nothing
   if ! Genie.Assets.external_assets(assets_config)
 
-    Genie.Router.route(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore")) do
+    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, file="stipplecore")) do
       Genie.Renderer.WebRenderable(
         Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", file="stipplecore")),
         :css) |> Genie.Renderer.respond
@@ -1166,38 +1198,38 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
     end
 
     Genie.Router.route(
-      Genie.Assets.asset_path(assets_config, :js, file="underscore-min"), named = :get_underscorejs) do
+      Genie.Assets.asset_route(assets_config, :js, file="underscore-min"), named = :get_underscorejs) do
       Genie.Renderer.WebRenderable(
         Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="underscore-min")), :javascript) |> Genie.Renderer.respond
     end
 
     VUEJS = Genie.Configuration.isprod() ? "vue.min" : "vue"
     Genie.Router.route(
-      Genie.Assets.asset_path(assets_config, :js, file=VUEJS), named = :get_vuejs) do
+      Genie.Assets.asset_route(assets_config, :js, file=VUEJS), named = :get_vuejs) do
         Genie.Renderer.WebRenderable(
           Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file=VUEJS)), :javascript) |> Genie.Renderer.respond
     end
 
     if core_theme
-      Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, file="stipplecore"), named = :get_stipplecorejs) do
+      Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="stipplecore"), named = :get_stipplecorejs) do
         Genie.Renderer.WebRenderable(
           Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="stipplecore")), :javascript) |> Genie.Renderer.respond
       end
     end
 
     Genie.Router.route(
-      Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), named = :get_vuefiltersjs) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="vue_filters")), :javascript) |> Genie.Renderer.respond
+      Genie.Assets.asset_route(assets_config, :js, file="vue_filters"), named = :get_vuefiltersjs) do
+        Genie.Renderer.WebRenderable(
+          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="vue_filters")), :javascript) |> Genie.Renderer.respond
     end
 
-    Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, file="watchers"), named = :get_watchersjs) do
+    Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="watchers"), named = :get_watchersjs) do
       Genie.Renderer.WebRenderable(
         Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="watchers")), :javascript) |> Genie.Renderer.respond
     end
 
     if Genie.config.webchannels_keepalive_frequency > 0 && WEB_TRANSPORT == Genie.WebChannels
-      Genie.Router.route(Genie.Assets.asset_path(assets_config, :js, file="keepalive"), named = :get_keepalivejs) do
+      Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="keepalive"), named = :get_keepalivejs) do
         Genie.Renderer.WebRenderable(
           Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="keepalive")), :javascript) |> Genie.Renderer.respond
       end
@@ -1215,9 +1247,14 @@ function injectdeps(output::Vector{AbstractString}, M::Type{<:ReactiveModel}) ::
     push!(output, f()...)
   end
 
-  push!(output, DEPS[M]()...)
+  haskey(DEPS, M) && push!(output, DEPS[M]()...)
 
   output
+end
+
+
+function channelscript(channel::String) :: String
+  Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"])
 end
 
 
@@ -1229,7 +1266,7 @@ Outputs the HTML code necessary for injecting the dependencies in the page (the 
 function deps(m::M; core_theme::Bool = true) :: Vector{String} where {M<:ReactiveModel}
   channel = getchannel(m)
   output = [
-    Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"]),
+    channelscript(channel),
     (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_script_tag(channel) : Genie.Assets.webthreads_script_tag(channel)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="underscore-min")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.min" : "vue"))),
@@ -1360,26 +1397,71 @@ macro kwdef(expr)
   end)
 end
 
+# checking properties of Reactive types
+@nospecialize
 
-function isprivate(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
-  val = getfield(model, field)
-  val isa Reactive && (val.r_mode == PRIVATE || val.no_frontend_watcher) && return true
-  ! isa(val, Reactive) && occursin(Stipple.SETTINGS.private_pattern, String(field)) && return true
+isprivate(field::Reactive) = field.r_mode == PRIVATE
 
-  false
+function isprivate(fieldname::Symbol, model::M)::Bool where {M<:ReactiveModel}
+  field = getfield(model, fieldname)
+  if field isa Reactive
+    isprivate(field)
+  else
+    occursin(Stipple.SETTINGS.private_pattern, String(fieldname))
+  end
 end
 
 
-function isreadonly(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
-  val = getfield(model, field)
-  val isa Reactive && (val.r_mode == READONLY) && return true
-  ! isa(val, Reactive) && occursin(Stipple.SETTINGS.readonly_pattern, String(field)) && return true
+isreadonly(field::Reactive) = field.r_mode == READONLY
 
-  false
+function isreadonly(fieldname::Symbol, model::M)::Bool where {M<:ReactiveModel}
+  field = getfield(model, fieldname)
+  if field isa Reactive
+    isreadonly(field)
+  else
+    occursin(Stipple.SETTINGS.readonly_pattern, String(fieldname))
+  end
 end
 
-function ispublic(field::Symbol, model::M)::Bool where {M<:ReactiveModel}
-  ! isprivate(field, model) && ! isreadonly(field, model)
+
+has_frontend_watcher(field::Reactive) = ! (field.r_mode in [READONLY, PRIVATE] || field.no_frontend_watcher)
+
+function has_frontend_watcher(fieldname::Symbol, model::M)::Bool where {M<:ReactiveModel}
+  getfield(model, fieldname) isa Reactive && has_frontend_watcher(getfield(model, fieldname))
+end
+
+
+has_backend_watcher(field::Reactive) = ! (field.r_mode == PRIVATE || field.no_backend_watcher)
+
+function has_backend_watcher(fieldname::Symbol, model::M)::Bool where {M<:ReactiveModel}
+  getfield(model, fieldname) isa Reactive && has_backend_watcher(getfield(model, fieldname))
+end
+
+@specialize
+
+
+function attributes(kwargs::Union{Vector{<:Pair}, Base.Iterators.Pairs, Dict},
+                    mappings::Dict{String,String} = Dict{String,String}())::NamedTuple
+
+  attrs = Stipple.OptDict()
+  mapped = false
+
+  for (k,v) in kwargs
+    v === nothing && continue
+    mapped = false
+
+    if haskey(mappings, string(k))
+      k = mappings[string(k)]
+    end
+
+    attr_key = string((isa(v, Symbol) && ! startswith(string(k), ":") &&
+                ! ( startswith(string(k), "v-") || startswith(string(k), "v" * Genie.config.html_parser_char_dash) ) ? ":" : ""), "$k") |> Symbol
+    attr_val = isa(v, Symbol) && ! startswith(string(k), ":") ? Stipple.julia_to_vue(v) : v
+
+    attrs[attr_key] = attr_val
+  end
+
+  NamedTuple(attrs)
 end
 
 
@@ -1440,7 +1522,7 @@ function register_mixin(context = @__MODULE__)
             prefix = string(expr.args[1])
             expr = expr.args[2]
         end
-    
+
         x = eval(expr)
         pre = eval(prefix)
         post = eval(postfix)
@@ -1451,7 +1533,7 @@ function register_mixin(context = @__MODULE__)
         for (f, type, v) in zip(Symbol.(pre, fieldnames(T), post), fieldtypes(T), values)
             push!(output.args, :($(esc(f))::$type = Stipple._deepcopy($v)) )
         end
-        
+
         :($output)
     end
   ))
@@ -1459,5 +1541,76 @@ function register_mixin(context = @__MODULE__)
 end
 
 export register_mixin
+
+export off!, nlistener
+
+"""
+    nlistener(@nospecialize(o::Observables.AbstractObservable)) = length(Observables.listeners(o))
+
+Number of listeners of the observable.
+
+"""
+nlistener(@nospecialize(o::Observable)) = length(Observables.listeners(o))
+
+"""
+    function off!(o::Observable, index::Union{Integer, AbstractRange, Vector})
+
+Remove listener or listeners with a given index from an observable.
+
+### Example
+```
+o = Observable(10)
+for i = 1:10
+    on(o) do o
+        println("Hello world, $i")
+    end
+end
+
+off!(o, 2:2:10)
+
+notify(o)
+# Hello world, 1
+# Hello world, 3
+# Hello world, 5
+# Hello world, 7
+# Hello world, 9
+
+off!(o, nlistener(o) - 1)
+
+julia> notify(o)
+# Hello world, 1
+# Hello world, 3
+# Hello world, 5
+# Hello world, 9
+```
+"""
+function off!(@nospecialize(o::Observables.AbstractObservable), index::Union{AbstractRange{<:Integer}, Vector{<:Integer}})
+  allunique(index) || (@info("All indices must be distinct"); return BitVector(zeros(len)))
+
+  len = length(index)
+  callbacks = Observables.listeners(o)
+  success = BitVector(zeros(len))
+
+  for (i, n) in enumerate(reverse(sort(index)))
+    if 0 < n <= length(callbacks)
+      for g in Observables.removehandler_callbacks
+        g(observable, callbacks[n])
+      end
+      deleteat!(callbacks, n)
+      success[len - i + 1] = true
+    end
+  end
+
+  success
+end
+
+off!(@nospecialize(o::Observables.AbstractObservable), index::Integer) = off!(o, [index])[1]
+
+"""
+    function off!(o::Observable)
+
+Remove all listeners from an observable.
+"""
+off!(@nospecialize(o::Observables.AbstractObservable)) = off!(o, 1:length(Observables.listeners(o)))
 
 end

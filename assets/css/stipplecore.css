@@ -328,7 +328,6 @@ body > .q-loading-bar {
   font-weight: 700;
 }
 .stipple-core .q-slider__track-container {
-  height: 3px;
   background: var(--st-slider--track);
 }
 .stipple-core .q-slider__track-markers {
