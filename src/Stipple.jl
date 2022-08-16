@@ -73,7 +73,7 @@ const config = Genie.config
 const channel_js_name = "window.CHANNEL"
 
 """
-    const assets_confg :: Genie.Assets.AssetsConfig
+    const assets_config :: Genie.Assets.AssetsConfig
 
 Manages the configuration of the assets (path, version, etc). Overwrite in order to customize:
 
@@ -876,7 +876,7 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
     field = getproperty(model, f)
 
     isa(field, Reactive) || continue
-    
+
     #make sure, mode is properly set
     if field.r_mode == 0
       if occursin(SETTINGS.private_pattern, String(field))
