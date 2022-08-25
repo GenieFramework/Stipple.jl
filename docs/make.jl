@@ -9,6 +9,9 @@ makedocs(
     format = Documenter.HTML(prettyurls = false),
     pages = [
         "Home" => "index.md",
+        "Tutorials" => [
+          "Stipple LifeCycle" => "guides/Stipple_LifeCycle.md",
+        ],
         "Stipple API" => [
           "Elements" => "api/elements.md",
           "Layout" => "api/layout.md",
