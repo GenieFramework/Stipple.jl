@@ -13,11 +13,11 @@ makedocs(
           "Stipple LifeCycle" => "guides/Stipple_LifeCycle.md",
         ],
         "Stipple API" => [
-          "Elements" => "api/elements.md",
-          "Layout" => "api/layout.md",
-          "NamedTuples" => "api/namedtuples.md",
-          "Stipple" => "api/stipple.md",
-          "Typography" => "api/typography.md",
+          "Elements" => "API/elements.md",
+          "Layout" => "API/layout.md",
+          "NamedTuples" => "API/namedtuples.md",
+          "Stipple" => "API/stipple.md",
+          "Typography" => "API/typography.md",
         ]
     ],
 )
