@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>NamedTuples · Stipple - data dashboards and reactive UIs for Julia</title><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../index.html">Stipple - data dashboards and reactive UIs for Julia</a></span></div><form class="docs-search" action="../search.html"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../index.html">Home</a></li><li><span class="tocitem">Tutorials</span><ul><li><a class="tocitem" href="../guides/Stipple_LifeCycle.html">Stipple LifeCycle</a></li></ul></li><li><span class="tocitem">Stipple API</span><ul><li><a class="tocitem" href="elements.html">Elements</a></li><li><a class="tocitem" href="layout.html">Layout</a></li><li class="is-active"><a class="tocitem" href="namedtuples.html">NamedTuples</a></li><li><a class="tocitem" href="stipple.html">Stipple</a></li><li><a class="tocitem" href="typography.html">Typography</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Stipple API</a></li><li class="is-active"><a href="namedtuples.html">NamedTuples</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href="namedtuples.html">NamedTuples</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/GenieFramework/Stipple.jl/blob/master/docs/src/API/namedtuples.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><article class="docstring"><header><a class="docstring-binding" id="Core.NamedTuple" href="#Core.NamedTuple"><code>Core.NamedTuple</code></a> — <span class="docstring-category">Type</span></header><section><div><pre><code class="language-julia hljs">NamedTuple</code></pre><p><code>NamedTuple</code>s are, as their name suggests, named <a href="API/@ref"><code>Tuple</code></a>s. That is, they&#39;re a tuple-like collection of values, where each entry has a unique name, represented as a <a href="API/@ref"><code>Symbol</code></a>. Like <code>Tuple</code>s, <code>NamedTuple</code>s are immutable; neither the names nor the values can be modified in place after construction.</p><p>Accessing the value associated with a name in a named tuple can be done using field access syntax, e.g. <code>x.a</code>, or using <a href="API/@ref"><code>getindex</code></a>, e.g. <code>x[:a]</code> or <code>x[(:a, :b)]</code>. A tuple of the names can be obtained using <a href="API/@ref"><code>keys</code></a>, and a tuple of the values can be obtained using <a href="API/@ref"><code>values</code></a>.</p><div class="admonition is-info"><header class="admonition-header">Note</header><div class="admonition-body"><p>Iteration over <code>NamedTuple</code>s produces the <em>values</em> without the names. (See example below.) To iterate over the name-value pairs, use the <a href="API/@ref"><code>pairs</code></a> function.</p></div></div><p>The <a href="API/@ref"><code>@NamedTuple</code></a> macro can be used for conveniently declaring <code>NamedTuple</code> types.</p><p><strong>Examples</strong></p><pre><code class="language-julia-repl hljs">julia&gt; x = (a=1, b=2)
+(a = 1, b = 2)
+
+julia&gt; x.a
+1
+
+julia&gt; x[:a]
+1
+
+julia&gt; x[(:a,)]
+(a = 1,)
+
+julia&gt; keys(x)
+(:a, :b)
+
+julia&gt; values(x)
+(1, 2)
+
+julia&gt; collect(x)
+2-element Vector{Int64}:
+ 1
+ 2
+
+julia&gt; collect(pairs(x))
+2-element Vector{Pair{Symbol, Int64}}:
+ :a =&gt; 1
+ :b =&gt; 2</code></pre><p>In a similar fashion as to how one can define keyword arguments programmatically, a named tuple can be created by giving a pair <code>name::Symbol =&gt; value</code> or splatting an iterator yielding such pairs after a semicolon inside a tuple literal:</p><pre><code class="language-julia-repl hljs">julia&gt; (; :a =&gt; 1)
+(a = 1,)
+
+julia&gt; keys = (:a, :b, :c); values = (1, 2, 3);
+
+julia&gt; (; zip(keys, values)...)
+(a = 1, b = 2, c = 3)</code></pre><p>As in keyword arguments, identifiers and dot expressions imply names:</p><pre><code class="language-julia-repl hljs">julia&gt; x = 0
+0
+
+julia&gt; t = (; x)
+(x = 0,)
+
+julia&gt; (; t.x)
+(x = 0,)</code></pre><div class="admonition is-compat"><header class="admonition-header">Julia 1.5</header><div class="admonition-body"><p>Implicit names from identifiers and dot expressions are available as of Julia 1.5.</p></div></div><div class="admonition is-compat"><header class="admonition-header">Julia 1.7</header><div class="admonition-body"><p>Use of <code>getindex</code> methods with multiple <code>Symbol</code>s is available as of Julia 1.7.</p></div></div></div><a class="docs-sourcelink" target="_blank" href="https://github.com/JuliaLang/julia/blob/742b9abb4dd4621b667ec5bb3434b8b3602f96fd/base/namedtuple.jl#L3-L85">source</a></section></article></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="layout.html">« Layout</a><a class="docs-footer-nextpage" href="stipple.html">Stipple »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.23 on <span class="colophon-date" title="Wednesday 7 September 2022 16:12">Wednesday 7 September 2022</span>. Using Julia version 1.7.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
