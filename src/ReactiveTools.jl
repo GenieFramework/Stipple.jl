@@ -126,10 +126,7 @@ macro model()
   if Stipple.ReactiveTools.TYPES[@__MODULE__] !== nothing
     ReactiveTools.TYPES[@__MODULE__]
   else
-    type = @eval ReactiveTools.@rstruct()
-    ReactiveTools.TYPES[@__MODULE__] = type
-
-    type
+    ReactiveTools.TYPES[@__MODULE__] = @eval ReactiveTools.@rstruct()
   end
   """ |> Meta.parse |> esc
 end
