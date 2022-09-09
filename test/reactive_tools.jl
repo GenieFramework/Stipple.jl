@@ -2,21 +2,20 @@ using Stipple
 using Stipple.ReactiveTools
 
 @binding const number = 2
-@binding const number2 = 2
+@binding const number2::Float64 = 2.55
 
 function process_data()
   @binding message = ""
   @binding reverse_message = ""
   @binding counter = 0
 
-  # @private account_number = 1234
-  # @readonly name = "Adrian"
-  # @field cache = String[]
+  @private account_number = 1234
+  @readonly name = "Adrian"
 
-  # @binding a::Array = [3, 2, 1]
+  @field cache = String[]
+  @field stash::Vector{Int} = []
 
-  # @jsfn d::Dict{Symbol, Any} = Dict(:hello => "World")
-  # @jsfn f::JSONText = JSONText("function() { return Example.n + 1 }")
+  @binding a::Array = [3, 2, 1]
 end
 
 function handlers(model)

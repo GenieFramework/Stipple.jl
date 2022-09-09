@@ -33,7 +33,6 @@ end
 
 function find_assignment(expr)
   assignment = nothing
-  # dump(expr)
 
   if isa(expr, Expr) && !contains(string(expr.head), "=")
     for arg in expr.args
@@ -52,7 +51,6 @@ end
 
 function parse_expression(expr::Expr, opts::String = "", typename::String = "Stipple.Reactive")
   expr = find_assignment(expr)
-  # dump(expr)
 
   (isa(expr, Expr) && contains(string(expr.head), "=")) ||
     error("Invalid binding expression -- use it with variables assignment ex `@binding a = 2`")
@@ -86,7 +84,8 @@ end
 # works with
 # @binding a = 2
 # @binding const a = 2
-# @binding const a::Int = 2
+# @binding const a::Int = 24
+# @binding a::Vector = [1, 2, 3]
 macro binding(expr)
   binding(expr, __module__)
   esc(expr)
