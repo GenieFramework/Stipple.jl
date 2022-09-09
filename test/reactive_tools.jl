@@ -1,10 +1,22 @@
 using Stipple
 using Stipple.ReactiveTools
 
+@binding const number = 2
+@binding const number2 = 2
+
 function process_data()
   @binding message = ""
   @binding reverse_message = ""
   @binding counter = 0
+
+  # @private account_number = 1234
+  # @readonly name = "Adrian"
+  # @field cache = String[]
+
+  # @binding a::Array = [3, 2, 1]
+
+  # @jsfn d::Dict{Symbol, Any} = Dict(:hello => "World")
+  # @jsfn f::JSONText = JSONText("function() { return Example.n + 1 }")
 end
 
 function handlers(model)
@@ -40,14 +52,13 @@ function ui(model)
   ]
 end
 
-# global model
+global model
 
 route("/") do
   process_data()
-  # global model = @init()
-  # @show typeof(model)
-  # model |> handlers |> ui |> html
-  @init() |> handlers |> ui |> html
+  global model = @init()
+  model |> handlers |> ui |> html
+  # @init() |> handlers |> ui |> html
 end
 
 up()

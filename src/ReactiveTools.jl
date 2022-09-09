@@ -3,7 +3,7 @@ module ReactiveTools
 using Stipple
 using MacroTools
 
-export @binding, @rstruct, @model, @handler, @init
+export @binding, @rstruct, @model, @handler, @init, @readonly, @private, @field, @jsfn
 
 const REACTIVE_STORAGE = Dict{Module,Vector{Expr}}()
 const TYPES = Dict{Module,Union{<:DataType,Nothing}}()
@@ -50,7 +50,7 @@ function find_assignment(expr)
   assignment
 end
 
-function parse_expression(expr::Expr)
+function parse_expression(expr::Expr, opts::String = "", typename::String = "Stipple.Reactive")
   expr = find_assignment(expr)
   # dump(expr)
 
@@ -60,12 +60,20 @@ function parse_expression(expr::Expr)
   var = expr.args[1]
   op = expr.head
   val = expr.args[2]
-  isa(val, String) && (val = "\"$val\"")
+  isa(val, AbstractString) && (val = "\"$val\"")
 
-  field = "$var $op Stipple.Reactive($val)"
+  field = "$var $op $(typename)($val)$opts"
   field_expr = MacroTools.unblock(Meta.parse(field))
 
   field_expr
+end
+
+function binding(expr::Expr, m::Module, opts::String = "", typename::String = "Stipple.Reactive")
+  init_storage(m)
+  field_expr = parse_expression(expr, opts, typename)
+  push!(REACTIVE_STORAGE[m], field_expr)
+  unique!(REACTIVE_STORAGE[m])
+  clear_type(m)
 end
 
 # works with
@@ -73,16 +81,27 @@ end
 # @binding const a = 2
 # @binding const a::Int = 2
 macro binding(expr)
-  init_storage(__module__)
+  binding(expr, __module__)
+  esc(expr)
+end
 
-  field_expr = parse_expression(expr)
+macro readonly(expr)
+  binding(expr, __module__, ", READONLY")
+  esc(expr)
+end
 
-  push!(REACTIVE_STORAGE[__module__], field_expr)
+macro private(expr)
+  binding(expr, __module__, ", PRIVATE")
+  esc(expr)
+end
 
-  unique!(REACTIVE_STORAGE[__module__])
+macro jsfn(expr)
+  binding(expr, __module__, ", JSFUNCTION")
+  esc(expr)
+end
 
-  clear_type(__module__)
-
+macro field(expr)
+  binding(expr, __module__, "", "")
   esc(expr)
 end
 
