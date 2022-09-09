@@ -58,11 +58,18 @@ function parse_expression(expr::Expr, opts::String = "", typename::String = "Sti
     error("Invalid binding expression -- use it with variables assignment ex `@binding a = 2`")
 
   var = expr.args[1]
+  rtype = "R"
+  if isa(var, Expr) && var.head == Symbol("::")
+    rtype = "R{$(var.args[2])}"
+    var = var.args[1]
+  end
+
   op = expr.head
+
   val = expr.args[2]
   isa(val, AbstractString) && (val = "\"$val\"")
 
-  field = "$var $op $(typename)($val)$opts"
+  field = "$var::$rtype $op $(typename)($val)$opts"
   field_expr = MacroTools.unblock(Meta.parse(field))
 
   field_expr
