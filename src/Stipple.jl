@@ -1471,9 +1471,14 @@ _deepcopy(r::R{T}) where T = R(deepcopy(r.o.val), r.r_mode, r.no_backend_watcher
 _deepcopy(x) = deepcopy(x)
 
 """
-    function register_mixin(context = @__MODULE__)
+    function register_mixin is deprecated, `@mixin` now works without any predefinition
+"""
+function register_mixin end
 
-register a macro `@mixin` that can be used for inserting structs or struct types
+"""
+    macro mixin(expr, prefix, postfix)
+    
+`@mixin` is used for inserting structs or struct types
 in `ReactiveModel`s or other `Base.@kwdef` structs.
 
 There are two modes of usage:
@@ -1481,6 +1486,8 @@ There are two modes of usage:
 @reactive! mutable struct PlotlyDemo <: ReactiveModel
   @mixin PlotWithEvents "prefix_" "_postfix"
 end
+
+and
 
 @reactive! mutable struct PlotlyDemo <: ReactiveModel
   @mixin prefix::PlotWithEvents
@@ -1490,8 +1497,6 @@ end
 ### Example
 
 ```
-register_mixin(@__MODULE__)
-
 const PlotlyEvent = Dict{String, Any}
 Base.@kwdef struct PlotlyEvents
     _selected::R{PlotlyEvent} = PlotlyEvent()
@@ -1506,41 +1511,41 @@ Base.@kwdef struct PlotWithEvents
 end
 
 @reactive! mutable struct PlotlyDemo <: ReactiveModel
-  @mixin prefix::PlotWithEvents
+    @mixin prefix::PlotWithEvents
 end
 
 julia> fieldnames(PlotlyDemo)
 (:plot, :plot_selected, :plot_hover, :plot_click, :plot_relayout, :channel__, :isready, :isprocessing)
 
-Note: The latest version of StipplePlotly exports `PlotlyEvents`, `PlotWithEvents`, `PBPlotWithEvents`
+The above code is part of StipplePlotly. The latest version of StipplePlotly exports `PlotlyEvents`, `PlotWithEvents`, `PBPlotWithEvents`
+
+Note the usage of `var""` in mixin fields, which means that an empty name is appended to the prefix.
+This is typically used for cases when there is a main entry with options. In that case the prefix
+determines the name of the main field and the other fieldnames are typically prefixed with a hyphen.
 ```
 """
-function register_mixin(context = @__MODULE__)
-  Core.eval(context, :(
-    macro mixin(expr, prefix = "", postfix = "", context = @__MODULE__)
-        if hasproperty(expr, :head) && expr.head == :(::)
-            prefix = string(expr.args[1])
-            expr = expr.args[2]
-        end
+macro mixin(expr, prefix = "", postfix = "")
+  if hasproperty(expr, :head) && expr.head == :(::)
+      prefix = string(expr.args[1])
+      expr = expr.args[2]
+  end
 
-        x = eval(expr)
-        pre = eval(prefix)
-        post = eval(postfix)
-        T = x isa DataType ? x : typeof(x)
-        mix = x isa DataType ? x() : x
-        values = getfield.(Ref(mix), fieldnames(T))
-        output = quote end
-        for (f, type, v) in zip(Symbol.(pre, fieldnames(T), post), fieldtypes(T), values)
-            push!(output.args, :($(esc(f))::$type = Stipple._deepcopy($v)) )
-        end
+  x = Core.eval(__module__, expr)
+  pre = Core.eval(__module__, prefix)
+  post = Core.eval(__module__, postfix)
 
-        :($output)
-    end
-  ))
-  nothing
+  T = x isa DataType ? x : typeof(x)
+  mix = x isa DataType ? x() : x
+  values = getfield.(Ref(mix), fieldnames(T))
+  output = quote end
+  for (f, type, v) in zip(Symbol.(pre, fieldnames(T), post), fieldtypes(T), values)
+      push!(output.args, :($f::$type = Stipple._deepcopy($v)) )
+  end
+
+  esc(:($output))
 end
 
-export register_mixin
+export @mixin
 
 export off!, nlistener
 
