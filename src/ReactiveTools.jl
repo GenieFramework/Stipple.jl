@@ -64,13 +64,14 @@ function parse_expression(expr::Expr, opts::String = "", typename::String = "Sti
 
   op = expr.head
 
-  val = expr.args[2]
-  isa(val, AbstractString) && (val = "\"$val\"")
+  # val = expr.args[2]
+  # isa(val, AbstractString) && (val = "\"$val\"")
+  # field = "$var::$rtype $op $(typename)($val)$opts"
 
-  field = "$var::$rtype $op $(typename)($val)$opts"
-  field_expr = MacroTools.unblock(Meta.parse(field))
+  field = "$var::$rtype $op $(typename)($var)$opts"
+  MacroTools.unblock(Meta.parse(field))
 
-  field_expr
+
 end
 
 function binding(expr::Expr, m::Module, opts::String = "", typename::String = "Stipple.Reactive")
@@ -86,6 +87,7 @@ end
 # @binding const a = 2
 # @binding const a::Int = 24
 # @binding a::Vector = [1, 2, 3]
+# @binding a::Vector{Int} = [1, 2, 3]
 macro binding(expr)
   binding(expr, __module__)
   esc(expr)
