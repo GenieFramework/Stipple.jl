@@ -3,10 +3,14 @@ module ReactiveTools
 using Stipple
 using MacroTools
 
-export @binding, @rstruct, @model, @handler, @init, @readonly, @private, @field, @jsfn
+export @binding, @rstruct, @model, @handler, @init, @readonly, @private, @field, @model!
 
 const REACTIVE_STORAGE = Dict{Module,Vector{Expr}}()
 const TYPES = Dict{Module,Union{<:DataType,Nothing}}()
+
+function __init__()
+  Stipple.UPDATE_MUTABLE[] = true
+end
 
 function default_struct_name(m::Module)
   "$(m)_ReactiveModel"
@@ -70,8 +74,10 @@ function parse_expression(expr::Expr, opts::String = "", typename::String = "Sti
 
   field = "$var::$rtype $op $(typename)($var)$opts"
   MacroTools.unblock(Meta.parse(field))
+end
 
-
+function binding(expr::Symbol, m::Module, opts::String = "", typename::String = "Stipple.Reactive")
+  binding(:($expr = $expr), m, opts, typename)
 end
 
 function binding(expr::Expr, m::Module, opts::String = "", typename::String = "Stipple.Reactive")
@@ -103,10 +109,11 @@ macro private(expr)
   esc(expr)
 end
 
-macro jsfn(expr)
-  binding(expr, __module__, ", JSFUNCTION")
-  esc(expr)
-end
+# does not work
+# macro jsfn(expr)
+#   binding(expr, __module__, ", JSFUNCTION")
+#   esc(expr)
+# end
 
 macro field(expr)
   binding(expr, __module__, "", "")
@@ -131,6 +138,10 @@ macro model()
     ReactiveTools.TYPES[@__MODULE__] = @eval ReactiveTools.@rstruct()
   end
   """ |> Meta.parse |> esc
+end
+
+macro model!()
+  :(@model() |> Base.invokelatest)
 end
 
 macro init()

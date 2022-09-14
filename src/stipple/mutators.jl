@@ -1,3 +1,5 @@
+const UPDATE_MUTABLE = Ref(false)
+
 """
     setindex_withoutwatchers!(field::Reactive, val; notify=(x)->true)
     setindex_withoutwatchers!(field::Reactive, val, keys::Int...; notify=(x)->true)
@@ -71,11 +73,35 @@ Sets the value of `model.field` from `oldval` to `newval`. Returns the upated `m
 """
 function update!(model::M, field::Symbol, newval::T1, oldval::T2)::M where {T1, T2, M<:ReactiveModel}
   f = getfield(model, field)
+
   if f isa Reactive
+    if UPDATE_MUTABLE[] # experimental
+      if newval isa Vector || newval isa Dict
+        push!(getproperty(model, field)[] |> empty!, newval...)
+
+        notify(getproperty(model, field))
+        return model
+      elseif newval isa Ref
+        getproperty(model, field)[][] = newval[]
+
+        notify(getproperty(model, field))
+        return model
+      elseif isstructtype(typeof(newval))
+        object = getproperty(model, field)[]
+        for field in fieldnames(typeof(newval))
+          setfield!(object, field, getfield(newval, field))
+        end
+
+        notify(getproperty(model, field))
+        return model
+      end
+    end
+
     f.r_mode == PRIVATE || f.no_backend_watcher ? f[] = newval : setindex_withoutwatchers!(f, newval, 1)
   else
     setfield!(model, field, newval)
   end
+
   model
 end
 
