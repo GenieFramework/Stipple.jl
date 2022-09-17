@@ -2,11 +2,12 @@ module ReactiveTools
 
 using Stipple
 using MacroTools
+using OrderedCollections
 
-export @binding, @rstruct, @model, @handler, @init, @readonly, @private, @field, @model!
+export @binding, @rstruct, @type, @handlers, @init, @readonly, @private, @field, @model, @page
 
-const REACTIVE_STORAGE = Dict{Module,Vector{Expr}}()
-const TYPES = Dict{Module,Union{<:DataType,Nothing}}()
+const REACTIVE_STORAGE = LittleDict{Module,LittleDict{Symbol,Expr}}()
+const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
 
 function __init__()
   Stipple.UPDATE_MUTABLE[] = true
@@ -17,9 +18,11 @@ function default_struct_name(m::Module)
 end
 
 function init_storage(m::Module)
-  haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = Expr[])
+  haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = LittleDict{Symbol,Expr}())
   haskey(TYPES, m) || (TYPES[m] = nothing)
 end
+
+#===#
 
 function clear_type(m::Module)
   TYPES[m] = nothing
@@ -34,6 +37,38 @@ function bindings(m)
   init_storage(m)
   REACTIVE_STORAGE[m]
 end
+
+#===#
+
+macro rstruct()
+  init_storage(__module__)
+
+  """
+  @reactive! mutable struct $(default_struct_name(__module__)) <: ReactiveModel
+    $(join(REACTIVE_STORAGE[__module__] |> values |> collect, "\n"))
+  end
+  """ |> Meta.parse |> esc
+end
+
+macro type()
+  init_storage(__module__)
+
+  """
+  if Stipple.ReactiveTools.TYPES[@__MODULE__] !== nothing
+    ReactiveTools.TYPES[@__MODULE__]
+  else
+    ReactiveTools.TYPES[@__MODULE__] = @eval ReactiveTools.@rstruct()
+  end
+  """ |> Meta.parse |> esc
+end
+
+macro model()
+  init_storage(__module__)
+
+  :(@type() |> Base.invokelatest)
+end
+
+#===#
 
 function find_assignment(expr)
   assignment = nothing
@@ -68,12 +103,8 @@ function parse_expression(expr::Expr, opts::String = "", typename::String = "Sti
 
   op = expr.head
 
-  # val = expr.args[2]
-  # isa(val, AbstractString) && (val = "\"$val\"")
-  # field = "$var::$rtype $op $(typename)($val)$opts"
-
   field = "$var::$rtype $op $(typename)($var)$opts"
-  MacroTools.unblock(Meta.parse(field))
+  var, MacroTools.unblock(Meta.parse(field))
 end
 
 function binding(expr::Symbol, m::Module, opts::String = "", typename::String = "Stipple.Reactive")
@@ -82,9 +113,11 @@ end
 
 function binding(expr::Expr, m::Module, opts::String = "", typename::String = "Stipple.Reactive")
   init_storage(m)
-  field_expr = parse_expression(expr, opts, typename)
-  push!(REACTIVE_STORAGE[m], field_expr)
-  unique!(REACTIVE_STORAGE[m])
+
+  var, field_expr = parse_expression(expr, opts, typename)
+  REACTIVE_STORAGE[m][var] = field_expr
+
+  # remove cached type and instance
   clear_type(m)
 end
 
@@ -120,37 +153,49 @@ macro field(expr)
   esc(expr)
 end
 
-macro rstruct()
-  init_storage(__module__)
-
-  """
-  @reactive! mutable struct $(default_struct_name(__module__)) <: ReactiveModel
-    $(join(REACTIVE_STORAGE[__module__], "\n"))
-  end
-  """ |> Meta.parse |> esc
-end
-
-macro model()
-  """
-  if Stipple.ReactiveTools.TYPES[@__MODULE__] !== nothing
-    ReactiveTools.TYPES[@__MODULE__]
-  else
-    ReactiveTools.TYPES[@__MODULE__] = @eval ReactiveTools.@rstruct()
-  end
-  """ |> Meta.parse |> esc
-end
-
-macro model!()
-  :(@model() |> Base.invokelatest)
-end
+#===#
 
 macro init()
-  """
-  begin
-    local modeltype = @eval ReactiveTools.@model();
-    Stipple.init(modeltype)
-  end
-  """ |> Meta.parse |> esc
+  quote
+    local initfn =  if isdefined($__module__, :init_from_storage)
+                      $__module__.init_from_storage
+                    else
+                      $__module__.init
+                    end
+    local handlersfn =  if isdefined($__module__, :handlers)
+                          $__module__.handlers
+                        else
+                          identity
+                        end
+
+    @type() |> initfn |> handlersfn
+  end |> esc
+end
+
+macro handlers(expr)
+  quote
+    function handlers(model)
+      $expr
+
+      model
+    end
+  end |> esc
+end
+
+#===#
+
+macro page(url, view, layout)
+  quote
+    Stipple.Pages.Page( $url;
+                        view = $view,
+                        layout = $layout,
+                        model = :(@init()),
+                        context = $__module__)
+  end |> esc
+end
+
+macro page(url, view)
+  :(@page($url, $view, string("<% page(model, partial = true, [@yield]) %>"))) |> esc
 end
 
 end

@@ -86,7 +86,7 @@ function update!(model::M, field::Symbol, newval::T1, oldval::T2)::M where {T1, 
 
         notify(getproperty(model, field))
         return model
-      elseif isstructtype(typeof(newval))
+      elseif isstructtype(typeof(newval)) && ! isa(newval, AbstractString)
         object = getproperty(model, field)[]
         for field in fieldnames(typeof(newval))
           setfield!(object, field, getfield(newval, field))

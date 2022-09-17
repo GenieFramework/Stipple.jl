@@ -29,7 +29,6 @@ export setchannel, getchannel
 include("ParsingTools.jl")
 include("ModelStorage.jl")
 include("NamedTuples.jl")
-include("ReactiveTools.jl")
 
 include("stipple/reactivity.jl")
 include("stipple/json.jl")
@@ -61,6 +60,10 @@ export newapp
 export onbutton
 export @kwredef
 export init
+
+#===#
+
+include("ReactiveTools.jl")
 
 #===#
 
