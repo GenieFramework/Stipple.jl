@@ -44,9 +44,22 @@ function Page(  route::Union{Route,String};
 
   route.action = () -> html(view; layout, context, model = (isa(model,Function) ? Base.invokelatest(model) : model), kwargs...)
 
+  page = Page(route, view, typeof((isa(model,Function) ? Base.invokelatest(model) : model)), layout)
+
+  for i in eachindex(_pages)
+    if _pages[i].route.path == route.path && _pages[i].route.method == route.method
+      Router.delete!(routename(_pages[i].route))
+      _pages[i] = page
+
+      break
+    else
+      push!(_pages, page)
+    end
+  end
+
   Router.route(route)
 
-  push!(_pages, Page(route, view, typeof((isa(model,Function) ? Base.invokelatest(model) : model)), layout))
+  page
 end
 
 end
