@@ -8,6 +8,19 @@ export @binding, @rstruct, @type, @handlers, @init, @readonly, @private, @field,
 
 const REACTIVE_STORAGE = LittleDict{Module,LittleDict{Symbol,Expr}}()
 const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
+const DEFAULT_LAYOUT = Ref{String}("""
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <% Stipple.sesstoken() %>
+    <title>Genie App</title>
+  </head>
+  <body>
+    <% page(model, partial = true, [@yield]) %>
+  </body>
+</html>
+""")
 
 function __init__()
   Stipple.UPDATE_MUTABLE[] = true
@@ -195,7 +208,7 @@ macro page(url, view, layout)
 end
 
 macro page(url, view)
-  :(@page($url, $view, string("<% page(model, partial = true, [@yield]) %>"))) |> esc
+  :(@page($url, $view, Stipple.ReactiveTools.DEFAULT_LAYOUT[])) |> esc
 end
 
 end
