@@ -231,7 +231,7 @@ macro page(url, view, layout)
     Stipple.Pages.Page( $url;
                         view = $view,
                         layout = $layout,
-                        model = :(@init()),
+                        model = () -> @init(),
                         context = $__module__)
   end |> esc
 end
