@@ -4,7 +4,7 @@ using Stipple
 using MacroTools
 using OrderedCollections
 
-export @binding, @readonly, @private, @field, @in, @out, @value
+export @binding, @readonly, @private, @field, @in, @out, @value, @jsfn
 export @page, @rstruct, @type, @handlers, @init, @model
 
 const REACTIVE_STORAGE = LittleDict{Module,LittleDict{Symbol,Expr}}()
@@ -184,11 +184,10 @@ macro private(expr)
   esc(expr)
 end
 
-# does not work
-# macro jsfn(expr)
-#   binding(expr, __module__, ", JSFUNCTION")
-#   esc(expr)
-# end
+macro jsfn(expr)
+  binding(expr, __module__, ", JSFUNCTION", "Stipple.Reactive", false)
+  esc(expr)
+end
 
 macro field(expr)
   binding(expr, __module__, "", "", false)
