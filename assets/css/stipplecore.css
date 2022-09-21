@@ -525,3 +525,5 @@ body > .q-loading-bar {
     margin: auto;
   }
 }
+
+[v-cloak] { display: none; }

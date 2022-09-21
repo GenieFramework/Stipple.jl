@@ -18,7 +18,7 @@ const DEFAULT_LAYOUT = Ref{String}("""
     <title>Genie App</title>
   </head>
   <body>
-    <% page(model, partial = true, [@yield], @iif(:isready)) %>
+    <% page(model, partial = true, v__cloak = true, [@yield], @iif(:isready)) %>
   </body>
 </html>
 """)
