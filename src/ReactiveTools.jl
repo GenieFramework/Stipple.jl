@@ -4,7 +4,8 @@ using Stipple
 using MacroTools
 using OrderedCollections
 
-export @binding, @rstruct, @type, @handlers, @init, @readonly, @private, @field, @model, @page
+export @binding, @readonly, @private, @field, @in, @out, @value
+export @page, @rstruct, @type, @handlers, @init, @model
 
 const REACTIVE_STORAGE = LittleDict{Module,LittleDict{Symbol,Expr}}()
 const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
@@ -17,13 +18,13 @@ const DEFAULT_LAYOUT = Ref{String}("""
     <title>Genie App</title>
   </head>
   <body>
-    <% page(model, partial = true, [@yield]) %>
+    <% page(model, partial = true, [@yield], @iif(:isready)) %>
   </body>
 </html>
 """)
 
 function __init__()
-  Stipple.UPDATE_MUTABLE[] = true
+  Stipple.UPDATE_MUTABLE[] = false
 end
 
 function default_struct_name(m::Module)
@@ -101,33 +102,46 @@ function find_assignment(expr)
   assignment
 end
 
-function parse_expression(expr::Expr, opts::String = "", typename::String = "Stipple.Reactive")
+function parse_expression(expr::Expr, opts::String = "", typename::String = "Stipple.Reactive", reference::Bool = true)
   expr = find_assignment(expr)
 
   (isa(expr, Expr) && contains(string(expr.head), "=")) ||
     error("Invalid binding expression -- use it with variables assignment ex `@binding a = 2`")
 
   var = expr.args[1]
-  rtype = "R"
+  rtype = ""
+
+  if ! isempty(opts)
+    rtype = "::R"
+    typename = ""
+  end
+
   if isa(var, Expr) && var.head == Symbol("::")
-    rtype = "R{$(var.args[2])}"
+    rtype = "::R{$(var.args[2])}"
     var = var.args[1]
   end
 
   op = expr.head
 
-  field = "$var::$rtype $op $(typename)($var)$opts"
+  field = if ! reference
+    val = expr.args[2]
+    isa(val, AbstractString) && (val = "\"$val\"")
+    "$var$rtype $op $(typename)($(val))$(opts)"
+  else
+    "$var$rtype $op $(typename)($var)$(opts)"
+  end
+
   var, MacroTools.unblock(Meta.parse(field))
 end
 
-function binding(expr::Symbol, m::Module, opts::String = "", typename::String = "Stipple.Reactive")
+function binding(expr::Symbol, m::Module, opts::String = "", typename::String = "Stipple.Reactive", reference::Bool = true)
   binding(:($expr = $expr), m, opts, typename)
 end
 
-function binding(expr::Expr, m::Module, opts::String = "", typename::String = "Stipple.Reactive")
+function binding(expr::Expr, m::Module, opts::String = "", typename::String = "Stipple.Reactive", reference::Bool = true)
   init_storage(m)
 
-  var, field_expr = parse_expression(expr, opts, typename)
+  var, field_expr = parse_expression(expr, opts, typename, reference)
   REACTIVE_STORAGE[m][var] = field_expr
 
   # remove cached type and instance
@@ -145,13 +159,28 @@ macro binding(expr)
   esc(expr)
 end
 
+macro value(expr)
+  binding(expr, __module__, "", "Stipple.Reactive", false)
+  esc(expr)
+end
+
+macro in(expr)
+  binding(expr, __module__, "", "Stipple.Reactive", false)
+  esc(expr)
+end
+
+macro out(expr)
+  binding(expr, __module__, ", READONLY", "Stipple.Reactive", false)
+  esc(expr)
+end
+
 macro readonly(expr)
-  binding(expr, __module__, ", READONLY")
+  binding(expr, __module__, ", READONLY", "Stipple.Reactive", false)
   esc(expr)
 end
 
 macro private(expr)
-  binding(expr, __module__, ", PRIVATE")
+  binding(expr, __module__, ", PRIVATE", "Stipple.Reactive", false)
   esc(expr)
 end
 
@@ -162,7 +191,7 @@ end
 # end
 
 macro field(expr)
-  binding(expr, __module__, "", "")
+  binding(expr, __module__, "", "", false)
   esc(expr)
 end
 
@@ -209,6 +238,10 @@ end
 
 macro page(url, view)
   :(@page($url, $view, Stipple.ReactiveTools.DEFAULT_LAYOUT[])) |> esc
+end
+
+macro page(url)
+  :(@page($url, "$(__file__).html", Stipple.ReactiveTools.DEFAULT_LAYOUT[])) |> esc
 end
 
 end

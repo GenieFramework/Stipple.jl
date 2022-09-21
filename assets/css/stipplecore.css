@@ -327,9 +327,9 @@ body > .q-loading-bar {
   font-family: sans-serif;
   font-weight: 700;
 }
-.stipple-core .q-slider__track-container {
+/* .stipple-core .q-slider__track-container {
   background: var(--st-slider--track);
-}
+} */
 .stipple-core .q-slider__track-markers {
   color: currentColor;
 }

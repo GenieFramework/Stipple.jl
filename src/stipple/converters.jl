@@ -1,0 +1,1 @@
+Base.convert(::Type{Symbol}, s::String) = Symbol(s)

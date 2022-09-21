@@ -8,10 +8,17 @@ Change the content of a Reactive field without triggering the listeners.
 If keys are specified, only these listeners are exempted from triggering.
 """
 function setindex_withoutwatchers!(field::Reactive{T}, val, keys::Int...; notify=(x)->true) where T
-  count = 1
   field.o.val = val
-  length(keys) == 0 && return field
 
+  callwatchers(field, val, keys...; notify)
+
+  return field
+end
+
+function callwatchers(field, val, keys...; notify)
+  isempty(keys) && return field
+
+  count = 1
   for f in Observables.listeners(field.o)
     if in(count, keys)
       count += 1
@@ -23,7 +30,7 @@ function setindex_withoutwatchers!(field::Reactive{T}, val, keys::Int...; notify
       try
         Base.invokelatest(f, val)
       catch ex
-        @error "Error attempting to invoke $f with $val"
+        @error "Error attempting to invoke handler $count for field $field with value $val"
         @error ex
         Genie.Configuration.isdev() && rethrow(ex)
       end
@@ -31,8 +38,6 @@ function setindex_withoutwatchers!(field::Reactive{T}, val, keys::Int...; notify
 
     count += 1
   end
-
-  return field
 end
 
 function Base.setindex!(r::Reactive{T}, val, args::Vector{Int}; notify=(x)->true) where T
@@ -50,7 +55,7 @@ function setfield_withoutwatchers!(app::T, field::Symbol, val, keys...; notify=(
   f = getfield(app, field)
 
   if f isa Reactive
-    setindex_withoutwatchers!(f, val, keys...; notify = notify)
+    setindex_withoutwatchers!(f, val, keys...; notify)
   else
     setfield!(app, field, val)
   end
@@ -73,31 +78,30 @@ Sets the value of `model.field` from `oldval` to `newval`. Returns the upated `m
 """
 function update!(model::M, field::Symbol, newval::T1, oldval::T2)::M where {T1, T2, M<:ReactiveModel}
   f = getfield(model, field)
+  ischanged = false
 
   if f isa Reactive
     if UPDATE_MUTABLE[] # experimental
       if newval isa Vector || newval isa Dict
         push!(getproperty(model, field)[] |> empty!, newval...)
-
-        notify(getproperty(model, field))
-        return model
+        ischanged = true
       elseif newval isa Ref
         getproperty(model, field)[][] = newval[]
-
-        notify(getproperty(model, field))
-        return model
+        ischanged = true
       elseif isstructtype(typeof(newval)) && ! isa(newval, AbstractString)
         object = getproperty(model, field)[]
         for field in fieldnames(typeof(newval))
           setfield!(object, field, getfield(newval, field))
         end
-
-        notify(getproperty(model, field))
-        return model
+        ischanged = true
       end
     end
 
-    f.r_mode == PRIVATE || f.no_backend_watcher ? f[] = newval : setindex_withoutwatchers!(f, newval, 1)
+    if ischanged
+      f.r_mode == PRIVATE || f.no_backend_watcher ? nothing : callwatchers(f, newval, 1)
+    else
+      f.r_mode == PRIVATE || f.no_backend_watcher ? f[] = newval : setindex_withoutwatchers!(f, newval, 1)
+    end
   else
     setfield!(model, field, newval)
   end
@@ -106,9 +110,7 @@ function update!(model::M, field::Symbol, newval::T1, oldval::T2)::M where {T1, 
 end
 
 function update!(model::M, field::Reactive{T}, newval::T, oldval::T)::M where {T, M<:ReactiveModel}
-  field.r_mode == PRIVATE || field.no_backend_watcher ? field[] = newval : setindex_withoutwatchers!(field, newval, 1)
-
-  model
+  update!(model, Symbol(field), newval, oldval)
 end
 
 function update!(model::M, field::Any, newval::T, oldval::T)::M where {T,M<:ReactiveModel}

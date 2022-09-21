@@ -28,7 +28,7 @@ pages() = _pages
 
 function Page(  route::Union{Route,String};
                 view::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString},
-                model::Union{M,Function,Expr,Nothing} = Stipple.init(EmptyModel),
+                model::Union{M,Function,Nothing,Expr} = Stipple.init(EmptyModel),
                 layout::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Nothing} = nothing,
                 context::Module = @__MODULE__,
                 kwargs...
@@ -44,7 +44,7 @@ function Page(  route::Union{Route,String};
 
   route.action = () -> html(view; layout, context, model = (isa(model,Function) ? Base.invokelatest(model) : model), kwargs...)
 
-  page = Page(route, view, typeof((isa(model,Function) ? Base.invokelatest(model) : model)), layout)
+  page = Page(route, view, typeof((isa(model,Function) || isa(model,DataType) ? Base.invokelatest(model) : model)), layout)
 
   for i in eachindex(_pages)
     if _pages[i].route.path == route.path && _pages[i].route.method == route.method
