@@ -2,10 +2,11 @@ module ReactiveTools
 
 using Stipple
 using MacroTools
+using MacroTools: postwalk
 using OrderedCollections
 
-export @binding, @readonly, @private, @field, @in, @out, @value, @jsfn
-export @page, @rstruct, @type, @handlers, @init, @model
+export @binding, @readonly, @private, @in, @out, @value, @jsfn
+export @page, @rstruct, @type, @handlers, @init, @model, @onchange, @onchangeany
 
 const REACTIVE_STORAGE = LittleDict{Module,LittleDict{Symbol,Expr}}()
 const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
@@ -34,6 +35,7 @@ end
 function init_storage(m::Module)
   haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = LittleDict{Symbol,Expr}())
   haskey(TYPES, m) || (TYPES[m] = nothing)
+
 end
 
 #===#
@@ -189,11 +191,6 @@ macro jsfn(expr)
   esc(expr)
 end
 
-macro field(expr)
-  binding(expr, __module__, "", "", false)
-  esc(expr)
-end
-
 #===#
 
 macro init()
@@ -203,8 +200,8 @@ macro init()
                     else
                       $__module__.init
                     end
-    local handlersfn =  if isdefined($__module__, :handlers)
-                          $__module__.handlers
+    local handlersfn =  if isdefined($__module__, :__GF_AUTO_HANDLERS__)
+                          $__module__.__GF_AUTO_HANDLERS__
                         else
                           identity
                         end
@@ -215,10 +212,41 @@ end
 
 macro handlers(expr)
   quote
-    function handlers(model)
+    function __GF_AUTO_HANDLERS__(__model__)
       $expr
 
-      model
+      __model__
+    end
+  end |> esc
+end
+
+macro onchange(var, expr)
+  known_vars = push!(Stipple.ReactiveTools.REACTIVE_STORAGE[__module__] |> keys |> collect, :isready, :isprocessing) # add mixins
+
+  if isa(var, Symbol) && in(var, known_vars)
+    var = :(__model__.$var)
+  else
+    error("Unknown binding $var")
+  end
+
+  exp = postwalk(x -> isa(x, Symbol) && in(x, known_vars) ? :(__model__.$x[]) : x, expr)
+
+  quote
+    on($var) do __value__
+      $exp
+    end
+  end |> esc
+end
+
+macro onchangeany(vars, expr)
+  known_vars = push!(Stipple.ReactiveTools.REACTIVE_STORAGE[__module__] |> keys |> collect, :isready, :isprocessing) # add mixins
+
+  va = postwalk(x -> isa(x, Symbol) && in(x, known_vars) ? :(__model__.$x) : x, vars)
+  exp = postwalk(x -> isa(x, Symbol) && in(x, known_vars) ? :(__model__.$x[]) : x, expr)
+
+  quote
+    onany($va...) do (__values__...)
+      $exp
     end
   end |> esc
 end

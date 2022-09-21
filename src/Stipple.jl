@@ -392,6 +392,7 @@ function Base.push!(app::M, vals::Pair{Symbol,T};
     webtransport().broadcast(channel, json(Dict("key" => julia_to_vue(vals[1]), "value" => Stipple.render(vals[2], vals[1]))), except = except)
   catch ex
     @error ex
+    false
   end
 end
 
@@ -425,7 +426,7 @@ include("stipple/jsintegration.jl")
 #===#
 
 import OrderedCollections
-const DEPS = OrderedCollections.OrderedDict{Union{Any,AbstractString}, Function}()
+const DEPS = OrderedCollections.LittleDict{Union{Any,AbstractString}, Function}()
 
 """
     function deps_routes(channel::String = Genie.config.webchannels_default_route) :: Nothing
