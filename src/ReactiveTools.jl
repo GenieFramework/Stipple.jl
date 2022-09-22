@@ -10,19 +10,30 @@ export @page, @rstruct, @type, @handlers, @init, @model, @onchange, @onchangeany
 
 const REACTIVE_STORAGE = LittleDict{Module,LittleDict{Symbol,Expr}}()
 const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
-const DEFAULT_LAYOUT = Ref{String}("""
+
+function DEFAULT_LAYOUT(; title::String = "Genie App")
+  """
 <!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8">
     <% Stipple.sesstoken() %>
-    <title>Genie App</title>
+    <title>$title</title>
+    <% if isfile(joinpath(Genie.config.server_document_root), "app.css") %>
+    <link rel='stylesheet' href='app.css'>
+    <% else %>
+    <% end %>
   </head>
   <body>
     <% page(model, partial = true, v__cloak = true, [@yield], @iif(:isready)) %>
+    <% if isfile(joinpath(Genie.config.server_document_root), "app.js") %>
+    <script src='app.js'></script>
+    <% else %>
+    <% end %>
   </body>
 </html>
-""")
+"""
+end
 
 function __init__()
   Stipple.UPDATE_MUTABLE[] = false
@@ -121,6 +132,7 @@ function parse_expression(expr::Expr, opts::String = "", typename::String = "Sti
   if isa(var, Expr) && var.head == Symbol("::")
     rtype = "::R{$(var.args[2])}"
     var = var.args[1]
+    typename = ""
   end
 
   op = expr.head
@@ -264,11 +276,11 @@ macro page(url, view, layout)
 end
 
 macro page(url, view)
-  :(@page($url, $view, Stipple.ReactiveTools.DEFAULT_LAYOUT[])) |> esc
+  :(@page($url, $view, Stipple.ReactiveTools.DEFAULT_LAYOUT())) |> esc
 end
 
 macro page(url)
-  :(@page($url, "$(__file__).html", Stipple.ReactiveTools.DEFAULT_LAYOUT[])) |> esc
+  :(@page($url, "$(__file__).html", Stipple.ReactiveTools.DEFAULT_LAYOUT())) |> esc
 end
 
 end

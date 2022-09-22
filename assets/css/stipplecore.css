@@ -37,6 +37,7 @@
 .stipple-core .st-header,
 .stipple-core .st-module {
   box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.05);
+  overflow: auto;
 }
 .stipple-core .st-module {
   background: var(--st-dashboard-module);
@@ -508,7 +509,6 @@ body > .q-loading-bar {
 .stipple-core .st-logo {
   text-align: center;
   display: block;
-  vertical-align: middle;
 }
 @media (min-width: 600px) {
   .stipple-core .st-header__title,
