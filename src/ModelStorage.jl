@@ -10,7 +10,7 @@ export init_from_storage
 
 function init_from_storage(m::Type{T};
                             channel::Union{Any,Nothing} = Stipple.channeldefault(),
-                            kwargs...)::T where T
+                            kwargs...) where T
   model_id = Symbol(m)
   model = Stipple.init(m; channel, kwargs...)
   stored_model = GenieSession.get(model_id, nothing)

@@ -28,177 +28,32 @@ export setchannel, getchannel
 
 include("ParsingTools.jl")
 include("ModelStorage.jl")
-
 include("NamedTuples.jl")
+
+include("stipple/reactivity.jl")
+include("stipple/json.jl")
+include("stipple/undefined.jl")
+include("stipple/assets.jl")
+include("stipple/converters.jl")
+
 using .NamedTuples
-
-const JSONParser = JSON3
-const json = JSON3.write
-
-struct JSONText
-  s::String
-end
-
-@inline StructTypes.StructType(::Type{JSONText}) = JSON3.RawType()
-@inline StructTypes.construct(::Type{JSONText}, x::JSON3.RawValue) = JSONText(string(x))
-@inline JSON3.rawbytes(x::JSONText) = codeunits(x.s)
-
-macro json(expr)
-  expr.args[1].args[1] = :(StructTypes.$(expr.args[1].args[1]))
-  T = expr.args[1].args[2].args[2]
-
-  quote
-    $(esc(:(StructTypes.StructType(::Type{($T)}) = StructTypes.CustomStruct())))
-    $(esc(expr))
-  end
-end
 
 export JSONParser, JSONText, json, @json, jsfunction, @jsfunction_str
 
-# support for handling JS `undefined` values
-export Undefined, UNDEFINED
-
-struct Undefined
-end
-
-const UNDEFINED = Undefined()
-const UNDEFINED_PLACEHOLDER = "__undefined__"
-const UNDEFINED_VALUE = "undefined"
-
-@json lower(x::Undefined) = UNDEFINED_PLACEHOLDER
-Base.show(io::IO, x::Undefined) = Base.print(io, UNDEFINED_VALUE)
-
 const config = Genie.config
-
 const channel_js_name = "window.CHANNEL"
 
-"""
-    const assets_config :: Genie.Assets.AssetsConfig
-
-Manages the configuration of the assets (path, version, etc). Overwrite in order to customize:
-
-### Example
-
-```julia
-Stipple.assets_config.package = "Foo"
-```
-"""
-const assets_config = Genie.Assets.AssetsConfig(package = "Stipple.jl")
-
-function Genie.Renderer.Html.attrparser(k::Symbol, v::JSONText) :: String
-  if startswith(v.s, ":")
-    ":$(k |> Genie.Renderer.Html.parseattr)=$(v.s[2:end]) "
-  else
-    "$(k |> Genie.Renderer.Html.parseattr)=$(v.s) "
-  end
-end
-
-
-mutable struct Reactive{T} <: Observables.AbstractObservable{T}
-  o::Observables.Observable{T}
-  r_mode::Int
-  no_backend_watcher::Bool
-  no_frontend_watcher::Bool
-
-  Reactive{T}() where {T} = new{T}(Observable{T}(), PUBLIC, false, false)
-  Reactive{T}(o, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, PUBLIC, no_bw, no_fw)
-  Reactive{T}(o, mode::Int, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, mode, no_bw, no_fw)
-  Reactive{T}(o, mode::Int, updatemode::Int) where {T} = new{T}(o, mode, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0)
-
-  # Construct an Reactive{Any} without runtime dispatch
-  Reactive{Any}(@nospecialize(o)) = new{Any}(Observable{Any}(o), PUBLIC, false, false)
-end
-
-Reactive(r::T, arg1, args...) where T = convert(Reactive{T}, (r, arg1, args...))
-Reactive(r::T) where T = convert(Reactive{T}, r)
-
-Base.convert(::Type{T}, x::T) where {T<:Reactive} = x  # resolves ambiguity with convert(::Type{T}, x::T) in base/essentials.jl
-Base.convert(::Type{T}, x) where {T<:Reactive} = T(x)
-
-Base.convert(::Type{Reactive{T}}, (r, m)::Tuple{T, Int}) where T = m < 16 ? Reactive{T}(Observable(r), m, PUBLIC) : Reactive{T}(Observable(r), PUBLIC, m)
-Base.convert(::Type{Reactive{T}}, (r, w)::Tuple{T, Bool}) where T = Reactive{T}(Observable(r), PUBLIC, w, false)
-Base.convert(::Type{Reactive{T}}, (r, m, nw)::Tuple{T, Int, Bool}) where T = Reactive{T}(Observable(r), m, nw, false)
-Base.convert(::Type{Reactive{T}}, (r, nbw, nfw)::Tuple{T, Bool, Bool}) where T = Reactive{T}(Observable(r), PUBLIC, nbw, nfw)
-Base.convert(::Type{Reactive{T}}, (r, m, nbw, nfw)::Tuple{T, Int, Bool, Bool}) where T = Reactive{T}(Observable(r), m, nbw, nfw)
-Base.convert(::Type{Reactive{T}}, (r, m, u)::Tuple{T, Int, Int}) where T = Reactive{T}(Observable(r), m, u)
-Base.convert(::Type{Observable{T}}, r::Reactive{T}) where T = getfield(r, :o)
-
-Base.getindex(r::Reactive{T}) where T = Base.getindex(getfield(r, :o))
-Base.setindex!(r::Reactive{T}) where T = Base.setindex!(getfield(r, :o))
-
-# pass indexing and property methods to referenced variable
-function Base.getindex(r::Reactive{T}, arg1, args...) where T
-  getindex(getfield(r, :o).val, arg1, args...)
-end
-
-function Base.setindex!(r::Reactive{T}, val, arg1, args...) where T
-  setindex!(getfield(r, :o).val, val, arg1, args...)
-  Observables.notify!(r)
-end
-
-Base.setindex!(r::Reactive, val, ::typeof(!)) = getfield(r, :o).val = val
-Base.getindex(r::Reactive, ::typeof(!)) = getfield(r, :o).val
-
-function Base.getproperty(r::Reactive{T}, field::Symbol) where T
-  if field in (:o, :r_mode, :no_backend_watcher, :no_frontend_watcher) # fieldnames(Reactive)
-    getfield(r, field)
-  else
-    if field == :val
-      @warn """Reactive API has changed, use "[]" instead of ".val"!"""
-      getfield(r, :o).val
-    else
-      getproperty(getfield(r, :o).val, field)
-    end
-  end
-end
-
-function Base.setproperty!(r::Reactive{T}, field::Symbol, val) where T
-  if field in fieldnames(Reactive)
-    setfield!(r, field, val)
-  else
-    if field == :val
-      @warn """Reactive API has changed, use "setfield_withoutwatchers!() or o.val" instead of ".val"!"""
-      getfield(r, :o).val = val
-    else
-      setproperty!(getfield(r, :o).val, field, val)
-      Observables.notify!(r)
-    end
-  end
-end
-
-function Base.hash(r::T) where {T<:Reactive}
-  hash((( getfield(r, f) for f in fieldnames(typeof(r)) ) |> collect |> Tuple))
-end
-
-function Base.:(==)(a::T, b::R) where {T<:Reactive,R<:Reactive}
-  hash(a) == hash(b)
-end
-
-Observables.observe(r::Reactive{T}, args...; kwargs...) where T = Observables.observe(getfield(r, :o), args...; kwargs...)
-Observables.listeners(r::Reactive{T}, args...; kwargs...) where T = Observables.listeners(getfield(r, :o), args...; kwargs...)
-
-@static if isdefined(Observables, :appendinputs!)
-    Observables.appendinputs!(r::Reactive{T}, obsfuncs) where T = Observables.appendinputs!(getfield(r, :o), obsfuncs)
-end
-
-import Base.map!
-@inline Base.map!(f::F, r::Reactive, os...; update::Bool=true) where F = Base.map!(f::F, getfield(r, :o), os...; update=update)
-
-const R = Reactive
-const PUBLIC = 1
-const PRIVATE = 2
-const READONLY = 4
-const JSFUNCTION = 8
-const NO_BACKEND_WATCHER = 16
-const NO_FRONTEND_WATCHER = 32
-const NO_WATCHER = 48
-
-
-OptDict = Dict{Symbol, Any}
+const OptDict = Dict{Symbol, Any}
 opts(;kwargs...) = OptDict(kwargs...)
 
+#===#
 
-WEB_TRANSPORT = Genie.WebChannels
+const WEB_TRANSPORT = Ref{Module}(Genie.WebChannels)
+webtransport!(transport::Module) = WEB_TRANSPORT[] = transport
+webtransport() = WEB_TRANSPORT[]
+is_channels_webtransport() = webtransport() == Genie.WebChannels
+
+#===#
 
 export R, Reactive, ReactiveModel, @R_str, @js_str, client_data
 export PRIVATE, PUBLIC, READONLY, JSFUNCTION, NO_WATCHER, NO_BACKEND_WATCHER, NO_FRONTEND_WATCHER
@@ -206,6 +61,10 @@ export newapp
 export onbutton
 export @kwredef
 export init
+
+#===#
+
+include("ReactiveTools.jl")
 
 #===#
 
@@ -227,93 +86,6 @@ function __init__()
 
   deps_routes(core_theme = true)
 end
-
-#===#
-
-"""
-    type ReactiveModel
-
-The abstract type that is inherited by Stipple models. Stipple models are used for automatic 2-way data sync and data
-exchange between the Julia backend and the JavaScript/Vue.js frontend.
-
-### Example
-
-```julia
-Base.@kwdef mutable struct HelloPie <: ReactiveModel
-  plot_options::R{PlotOptions} = PlotOptions(chart_type=:pie, chart_width=380, chart_animations_enabled=true,
-                                            stroke_show = false, labels=["Slice A", "Slice B"])
-  piechart::R{Vector{Int}} = [44, 55]
-  values::R{String} = join(piechart, ",")
-end
-```
-"""
-abstract type ReactiveModel end
-
-
-export @reactors, @reactive, @reactive!
-export ChannelName, getchannel
-
-const ChannelName = String
-const CHANNELFIELDNAME = :channel__
-
-function getchannel(m::T) where {T<:ReactiveModel}
-  getfield(m, CHANNELFIELDNAME)
-end
-
-
-function setchannel(m::T, value) where {T<:ReactiveModel}
-  setfield!(m, CHANNELFIELDNAME, ChannelName(value))
-end
-
-const AUTOFIELDS = [:isready, :isprocessing] # not DRY but we need a reference to the auto-set fields
-
-@pour reactors begin
-  channel__::Stipple.ChannelName = Stipple.channelfactory()
-  isready::Stipple.R{Bool} = false
-  isprocessing::Stipple.R{Bool} = false
-end
-
-@mix Stipple.@with_kw mutable struct reactive
-  Stipple.@reactors
-end
-
-
-@mix Stipple.@kwredef mutable struct reactive!
-  Stipple.@reactors
-end
-
-
-mutable struct Settings
-  readonly_pattern
-  private_pattern
-end
-Settings(; readonly_pattern = r"_$", private_pattern = r"__$") = Settings(readonly_pattern, private_pattern)
-
-function Base.hash(r::T) where {T<:ReactiveModel}
-  hash((( getfield(r, f) for f in fieldnames(typeof(r)) ) |> collect |> Tuple))
-end
-
-function Base.:(==)(a::T, b::R) where {T<:ReactiveModel,R<:ReactiveModel}
-  hash(a) == hash(b)
-end
-
-#===#
-struct MissingPropertyException{T<:ReactiveModel} <: Exception
-  property::Symbol
-  entity::T
-end
-Base.string(ex::MissingPropertyException) = "Entity $entity does not have required property $property"
-
-#===#
-
-"""
-    const JS_DEBOUNCE_TIME
-
-Debounce time used to indicate the minimum frequency for sending data payloads to the backend (for example to batch send
-payloads when the user types into an text field, to avoid overloading the server).
-"""
-const JS_DEBOUNCE_TIME = 300 #ms
-const SETTINGS = Settings()
 
 #===#
 
@@ -367,295 +139,11 @@ Abstract function. Can be used by plugins to define custom Vue.js watch function
 """
 function watch end
 
-"""
-    function js_methods(app::T) where {T<:ReactiveModel}
-
-Defines js functions for the `methods` section of the vue element.
-
-### Example
-
-```julia
-js_methods(app::MyDashboard) = \"\"\"
-  mysquare: function (x) {
-    return x^2
-  }
-  myadd: function (x, y) {
-    return x + y
-  }
-\"\"\"
-```
-"""
-function js_methods(app::T)::String where {T<:ReactiveModel}
-  ""
-end
-
-function js_methods_events()::String
-"""
-  handle_event: function (event, handler) {
-    Genie.WebChannels.sendMessageTo(window.CHANNEL, 'events', {
-        'event': {
-            'name': handler
-        }
-    })
-  }
-"""
-end
-
-"""
-    function js_computed(app::T) where {T<:ReactiveModel}
-
-Defines js functions for the `computed` section of the vue element.
-These properties are updated every time on of the inner parameters changes its value.
-
-### Example
-
-```julia
-js_computed(app::MyDashboard) = \"\"\"
-  fullName: function () {
-    return this.firstName + ' ' + this.lastName
-  }
-\"\"\"
-```
-"""
-function js_computed(app::T)::String where {T<:ReactiveModel}
-  ""
-end
-
-const jscomputed = js_computed
-
-"""
-    function js_watch(app::T) where {T<:ReactiveModel}
-
-Defines js functions for the `watch` section of the vue element.
-These functions are called every time the respective property changes.
-
-### Example
-
-Updates the `fullName` every time `firstName` or `lastName` changes.
-
-```julia
-js_watch(app::MyDashboard) = \"\"\"
-  firstName: function (val) {
-    this.fullName = val + ' ' + this.lastName
-  },
-  lastName: function (val) {
-    this.fullName = this.firstName + ' ' + val
-  }
-\"\"\"
-```
-"""
-function js_watch(m::T)::String where {T<:ReactiveModel}
-  ""
-end
-
-const jswatch = js_watch
-
-"""
-    function js_created(app::T)::String where {T<:ReactiveModel}
-
-Defines js statements for the `created` section of the vue element.
-They are executed directly after the creation of the vue element.
-
-### Example
-
-```julia
-js_created(app::MyDashboard) = \"\"\"
-    if (this.cameraon) { startcamera() }
-\"\"\"
-```
-"""
-function js_created(app::T)::String where {T<:ReactiveModel}
-  ""
-end
-
-const jscreated = js_created
-
-"""
-    function js_mounted(app::T)::String where {T<:ReactiveModel}
-
-Defines js statements for the `mounted` section of the vue element.
-They are executed directly after the mounting of the vue element.
-
-### Example
-
-```julia
-js_created(app::MyDashboard) = \"\"\"
-    if (this.cameraon) { startcamera() }
-\"\"\"
-```
-"""
-function js_mounted(app::T)::String where {T<:ReactiveModel}
-  ""
-end
-
-const jsmounted = js_mounted
-
-"""
-    function client_data(app::T)::String where {T<:ReactiveModel}
-
-Defines additional data that will only be visible by the browser.
-
-It is meant to keep volatile data, e.g. form data that needs to pass a validation first.
-In order to use the data you most probably also want to define [`js_methods`](@ref)
-### Example
-
-```julia
-import Stipple.client_data
-client_data(m::Example) = client_data(client_name = js"null", client_age = js"null", accept = false)
-```
-will define the additional fields `client_name`, `clientage` and `accept` for the model `Example`. These should, of course, not overlap with existing fields of your model.
-"""
-client_data(app::T) where T <: ReactiveModel = Dict{String, Any}()
-
-client_data(;kwargs...) = Dict{String, Any}([String(k) => v for (k, v) in kwargs]...)
-
 #===#
 
-COMPONENTS = Dict()
-
-"""
-    function register_components(model::Type{M}, keysvals::AbstractVector) where {M<:ReactiveModel}
-
-Utility function for adding Vue components that need to be registered with the Vue.js app.
-This is usually needed for registering components provided by Stipple plugins.
-
-### Example
-
-```julia
-Stipple.register_components(HelloPie, StippleCharts.COMPONENTS)
-```
-"""
-function register_components(model::Type{M}, keysvals::AbstractVector) where {M<:ReactiveModel}
-  haskey(COMPONENTS, model) || (COMPONENTS[model] = Any[])
-  push!(COMPONENTS[model], keysvals...)
-end
-
-function register_components(model::Type{M}, args...) where {M<:ReactiveModel}
-  for a in args
-    register_components(model, a)
-  end
-end
-
-"""
-    function components(m::Type{M})::String where {M<:ReactiveModel}
-    function components(app::M)::String where {M<:ReactiveModel}
-
-JSON representation of the Vue.js components registered for the `ReactiveModel` `M`.
-"""
-function components(m::Type{M})::String where {M<:ReactiveModel}
-  haskey(COMPONENTS, m) || return ""
-
-  replace(Dict(COMPONENTS[m]...) |> json, "\""=>"") |> string
-end
-
-function components(app::M)::String where {M<:ReactiveModel}
-  components(M)
-end
-
-#===#
-
-"""
-    setindex_withoutwatchers!(field::Reactive, val; notify=(x)->true)
-    setindex_withoutwatchers!(field::Reactive, val, keys::Int...; notify=(x)->true)
-
-Change the content of a Reactive field without triggering the listeners.
-If keys are specified, only these listeners are exempted from triggering.
-"""
-function setindex_withoutwatchers!(field::Reactive{T}, val, keys::Int...; notify=(x)->true) where T
-  count = 1
-  field.o.val = val
-  length(keys) == 0 && return field
-
-  for f in Observables.listeners(field.o)
-    if in(count, keys)
-      count += 1
-
-      continue
-    end
-
-    if notify(f)
-      try
-        Base.invokelatest(f, val)
-      catch ex
-        @error "Error attempting to invoke $f with $val"
-        @error ex
-        Genie.Configuration.isdev() && rethrow(ex)
-      end
-    end
-
-    count += 1
-  end
-
-  return field
-end
-
-function Base.setindex!(r::Reactive{T}, val, args::Vector{Int}; notify=(x)->true) where T
-  setindex_withoutwatchers!(r, val, args...)
-end
-
-"""
-    setfield_withoutwatchers!(app::ReactiveModel, field::Symmbol, val; notify=(x)->true)
-    setfield_withoutwatchers!(app::ReactiveModel, field::Symmbol, val, keys...; notify=(x)->true)
-
-Change the field of a ReactiveModel without triggering the listeners.
-If keys are specified, only these listeners are exempted from triggering.
-"""
-function setfield_withoutwatchers!(app::T, field::Symbol, val, keys...; notify=(x)->true) where T <: ReactiveModel
-  f = getfield(app, field)
-
-  if f isa Reactive
-    setindex_withoutwatchers!(f, val, keys...; notify = notify)
-  else
-    setfield!(app, field, val)
-  end
-
-  app
-end
-
-#===#
-
-include("Typography.jl")
-include("Elements.jl")
-include("Layout.jl")
-
-@reexport using .Typography
-@reexport using .Elements
-@reexport using .Layout
-
-#===#
-
-function convertvalue(targetfield::Any, value)
-  stipple_parse(eltype(targetfield), value)
-end
-
-"""
-    function update!(model::M, field::Symbol, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-    function update!(model::M, field::Reactive, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-    function update!(model::M, field::Any, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-
-Sets the value of `model.field` from `oldval` to `newval`. Returns the upated `model` instance.
-"""
-function update!(model::M, field::Symbol, newval::T1, oldval::T2)::M where {T1, T2, M<:ReactiveModel}
-  f = getfield(model, field)
-  if f isa Reactive
-    f.r_mode == PRIVATE || f.no_backend_watcher ? f[] = newval : setindex_withoutwatchers!(f, newval, 1)
-  else
-    setfield!(model, field, newval)
-  end
-  model
-end
-
-function update!(model::M, field::Reactive{T}, newval::T, oldval::T)::M where {T, M<:ReactiveModel}
-  field.r_mode == PRIVATE || field.no_backend_watcher ? field[] = newval : setindex_withoutwatchers!(field, newval, 1)
-
-  model
-end
-
-function update!(model::M, field::Any, newval::T, oldval::T)::M where {T,M<:ReactiveModel}
-  setfield!(model, field, newval)
-
-  model
-end
+include("stipple/jsmethods.jl")
+include("stipple/components.jl")
+include("stipple/mutators.jl")
 
 #===#
 
@@ -685,45 +173,9 @@ end
 
 #===#
 
-# wrapper around Base.parse to prevent type piracy
-stipple_parse(::Type{T}, value) where T = Base.parse(T, value)
+include("stipple/parsers.jl")
 
-function stipple_parse(::Type{T}, value::Dict) where T <: AbstractDict
-  convert(T, value)
-end
-
-function stipple_parse(::Type{T}, value::Dict) where {Tval, T <: AbstractDict{Symbol, Tval}}
-  T(zip(Symbol.(string.(keys(value))), values(value)))
-end
-
-function stipple_parse(::Type{T1}, value::T2) where {T1 <: Number, T2 <: Number}
-  convert(T1, value)
-end
-
-function stipple_parse(::Type{T1}, value::T2) where {T1 <: Integer, T2 <: Number}
-  round(T1, value)
-end
-
-function stipple_parse(::Type{T1}, value::T2) where {T1 <: AbstractArray, T2 <: AbstractArray}
-  T1(stipple_parse.(eltype(T1), value))
-end
-
-function stipple_parse(::Type{T}, value) where T <: AbstractArray
-  convert(T, eltype(T)[value])
-end
-
-function stipple_parse(::Type{T}, value) where T <: AbstractRange
-  convert(T, value)
-end
-
-function stipple_parse(::Type{T}, v::T) where {T}
-  v::T
-end
-
-function stipple_parse(::Type{Symbol}, s::String)
-  Symbol(s)
-end
-
+#===#
 
 function channelfactory(length::Int = 32)
   randstring('A':'Z', length)
@@ -777,7 +229,7 @@ function init(m::Type{M};
               transport::Module = Genie.WebChannels,
               core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
 
-  global WEB_TRANSPORT = transport
+  webtransport!(transport)
   model = Base.invokelatest(m)
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
   ok_response = "OK"
@@ -790,7 +242,7 @@ function init(m::Type{M};
     setchannel(model, channelfactory())
   end
 
-  if WEB_TRANSPORT == Genie.WebChannels
+  if is_channels_webtransport()
     Genie.Assets.channels_subscribe(channel)
   else
     Genie.Assets.webthreads_subscribe(channel)
@@ -805,7 +257,8 @@ function init(m::Type{M};
 
       try
         haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) &&
-          Genie.Router.params!(Stipple.ModelStorage.Sessions.GenieSession.PARAMS_SESSION_KEY, Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
+          Genie.Router.params!(Stipple.ModelStorage.Sessions.GenieSession.PARAMS_SESSION_KEY,
+                                Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
       catch ex
         @error ex
       end
@@ -863,7 +316,7 @@ function init(m::Type{M};
   setup(model, channel)
 end
 function init(m::M; kwargs...)::M where {M<:ReactiveModel, S<:AbstractString}
-  error("This method has been removed -- please use `init($M; kwargs...)` instead")
+  error("This method has been removed -- please use `init($M; kwargs...)` instead")``
 end
 
 
@@ -936,9 +389,10 @@ function Base.push!(app::M, vals::Pair{Symbol,T};
                     channel::String = Genie.config.webchannels_default_route,
                     except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing)::Bool where {T,M<:ReactiveModel}
   try
-    WEB_TRANSPORT.broadcast(channel, json(Dict("key" => julia_to_vue(vals[1]), "value" => Stipple.render(vals[2], vals[1]))), except = except)
+    webtransport().broadcast(channel, json(Dict("key" => julia_to_vue(vals[1]), "value" => Stipple.render(vals[2], vals[1]))), except = except)
   catch ex
     @error ex
+    false
   end
 end
 
@@ -966,216 +420,13 @@ end
 
 #===#
 
-RENDERING_MAPPINGS = Dict{String,String}()
-mapping_keys() = collect(keys(RENDERING_MAPPINGS))
-
-"""
-    function rendering_mappings(mappings = Dict{String,String})
-
-Registers additional `mappings` as Julia to Vue properties mappings  (eg `foobar` to `foo-bar`).
-"""
-function rendering_mappings(mappings = Dict{String,String})
-  merge!(RENDERING_MAPPINGS, mappings)
-end
-
-"""
-    function julia_to_vue(field, mapping_keys = mapping_keys())
-
-Converts Julia names to Vue names (eg `foobar` to `foo-bar`).
-"""
-function julia_to_vue(field, mapping_keys = mapping_keys()) :: String
-  if in(string(field), mapping_keys)
-    parts = split(RENDERING_MAPPINGS[string(field)], "-")
-
-    if length(parts) > 1
-      extraparts = map((x) -> uppercasefirst(string(x)), parts[2:end])
-      string(parts[1], join(extraparts))
-    else
-      parts |> string
-    end
-  else
-    field |> string
-  end
-end
-
-"""
-    function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dict{Symbol,Any} where {M<:ReactiveModel}
-
-Renders the Julia `ReactiveModel` `app` as the corresponding Vue.js JavaScript code.
-"""
-function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dict{Symbol,Any} where {M<:ReactiveModel}
-  result = Dict{String,Any}()
-
-  for field in fieldnames(typeof(app))
-    f = getfield(app, field)
-
-    occursin(SETTINGS.private_pattern, String(field)) && continue
-    f isa Reactive && f.r_mode == PRIVATE && continue
-
-    result[julia_to_vue(field)] = Stipple.render(f, field)
-  end
-
-  vue = Dict( :el => JSONText("rootSelector"),
-              :mixins => JSONText("[watcherMixin, reviveMixin]"),
-              :data => merge(result, client_data(app)))
-
-  isempty(components(app)   |> strip)   || push!(vue, :components => components(app))
-  isempty(js_computed(app)  |> strip)   || push!(vue, :computed   => JSONText("{ $(js_computed(app)) }"))
-  isempty(js_watch(app)     |> strip)   || push!(vue, :watch      => JSONText("{ $(js_watch(app)) }"))
-  isempty(js_created(app)   |> strip)   || push!(vue, :created    => JSONText("function(){ $(js_created(app)); }"))
-  isempty(js_mounted(app)   |> strip)   || push!(vue, :mounted    => JSONText("function(){ $(js_mounted(app)); }"))
-  methods = js_methods(app) |> strip
-  push!(vue, :methods    => JSONText("{ $((isempty(methods) ? "" : methods*",")*js_methods_events()) }"))
-
-  vue
-end
-
-"""
-    function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) where {T}
-
-Default rendering of value types. Specialize `Stipple.render` to define custom rendering for your types.
-"""
-function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) where {T}
-  val
-end
-
-"""
-    function Stipple.render(o::Reactive{T}, fieldname::Union{Symbol,Nothing} = nothing) where {T}
-
-Default rendering of `Reactive` values. Specialize `Stipple.render` to define custom rendering for your type `T`.
-"""
-function Stipple.render(o::Reactive{T}, fieldname::Union{Symbol,Nothing} = nothing) where {T}
-  Stipple.render(o[], fieldname)
-end
-
-"""
-    function parse_jsfunction(s::AbstractString)
-
-Checks whether the string is a valid js function and returns a `Dict` from which a reviver function
-in the backend can construct a function.
-"""
-function parse_jsfunction(s::AbstractString)
-    # look for classical function definition
-    m = match( r"function\s*\(([^)]*)\)\s*{(.*)}", s)
-    !isnothing(m) && length(m.captures) == 2 && return opts(arguments=m[1], body=m[2])
-
-    # look for pure function definition
-    m = match( r"\s*\(?([^=)]*?)\)?\s*=>\s*({*.*?}*)\s*$" , s )
-    (isnothing(m) || length(m.captures) != 2) && return nothing
-
-    # if pure function body is without curly brackets, add a `return`, otherwise strip the brackets
-    # Note: for utf-8 strings m[2][2:end-1] will fail if the string ends with a wide character, e.g. ϕ
-    body = startswith(m[2], "{") ? m[2][2:prevind(m[2], lastindex(m[2]))] : "return " * m[2]
-    return opts(arguments=m[1], body=body)
-end
-
-"""
-    function replace_jsfunction!(js::Union{Dict, JSONText})
-
-Replaces all JSONText values that contain a valid js function by a `Dict` that codes the function for a reviver.
-For JSONText variables it encapsulates the dict in a JSONText to make the function type stable.
-"""
-replace_jsfunction!(x) = x # fallback is identity function
-
-function replace_jsfunction!(d::Dict)
-    for (k,v) in d
-        if isa(v, Dict) || isa(v, Array)
-            replace_jsfunction!(v)
-        elseif isa(v, JSONText)
-            jsfunc = parse_jsfunction(v.s)
-            isnothing(jsfunc) || ( d[k] = opts(jsfunction=jsfunc) )
-        end
-    end
-    return d
-end
-
-function replace_jsfunction!(v::Array)
-  replace_jsfunction!.(v)
-end
-
-"""
-Replaces all JSONText values on a copy of the input, see [`replace_jsfunction!`](@ref).
-"""
-function replace_jsfunction(d::Dict)
-  replace_jsfunction!(deepcopy(d))
-end
-
-function replace_jsfunction(v::Vector)
-  replace_jsfunction!.(deepcopy(v))
-end
-
-function replace_jsfunction(js::JSONText)
-    jsfunc = parse_jsfunction(js.s)
-    isnothing(jsfunc) ? js : JSONText(json(opts(jsfunction=jsfunc)))
-end
-
-replace_jsfunction(s::AbstractString) = replace_jsfunction(JSONText(s))
-
-"""
-    function jsfunction(jscode::String)
-
-Build a dictionary that is converted to a js function in the frontend by the reviver.
-There is also a string macro version `jsfunction"<js code>"`
-"""
-function jsfunction(jscode::String)
-  jsfunc = parse_jsfunction(jscode)
-  isnothing(jsfunc) && (jsfunc = opts(arguments = "", body = jscode) )
-  opts(jsfunction = jsfunc)
-end
-
-"""
-    jsfunction"<js code>"
-
-Build a dictionary that is converted to a js function in the frontend by the reviver.
-"""
-macro jsfunction_str(expr)
-  :( jsfunction($(esc(expr))) )
-end
-
-"""
-    function Base.run(model::ReactiveModel, jscode::String; context = :model)
-
-Execute js code in the frontend. `context` can be `:model` or `:app`
-"""
-function Base.run(model::ReactiveModel, jscode::String; context = :model)
-  context ∈ (:model, :app) && push!(model, Symbol("js_", context) => jsfunction(jscode); channel = getchannel(model))
-
-  nothing
-end
-
-"""
-  function Base.setindex!(model::ReactiveModel, val, index::AbstractString)
-
-Set model fields or subfields on the client.
-```
-model["plot.data[0].selectedpoints"] = [1, 3]
-model["table_selection"] = rowselection(model.table[], [2, 4])
-```
-Note:
-- Array indices are zero-based because the code is executed on the client side
-- Table indices are 1-based because they rely on the hidden "__id" columns, which is one-based
-"""
-function Base.setindex!(model::ReactiveModel, val, index::AbstractString)
-  run(model, "this.$index = $(strip(json(render(val)), '"'))")
-end
-
-"""
-  function Base.notify(model::ReactiveModel, field::JSONText)
-
-Notify model fields or subfields on the client side. Typically used after
-```
-model["plot.data[0].selectedpoints"] = [1, 3]
-notify(model, js"plot.data")
-```
-"""
-function Base.notify(model::ReactiveModel, field::JSONText)
-  run(model, "this.$(field.s).__ob__.dep.notify()")
-end
+include("stipple/rendering.jl")
+include("stipple/jsintegration.jl")
 
 #===#
 
 import OrderedCollections
-const DEPS = OrderedCollections.OrderedDict{Union{Any,AbstractString}, Function}()
+const DEPS = OrderedCollections.LittleDict{Union{Any,AbstractString}, Function}()
 
 """
     function deps_routes(channel::String = Genie.config.webchannels_default_route) :: Nothing
@@ -1191,7 +442,7 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
         :css) |> Genie.Renderer.respond
     end
 
-    if WEB_TRANSPORT == Genie.WebChannels
+    if is_channels_webtransport()
       Genie.Assets.channels_route(Genie.Assets.jsliteral(channel))
     else
       Genie.Assets.webthreads_route(Genie.Assets.jsliteral(channel))
@@ -1228,7 +479,7 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
         Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="watchers")), :javascript) |> Genie.Renderer.respond
     end
 
-    if Genie.config.webchannels_keepalive_frequency > 0 && WEB_TRANSPORT == Genie.WebChannels
+    if Genie.config.webchannels_keepalive_frequency > 0 && is_channels_webtransport()
       Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="keepalive"), named = :get_keepalivejs) do
         Genie.Renderer.WebRenderable(
           Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="keepalive")), :javascript) |> Genie.Renderer.respond
@@ -1267,7 +518,7 @@ function deps(m::M; core_theme::Bool = true) :: Vector{String} where {M<:Reactiv
   channel = getchannel(m)
   output = [
     channelscript(channel),
-    (WEB_TRANSPORT == Genie.WebChannels ? Genie.Assets.channels_script_tag(channel) : Genie.Assets.webthreads_script_tag(channel)),
+    (is_channels_webtransport() ? Genie.Assets.channels_script_tag(channel) : Genie.Assets.webthreads_script_tag(channel)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="underscore-min")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.min" : "vue"))),
     core_theme && Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="stipplecore")),
@@ -1275,7 +526,7 @@ function deps(m::M; core_theme::Bool = true) :: Vector{String} where {M<:Reactiv
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="watchers")),
 
     (
-      (Genie.config.webchannels_keepalive_frequency > 0 && WEB_TRANSPORT == Genie.WebChannels) ?
+      (Genie.config.webchannels_keepalive_frequency > 0 && is_channels_webtransport()) ?
         Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="keepalive"), defer=true) : ""
     )
   ]
@@ -1380,6 +631,8 @@ macro kwredef(expr)
     if VERSION < v"1.8-alpha"
       $curly ? $T_new.body.name.name = $(QuoteNode(T_old)) : $T_new.name.name = $(QuoteNode(T_old)) # fix the name
     end
+
+    $T_new
   end)
 end
 
@@ -1397,47 +650,11 @@ macro kwdef(expr)
   end)
 end
 
-# checking properties of Reactive types
-@nospecialize
+#===#
 
-isprivate(field::Reactive) = field.r_mode == PRIVATE
+include("stipple/reactive_props.jl")
 
-function isprivate(fieldname::Symbol, model::M)::Bool where {M<:ReactiveModel}
-  field = getfield(model, fieldname)
-  if field isa Reactive
-    isprivate(field)
-  else
-    occursin(Stipple.SETTINGS.private_pattern, String(fieldname))
-  end
-end
-
-
-isreadonly(field::Reactive) = field.r_mode == READONLY
-
-function isreadonly(fieldname::Symbol, model::M)::Bool where {M<:ReactiveModel}
-  field = getfield(model, fieldname)
-  if field isa Reactive
-    isreadonly(field)
-  else
-    occursin(Stipple.SETTINGS.readonly_pattern, String(fieldname))
-  end
-end
-
-
-has_frontend_watcher(field::Reactive) = ! (field.r_mode in [READONLY, PRIVATE] || field.no_frontend_watcher)
-
-function has_frontend_watcher(fieldname::Symbol, model::M)::Bool where {M<:ReactiveModel}
-  getfield(model, fieldname) isa Reactive && has_frontend_watcher(getfield(model, fieldname))
-end
-
-
-has_backend_watcher(field::Reactive) = ! (field.r_mode == PRIVATE || field.no_backend_watcher)
-
-function has_backend_watcher(fieldname::Symbol, model::M)::Bool where {M<:ReactiveModel}
-  getfield(model, fieldname) isa Reactive && has_backend_watcher(getfield(model, fieldname))
-end
-
-@specialize
+#===#
 
 
 function attributes(kwargs::Union{Vector{<:Pair}, Base.Iterators.Pairs, Dict},
@@ -1464,8 +681,11 @@ function attributes(kwargs::Union{Vector{<:Pair}, Base.Iterators.Pairs, Dict},
   NamedTuple(attrs)
 end
 
+#===#
 
 include("Pages.jl")
+
+#===#
 
 _deepcopy(r::R{T}) where T = R(deepcopy(r.o.val), r.r_mode, r.no_backend_watcher, r.no_frontend_watcher)
 _deepcopy(x) = deepcopy(x)
@@ -1617,5 +837,15 @@ off!(@nospecialize(o::Observables.AbstractObservable), index::Integer) = off!(o,
 Remove all listeners from an observable.
 """
 off!(@nospecialize(o::Observables.AbstractObservable)) = off!(o, 1:length(Observables.listeners(o)))
+
+#===#
+
+include("Typography.jl")
+include("Elements.jl")
+include("Layout.jl")
+
+@reexport using .Typography
+@reexport using .Elements
+@reexport using .Layout
 
 end
