@@ -46,14 +46,18 @@ function Page(  route::Union{Route,String};
 
   page = Page(route, view, typeof((isa(model,Function) || isa(model,DataType) ? Base.invokelatest(model) : model)), layout)
 
-  for i in eachindex(_pages)
-    if _pages[i].route.path == route.path && _pages[i].route.method == route.method
-      Router.delete!(routename(_pages[i].route))
-      _pages[i] = page
+  if isempty(_pages)
+    push!(_pages, page)
+  else
+    for i in eachindex(_pages)
+      if _pages[i].route.path == route.path && _pages[i].route.method == route.method
+        Router.delete!(routename(_pages[i].route))
+        _pages[i] = page
 
-      break
-    else
-      push!(_pages, page)
+        break
+      else
+        push!(_pages, page)
+      end
     end
   end
 
