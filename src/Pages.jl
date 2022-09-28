@@ -51,7 +51,7 @@ function Page(  route::Union{Route,String};
   else
     for i in eachindex(_pages)
       if _pages[i].route.path == route.path && _pages[i].route.method == route.method
-        Router.delete!(routename(_pages[i].route))
+        Router.delete!(Router.routename(_pages[i].route))
         _pages[i] = page
 
         break
