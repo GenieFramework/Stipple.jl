@@ -391,7 +391,7 @@ function Base.push!(app::M, vals::Pair{Symbol,T};
   try
     webtransport().broadcast(channel, json(Dict("key" => julia_to_vue(vals[1]), "value" => Stipple.render(vals[2], vals[1]))), except = except)
   catch ex
-    @error ex
+    @debug ex
     false
   end
 end
@@ -697,7 +697,7 @@ function register_mixin end
 
 """
     macro mixin(expr, prefix, postfix)
-    
+
 `@mixin` is used for inserting structs or struct types
 in `ReactiveModel`s or other `Base.@kwdef` structs.
 
