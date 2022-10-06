@@ -623,6 +623,11 @@ macro kwredef(expr)
   end
 
   T_old = t[n]
+
+  if isa(T_old, Expr) && T_old.head == Symbol(".")
+    T_old = (split(string(T_old), '.')[end] |> Symbol)
+  end
+
   t[n] = T_new = gensym(T_old)
 
   esc(quote

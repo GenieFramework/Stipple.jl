@@ -16,10 +16,10 @@ export pages
 @reactive mutable struct EmptyModel <: ReactiveModel
 end
 
-mutable struct Page{M<:ReactiveModel}
+mutable struct Page
   route::Route
   view::Union{Genie.Renderers.FilePath,<:AbstractString}
-  model::Type{M}
+  model
   layout::Union{Genie.Renderers.FilePath,<:AbstractString,Nothing}
 end
 
@@ -56,11 +56,11 @@ function Page(  route::Union{Route,String};
     push!(_pages, page)
   else
     for i in eachindex(_pages)
+      @show _pages[i]
+
       if _pages[i].route.path == route.path && _pages[i].route.method == route.method
         Router.delete!(Router.routename(_pages[i].route))
         _pages[i] = page
-
-        break
       else
         push!(_pages, page)
       end
@@ -70,6 +70,14 @@ function Page(  route::Union{Route,String};
   Router.route(route)
 
   page
+end
+
+function delete!(page::Page)
+  deleteat!(_pages, findall(p -> p == page, _pages))
+end
+
+function remove_pages()
+  empty!(_pages)
 end
 
 end
