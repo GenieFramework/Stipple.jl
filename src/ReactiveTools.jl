@@ -233,7 +233,11 @@ end
 
 macro init()
   quote
-    @init(@type())
+    instance = @init(@type())
+    for p in Stipple.Pages._pages
+      p.context == $__module__ && (p.model = instance)
+    end
+    instance
   end |> esc
 end
 

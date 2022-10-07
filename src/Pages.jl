@@ -21,6 +21,7 @@ mutable struct Page
   view::Union{Genie.Renderers.FilePath,<:AbstractString}
   model
   layout::Union{Genie.Renderers.FilePath,<:AbstractString,Nothing}
+  context::Module
 end
 
 const _pages = Page[]
@@ -50,14 +51,12 @@ function Page(  route::Union{Route,String};
 
   route.action = () -> html(view; layout, context, model = (isa(model,Function) ? Base.invokelatest(model) : model), kwargs...)
 
-  page = Page(route, view, typeof((isa(model,Function) || isa(model,DataType) ? Base.invokelatest(model) : model)), layout)
+  page = Page(route, view, typeof((isa(model,Function) || isa(model,DataType) ? Base.invokelatest(model) : model)), layout, context)
 
   if isempty(_pages)
     push!(_pages, page)
   else
     for i in eachindex(_pages)
-      @show _pages[i]
-
       if _pages[i].route.path == route.path && _pages[i].route.method == route.method
         Router.delete!(Router.routename(_pages[i].route))
         _pages[i] = page
