@@ -7,7 +7,7 @@ using OrderedCollections
 import Genie
 
 export @binding, @readonly, @private, @in, @out, @value, @jsfn
-export @page, @rstruct, @type, @handlers, @init, @model, @onchange, @onchangeany, @pages
+export @page, @rstruct, @type, @handlers, @init, @model, @onchange, @onchangeany
 
 const REACTIVE_STORAGE = LittleDict{Module,LittleDict{Symbol,Expr}}()
 const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
@@ -49,6 +49,8 @@ function default_struct_name(m::Module)
 end
 
 function init_storage(m::Module)
+  (m == @__MODULE__) && return nothing
+
   haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = LittleDict{Symbol,Expr}())
   haskey(TYPES, m) || (TYPES[m] = nothing)
 
@@ -212,7 +214,7 @@ end
 
 #===#
 
-macro init()
+macro init(modeltype)
   quote
     local initfn =  if isdefined($__module__, :init_from_storage)
                       $__module__.init_from_storage
@@ -225,45 +227,27 @@ macro init()
                           identity
                         end
 
-    @type() |> initfn |> handlersfn
+    $modeltype |> initfn |> handlersfn
+  end |> esc
+end
+
+macro init()
+  quote
+    @init(@type())
   end |> esc
 end
 
 macro handlers(expr)
-  res = quote
+  quote
     isdefined(@__MODULE__, :__HANDLERS__) || @eval const __HANDLERS__ = Stipple.Observables.ObserverFunction[]
 
     function __GF_AUTO_HANDLERS__(__model__)
-      # Stipple.Pages.remove_pages()
-      # for h in __HANDLERS__
-      #   Stipple.Observables.off(h)
-      # end
-
       empty!(__HANDLERS__)
 
       $expr
 
-      for p in Stipple.Pages._pages
-        p.model = typeof(__model__)
-        # p.route.model = __model__
-      end
-
       return __model__
     end
-  end |> esc
-
-  # @eval $__module__, @init
-
-  res
-end
-
-macro pages(expr)
-  quote
-    @show "Paging"
-    function __GF_AUTO_PAGES__()
-      $expr
-    end
-    __GF_AUTO_PAGES__()
   end |> esc
 end
 
@@ -295,9 +279,12 @@ macro onchangeany(vars, expr)
   exp = postwalk(x -> isa(x, Symbol) && in(x, known_vars) ? :(__model__.$x[]) : x, expr)
 
   quote
-    onany($va...) do (__values__...)
-      $exp
-    end
+    push!(__HANDLERS__, (
+      onany($va...) do (__values__...)
+        $exp
+      end
+      )...
+    )
   end |> esc
 end
 
@@ -308,7 +295,7 @@ macro page(url, view, layout)
     Stipple.Pages.Page( $url;
                         view = $view,
                         layout = $layout,
-                        model = () -> @init(),
+                        model = () -> @init,
                         context = $__module__)
   end |> esc
 end
