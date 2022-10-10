@@ -7,7 +7,7 @@ using OrderedCollections
 import Genie
 
 export @binding, @readonly, @private, @in, @out, @value, @jsfn
-export @page, @rstruct, @type, @handlers, @init, @model, @onchange, @onchangeany
+export @page, @rstruct, @type, @handlers, @init, @model, @onchange, @onchangeany, @onbutton
 
 const REACTIVE_STORAGE = LittleDict{Module,LittleDict{Symbol,Expr}}()
 const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
@@ -227,17 +227,17 @@ macro init(modeltype)
                           identity
                         end
 
-    $modeltype |> initfn |> handlersfn
+    instance = $modeltype |> initfn |> handlersfn
+    for p in Stipple.Pages._pages
+      p.context == $__module__ && (p.model = instance)
+    end
+    instance
   end |> esc
 end
 
 macro init()
   quote
-    instance = @init(@type())
-    for p in Stipple.Pages._pages
-      p.context == $__module__ && (p.model = instance)
-    end
-    instance
+    @init(@type())
   end |> esc
 end
 
@@ -255,21 +255,27 @@ macro handlers(expr)
   end |> esc
 end
 
+macro process_handler_input()
+  quote
+    known_vars = push!(Stipple.ReactiveTools.REACTIVE_STORAGE[__module__] |> keys |> collect, :isready, :isprocessing) # add mixins
+
+    if isa(var, Symbol) && in(var, known_vars)
+      var = :(__model__.$var)
+    else
+      error("Unknown binding $var")
+    end
+
+    expr = postwalk(x -> isa(x, Symbol) && in(x, known_vars) ? :(__model__.$x[]) : x, expr)
+  end |> esc
+end
+
 macro onchange(var, expr)
-  known_vars = push!(Stipple.ReactiveTools.REACTIVE_STORAGE[__module__] |> keys |> collect, :isready, :isprocessing) # add mixins
-
-  if isa(var, Symbol) && in(var, known_vars)
-    var = :(__model__.$var)
-  else
-    error("Unknown binding $var")
-  end
-
-  exp = postwalk(x -> isa(x, Symbol) && in(x, known_vars) ? :(__model__.$x[]) : x, expr)
+  @process_handler_input()
 
   quote
     push!(__HANDLERS__, (
       on($var) do __value__
-        $exp
+        $expr
       end
       )
     )
@@ -288,6 +294,19 @@ macro onchangeany(vars, expr)
         $exp
       end
       )...
+    )
+  end |> esc
+end
+
+macro onbutton(var, expr)
+  @process_handler_input()
+
+  quote
+    push!(__HANDLERS__, (
+      onbutton($var) do __value__
+        $expr
+      end
+      )
     )
   end |> esc
 end
