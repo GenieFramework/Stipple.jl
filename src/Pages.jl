@@ -45,7 +45,7 @@ function Page(  route::Union{Route,String};
 
   isa(model, Expr) && (model = Core.eval(context, model))
   route = isa(route, String) ? Route(; method = GET, path = route) : route
-  layout = isa(layout, String) && isfile(layout) ? filepath(layout) :
+  layout = isa(layout, String) && length(layout) < Stipple.IF_ITS_THAT_LONG_IT_CANT_BE_A_FILENAME && isfile(layout) ? filepath(layout) :
             isa(layout, ParsedHTMLString) || isa(layout, String) ? string(layout) :
               layout
 

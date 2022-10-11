@@ -20,12 +20,12 @@ function init_from_storage(m::Type{T};
     if field isa Reactive
       # restore fields only if a stored model exists, if the field is not part of the internal fields and is not write protected
       (
-        isnothing(stored_model) || f ∈ [:channels__, Stipple.AUTOFIELDS...] || Stipple.isreadonly(f, model) || Stipple.isprivate(f, model) ||
+        isnothing(stored_model) || f ∈ [Stipple.CHANNELFIELDNAME, Stipple.AUTOFIELDS...] || Stipple.isreadonly(f, model) || Stipple.isprivate(f, model) ||
         ! hasproperty(stored_model, f) || (field[!] = getfield(stored_model, f)[])
       )
 
       # register reactive handlers to automatically save model on session when model changes
-      if f ∉ [:channels__, Stipple.AUTOFIELDS...]
+      if f ∉ [Stipple.CHANNELFIELDNAME, Stipple.AUTOFIELDS...]
         on(field) do _
           GenieSession.set!(model_id, model)
         end

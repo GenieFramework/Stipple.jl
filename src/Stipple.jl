@@ -46,6 +46,8 @@ const channel_js_name = "window.CHANNEL"
 const OptDict = Dict{Symbol, Any}
 opts(;kwargs...) = OptDict(kwargs...)
 
+const IF_ITS_THAT_LONG_IT_CANT_BE_A_FILENAME = 500
+
 #===#
 
 const WEB_TRANSPORT = Ref{Module}(Genie.WebChannels)
@@ -477,6 +479,11 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
     Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="watchers"), named = :get_watchersjs) do
       Genie.Renderer.WebRenderable(
         Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="watchers")), :javascript) |> Genie.Renderer.respond
+    end
+
+    Genie.Router.route(Genie.Assets.asset_route(assets_config, :img, file="genie-logo"), named = :get_genielogosvg) do
+      Genie.Renderer.WebRenderable(
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="svg", file="genie-logo")), :svg) |> Genie.Renderer.respond
     end
 
     if Genie.config.webchannels_keepalive_frequency > 0 && is_channels_webtransport()
