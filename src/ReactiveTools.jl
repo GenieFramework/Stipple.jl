@@ -51,7 +51,7 @@ function DEFAULT_LAYOUT(; title::String = "Genie App")
     <footer class='_genie container'>
       <div class='row'>
         <div class='col-12'>
-          <p class='text-muted credit' style='text-align:center;'>Built with
+          <p class='text-muted credit' style='text-align:center;color:#8d99ae;'>Built with
             <a href='https://genieframework.com' target='_blank' class='_genie_logo' ref='nofollow'>Genie</a>
           </p>
         </div>
