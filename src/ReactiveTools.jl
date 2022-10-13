@@ -185,6 +185,11 @@ function binding(expr::Expr, m::Module, opts::String = "", typename::String = "S
 
   # remove cached type and instance
   clear_type(m)
+
+  instance = @eval m @type()
+  for p in Stipple.Pages._pages
+    p.context == m && (p.model = instance)
+  end
 end
 
 # works with
