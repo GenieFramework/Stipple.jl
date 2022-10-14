@@ -8,7 +8,7 @@ module Layout
 using Genie, Stipple
 
 export layout
-export page, app, row, cell
+export page, app, row, cell, container
 
 export theme
 const THEMES = Function[]
@@ -98,6 +98,15 @@ function page(model::M, args...;
 end
 
 const app = page
+
+
+function container(args...; fluid = false, kwargs...)
+  cssclass = fluid ? "container-fluid" : "container"
+  kwargs = NamedTuple(Dict{Symbol,Any}(kwargs...), :class, cssclass)
+
+  Genie.Renderer.Html.div(args...; kwargs...)
+end
+
 
 """
     function row(args...; kwargs...)
