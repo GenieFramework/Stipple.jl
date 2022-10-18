@@ -164,6 +164,9 @@ function parse_expression(expr::Expr, opts::String = "", typename::String = "Sti
   op = expr.head
 
   source = (source !== nothing ? "\"$(strip(replace(replace(string(source), "#="=>""), "=#"=>"")))\"" : "")
+  if Sys.iswindows()
+    source = replace(source, "\\"=>"\\\\")
+  end
 
   val = expr.args[2]
   isa(val, AbstractString) && (val = "\"$val\"")
