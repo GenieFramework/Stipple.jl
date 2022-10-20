@@ -18,9 +18,9 @@ end
 
 mutable struct Page
   route::Route
-  view::Union{Genie.Renderers.FilePath,<:AbstractString}
+  view::Union{Genie.Renderers.FilePath,Function,<:AbstractString}
   model
-  layout::Union{Genie.Renderers.FilePath,<:AbstractString,Nothing}
+  layout::Union{Genie.Renderers.FilePath,Function,<:AbstractString,Nothing}
   context::Module
 end
 
@@ -30,20 +30,20 @@ pages() = _pages
 function Page(  route::Union{Route,String};
                 view::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Vector{T},Function},
                 model::Union{M,Function,Nothing,Expr} = Stipple.init(EmptyModel),
-                layout::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Nothing} = nothing,
+                layout::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Nothing,Function} = nothing,
                 context::Module = @__MODULE__,
                 kwargs...
               ) where {M<:ReactiveModel,T<:AbstractString}
 
   view =  if isa(view, ParsedHTMLString) || isa(view, Vector{T})
             string(view)
-          elseif isa(view, Function)
-            view() |> string
           elseif isa(view, AbstractString)
             isfile(view) ? filepath(view) : view
           else
             view
           end
+
+  renderfunction = isa(view, Function) ? html! : html
 
   isa(model, Expr) && (model = Core.eval(context, model))
   route = isa(route, String) ? Route(; method = GET, path = route) : route
@@ -51,7 +51,7 @@ function Page(  route::Union{Route,String};
             isa(layout, ParsedHTMLString) || isa(layout, String) ? string(layout) :
               layout
 
-  route.action = () -> html(view; layout, context, model = (isa(model,Function) ? Base.invokelatest(model) : model), kwargs...)
+  route.action = () -> renderfunction(view; layout, context, model = (isa(model,Function) ? Base.invokelatest(model) : model), kwargs...)
 
   page = Page(route, view, typeof((isa(model,Function) || isa(model,DataType) ? Base.invokelatest(model) : model)), layout, context)
 
