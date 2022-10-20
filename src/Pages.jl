@@ -28,7 +28,7 @@ const _pages = Page[]
 pages() = _pages
 
 function Page(  route::Union{Route,String};
-                view::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Vector{T}},
+                view::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Vector{T},Function},
                 model::Union{M,Function,Nothing,Expr} = Stipple.init(EmptyModel),
                 layout::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Nothing} = nothing,
                 context::Module = @__MODULE__,
@@ -37,6 +37,8 @@ function Page(  route::Union{Route,String};
 
   view =  if isa(view, ParsedHTMLString) || isa(view, Vector{T})
             string(view)
+          elseif isa(view, Function)
+            view() |> string
           elseif isa(view, AbstractString)
             isfile(view) ? filepath(view) : view
           else

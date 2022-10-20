@@ -317,7 +317,7 @@ function init(m::Type{M};
 
   setup(model, channel)
 end
-function init(m::M; kwargs...)::M where {M<:ReactiveModel, S<:AbstractString}
+function init(m::M; kwargs...)::M where {M<:ReactiveModel}
   error("This method has been removed -- please use `init($M; kwargs...)` instead")``
 end
 
