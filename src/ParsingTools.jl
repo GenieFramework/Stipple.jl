@@ -9,7 +9,7 @@ export symbol_dict, type_dict, serialize, serialize!, deserialize, deserialize!,
 
 Generate a dict with the types of the fields.
 """
-typedict(T::DataType) = Dict(zip(fieldnames(T), fieldtypes(T)))
+type_dict(T::DataType) = Dict(zip(fieldnames(T), fieldtypes(T)))
 
 symbol_dict(x) = x
 symbol_dict(d::AbstractDict) = Dict{Symbol,Any}([(Symbol(k), symbol_dict(v)) for (k, v) in d])
