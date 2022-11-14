@@ -778,8 +778,9 @@ macro mixin(expr, prefix = "", postfix = "")
   values = getfield.(Ref(mix), fieldnames(T))
   output = quote end
   for (f, type, v) in zip(Symbol.(pre, fieldnames(T), post), fieldtypes(T), values)
-      push!(output.args, :($f::$type = Stipple._deepcopy($v)) )
-  end
+    v_copy = Stipple._deepcopy(v)
+    ReactiveTools.REACTIVE_STORAGE[__module__][f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy)
+end
 
   esc(:($output))
 end

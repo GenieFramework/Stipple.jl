@@ -122,7 +122,7 @@ end
 abstract type ReactiveModel end
 
 
-export @reactors, @reactive, @reactive!, @modeltype
+export @reactors, @reactive, @reactive!, @type
 export ChannelName, getchannel
 
 const ChannelName = String
@@ -154,7 +154,7 @@ end
   Stipple.@reactors
 end
 
-macro modeltype(modelname, expr)
+macro type(modelname, expr)
   modelconst = Symbol(modelname, '!')
 
   esc(quote

@@ -6,7 +6,7 @@ using MacroTools: postwalk
 using OrderedCollections
 import Genie
 
-export @binding, @readonly, @private, @in, @out, @value, @jsfn
+export @binding, @readonly, @private, @in, @out, @value, @jsfn, @mix_in
 export @page, @rstruct, @type, @handlers, @init, @model, @onchange, @onchangeany, @onbutton
 export DEFAULT_LAYOUT, Page
 
@@ -97,11 +97,13 @@ macro rstruct()
   init_storage(__module__)
 
   """
-  @modeltype $(default_struct_name(__module__)) begin
+  @type $(default_struct_name(__module__)) begin
     $(join(REACTIVE_STORAGE[__module__] |> values |> collect, "\n"))
   end
   """ |> Meta.parse |> esc
 end
+
+import Stipple.@type
 
 macro type()
   init_storage(__module__)
@@ -224,6 +226,31 @@ end
 macro jsfn(expr)
   binding(expr, __module__, ", JSFUNCTION"; source = __source__)
   esc(expr)
+end
+
+macro mix_in(expr, prefix = "", postfix = "")
+
+  init_storage(__module__)
+  if hasproperty(expr, :head) && expr.head == :(::)
+      prefix = string(expr.args[1])
+      expr = expr.args[2]
+  end
+
+  x = Core.eval(__module__, expr)
+  pre = Core.eval(__module__, prefix)
+  post = Core.eval(__module__, postfix)
+
+  T = x isa DataType ? x : typeof(x)
+  mix = x isa DataType ? x() : x
+  values = getfield.(Ref(mix), fieldnames(T))
+  ff = Symbol.(pre, fieldnames(T), post)
+  for (f, type, v) in zip(ff, fieldtypes(T), values)
+      v_copy = Stipple._deepcopy(v)
+      REACTIVE_STORAGE[__module__][f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy)
+  end
+
+  clear_type(__module__)
+  esc(values)
 end
 
 #===#
