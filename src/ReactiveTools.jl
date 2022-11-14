@@ -97,7 +97,7 @@ macro rstruct()
   init_storage(__module__)
 
   """
-  @reactive! mutable struct $(default_struct_name(__module__)) <: ReactiveModel
+  @modeltype $(default_struct_name(__module__)) begin
     $(join(REACTIVE_STORAGE[__module__] |> values |> collect, "\n"))
   end
   """ |> Meta.parse |> esc

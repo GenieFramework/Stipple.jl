@@ -122,18 +122,18 @@ end
 abstract type ReactiveModel end
 
 
-export @reactors, @reactive, @reactive!
+export @reactors, @reactive, @reactive!, @modeltype
 export ChannelName, getchannel
 
 const ChannelName = String
 const CHANNELFIELDNAME = :channel__
 
-function getchannel(m::T) where {T<:ReactiveModel}
+function getchannel(m::M) where {M<:ReactiveModel}
   getfield(m, CHANNELFIELDNAME)
 end
 
 
-function setchannel(m::T, value) where {T<:ReactiveModel}
+function setchannel(m::M, value) where {M<:ReactiveModel}
   setfield!(m, CHANNELFIELDNAME, ChannelName(value))
 end
 
@@ -152,6 +152,23 @@ end
 
 @mix Stipple.@kwredef mutable struct reactive!
   Stipple.@reactors
+end
+
+macro modeltype(modelname, expr)
+  modelconst = Symbol(modelname, '!')
+
+  esc(quote
+      abstract type $modelname <: ReactiveModel end
+      
+      @reactive! mutable struct $modelconst <: $modelname
+          $(expr.args...)
+      end
+
+      delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
+      Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
+      
+      $modelconst
+  end)
 end
 
 #===#

@@ -206,8 +206,8 @@ end
 
 
 """
-    function init(m::Type{M};
-                    vue_app_name::S = Stipple.Elements.root(m),
+    function init(::Type{M};
+                    vue_app_name::S = Stipple.Elements.root(M),
                     endpoint::S = vue_app_name,
                     channel::Union{Any,Nothing} = nothing,
                     debounce::Int = JS_DEBOUNCE_TIME,
@@ -223,8 +223,8 @@ frontend and perform the 2-way backend-frontend data sync. Returns the instance 
 hs_model = Stipple.init(HelloPie)
 ```
 """
-function init(m::Type{M};
-              vue_app_name::S = Stipple.Elements.root(m),
+function init(::Type{M};
+              vue_app_name::S = Stipple.Elements.root(M),
               endpoint::S = vue_app_name,
               channel::Union{Any,Nothing} = channeldefault(),
               debounce::Int = JS_DEBOUNCE_TIME,
@@ -232,7 +232,8 @@ function init(m::Type{M};
               core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
 
   webtransport!(transport)
-  model = Base.invokelatest(m)
+  concrete_modeltype = (isabstracttype(M) ? Core.eval(Base.parentmodule(M), Symbol(Base.nameof(M), "!")) : M)::Type{<:ReactiveModel}
+  model = Base.invokelatest(concrete_modeltype)
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
   ok_response = "OK"
 
@@ -313,7 +314,7 @@ function init(m::Type{M};
     end
   end
 
-  haskey(DEPS, M) || (DEPS[M] = stipple_deps(m, vue_app_name, debounce, core_theme, endpoint, transport))
+  haskey(DEPS, M) || (DEPS[M] = stipple_deps(M, vue_app_name, debounce, core_theme, endpoint, transport))
 
   setup(model, channel)
 end
@@ -322,12 +323,18 @@ function init(m::M; kwargs...)::M where {M<:ReactiveModel}
 end
 
 
-function stipple_deps(m::Type{M}, vue_app_name, debounce, core_theme, endpoint, transport)::Function where {M<:ReactiveModel}
+function routename(::Type{M}) where M<:ReactiveModel
+  SM = supertype(M)::Type{<:ReactiveModel}
+  s = replace(string(SM == ReactiveModel ? M : SM), "." => "_", r"^var\"#+" =>"", r"#+" => "_")
+  replace(s, r"[^0-9a-zA-Z_]+" => "")
+end
+
+function stipple_deps(::Type{M}, vue_app_name, debounce, core_theme, endpoint, transport)::Function where {M<:ReactiveModel}
   () -> begin
     if ! Genie.Assets.external_assets(assets_config)
-      if ! Genie.Router.isroute(Symbol(m))
-        Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file = endpoint), named = Symbol(m)) do
-          Stipple.Elements.vue_integration(m; vue_app_name, debounce, core_theme, transport) |> Genie.Renderer.Js.js
+      if ! Genie.Router.isroute(Symbol(routename(M)))
+        Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file = endpoint), named = Symbol(routename(M))) do
+          Stipple.Elements.vue_integration(M; vue_app_name, debounce, core_theme, transport) |> Genie.Renderer.Js.js
         end
       end
     end
@@ -337,7 +344,7 @@ function stipple_deps(m::Type{M}, vue_app_name, debounce, core_theme, endpoint, 
         Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file = vue_app_name), defer = true)
       else
         Genie.Renderer.Html.script([
-          (Stipple.Elements.vue_integration(m; vue_app_name, core_theme, debounce) |> Genie.Renderer.Js.js).body |> String
+          (Stipple.Elements.vue_integration(M; vue_app_name, core_theme, debounce) |> Genie.Renderer.Js.js).body |> String
         ])
       end
     ]
