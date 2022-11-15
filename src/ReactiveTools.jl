@@ -239,16 +239,10 @@ end
 
 macro out(flag, expr)
   flag != :non_reactive && return esc(:(@out($expr)))
-  var = expr.args[1]
-  varname = var isa Symbol ? var : var.args[1]
-  if ! occursin(Stipple.SETTINGS.readonly_pattern, string(varname))
-    varname = Symbol(varname, "_")
-    if var isa Symbol
-      expr.args[1] = varname
-    else
-      expr.args[1].args[1] = varname
-    end
-  end
+
+  varparent = expr.args[1] isa Symbol ? expr : expr.args[1]
+  occursin(Stipple.SETTINGS.readonly_pattern, string(varparent.args[1])) || (varparent.args[1] = Symbol(varparent.args[1], "_"))
+  
   binding(expr, __module__; source = __source__)
   esc(:(ReactiveTools.@reportval($expr)))
 end
@@ -269,16 +263,10 @@ end
 
 macro private(flag, expr)
   flag != :non_reactive && return esc(:(@private($expr)))
-  var = expr.args[1]
-  varname = var isa Symbol ? var : var.args[1]
-  if ! occursin(Stipple.SETTINGS.private_pattern, string(varname))
-    varname = Symbol(varname, "__")
-    if var isa Symbol
-      expr.args[1] = varname
-    else
-      expr.args[1].args[1] = varname
-    end
-  end
+
+  varparent = expr.args[1] isa Symbol ? expr : expr.args[1]
+  occursin(Stipple.SETTINGS.private_pattern, string(varparent.args[1])) || (varparent.args[1] = Symbol(varparent.args[1], "__"))
+
   binding(expr, __module__; source = __source__)
   esc(:(ReactiveTools.@reportval($expr)))
 end
