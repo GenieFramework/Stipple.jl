@@ -180,7 +180,7 @@ function parse_expression(expr::Expr, @nospecialize(mode) = nothing, source = no
       expr.args[1] = :($var::R)
       :R
     end
-    expr.args[2] = :($type($(expr.args[2]), $mode, false, false, source))
+    expr.args[2] = :($type($(expr.args[2]), $mode, false, false, $source))
   end
 
   expr.args[1] isa Symbol && (expr.args[1] = :($(expr.args[1])::$(typeof(expr.args[2]))))
@@ -225,8 +225,31 @@ macro in(expr)
   esc(:(ReactiveTools.@reportval($expr)))
 end
 
+
+macro in(flag, expr)
+  flag != :non_reactive && return esc(:(@in($expr)))
+  binding(expr, __module__; source = __source__)
+  esc(:(ReactiveTools.@reportval($expr)))
+end
+
 macro out(expr)
   binding(expr, __module__, :READONLY; source = __source__)
+  esc(:(ReactiveTools.@reportval($expr)))
+end
+
+macro out(flag, expr)
+  flag != :non_reactive && return esc(:(@out($expr)))
+  var = expr.args[1]
+  varname = var isa Symbol ? var : var.args[1]
+  if ! occursin(Stipple.SETTINGS.readonly_pattern, string(varname))
+    varname = Symbol(varname, "_")
+    if var isa Symbol
+      expr.args[1] = varname
+    else
+      expr.args[1].args[1] = varname
+    end
+  end
+  binding(expr, __module__; source = __source__)
   esc(:(ReactiveTools.@reportval($expr)))
 end
 
@@ -234,8 +257,29 @@ macro readonly(expr)
   esc(:(@out($expr)))
 end
 
+macro readonly(flag, expr)
+  esc(:(@out($flag, $expr)))
+end
+
 macro private(expr)
   binding(expr, __module__, :PRIVATE; source = __source__)
+  esc(:(ReactiveTools.@reportval($expr)))
+end
+
+
+macro private(flag, expr)
+  flag != :non_reactive && return esc(:(@private($expr)))
+  var = expr.args[1]
+  varname = var isa Symbol ? var : var.args[1]
+  if ! occursin(Stipple.SETTINGS.private_pattern, string(varname))
+    varname = Symbol(varname, "__")
+    if var isa Symbol
+      expr.args[1] = varname
+    else
+      expr.args[1].args[1] = varname
+    end
+  end
+  binding(expr, __module__; source = __source__)
   esc(:(ReactiveTools.@reportval($expr)))
 end
 
