@@ -95,26 +95,29 @@ end
 
 macro rstruct()
   init_storage(__module__)
-
-  """
-  @type $(default_struct_name(__module__)) begin
-    $(join(REACTIVE_STORAGE[__module__] |> values |> collect, "\n"))
-  end
-  """ |> Meta.parse |> esc
+  modelname = Symbol(default_struct_name(__module__))
+  output = Core.eval(__module__, :(
+    values(ReactiveTools.REACTIVE_STORAGE[@__MODULE__])
+  ))
+    
+  esc(quote
+    @type $modelname begin
+      $(output...)
+    end
+  end)  
 end
 
 import Stipple.@type
 
 macro type()
   init_storage(__module__)
-
-  """
-  if Stipple.ReactiveTools.TYPES[@__MODULE__] !== nothing
-    ReactiveTools.TYPES[@__MODULE__]
-  else
-    ReactiveTools.TYPES[@__MODULE__] = @eval ReactiveTools.@rstruct()
-  end
-  """ |> Meta.parse |> esc
+  esc(quote
+    if Stipple.ReactiveTools.TYPES[@__MODULE__] !== nothing
+      ReactiveTools.TYPES[@__MODULE__]
+    else
+      ReactiveTools.TYPES[@__MODULE__] = ReactiveTools.@rstruct()
+    end
+  end)
 end
 
 macro model()
@@ -143,50 +146,43 @@ function find_assignment(expr)
   assignment
 end
 
-function parse_expression(expr::Expr, opts::String = "", typename::String = "Stipple.Reactive", source = nothing)
+function parse_expression(expr::Expr, @nospecialize(mode) = nothing, source = nothing)
   expr = find_assignment(expr)
 
   (isa(expr, Expr) && contains(string(expr.head), "=")) ||
     error("Invalid binding expression -- use it with variables assignment ex `@binding a = 2`")
-
-  var = expr.args[1]
-  rtype = ""
-
-  if ! isempty(opts)
-    rtype = "::R"
-    typename = "R"
-  end
-
-  if isa(var, Expr) && var.head == Symbol("::")
-    rtype = "::R{$(var.args[2])}"
-    var = var.args[1]
-    typename = "R"
-  end
-
-  op = expr.head
 
   source = (source !== nothing ? "\"$(strip(replace(replace(string(source), "#="=>""), "=#"=>"")))\"" : "")
   if Sys.iswindows()
     source = replace(source, "\\"=>"\\\\")
   end
 
-  val = expr.args[2]
-  isa(val, AbstractString) && (val = "\"$val\"")
-  field = "$var$rtype $op $(typename)(($(val))$(opts),false,false,$source)"
+  var = expr.args[1]
+  if !isnothing(mode)
+    type = if isa(var, Expr) && var.head == Symbol("::")
+      # change type R to type R{T}
+      var.args[2] = :(R{$(var.args[2])})
+    else
+      # add type definition `::R` to the var and return type `R`
+      expr.args[1] = :($var::R)
+      :R
+    end
+    expr.args[2] = :($type($(expr.args[2]), $mode, false, false, source))
+  end
 
-  var, MacroTools.unblock(Meta.parse(field))
+  expr.args[1].args[1], expr
 end
 
-function binding(expr::Symbol, m::Module, opts::String = "", typename::String = "Stipple.Reactive"; source = nothing)
-  binding(:($expr = $expr), m, opts, typename; source)
+function binding(expr::Symbol, m::Module, @nospecialize(mode::Any = nothing); source = nothing)
+  binding(:($expr = $expr), m, mode; source)
 end
 
-function binding(expr::Expr, m::Module, opts::String = "", typename::String = "Stipple.Reactive"; source = nothing)
+function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); source = nothing)
   (m == @__MODULE__) && return nothing
 
   init_storage(m)
 
-  var, field_expr = parse_expression(expr, opts, typename, source)
+  var, field_expr = parse_expression(expr, mode, source)
   REACTIVE_STORAGE[m][var] = field_expr
 
   # remove cached type and instance
@@ -205,12 +201,14 @@ end
 # @binding a::Vector = [1, 2, 3]
 # @binding a::Vector{Int} = [1, 2, 3]
 macro in(expr)
-  binding(expr, __module__, ", PUBLIC"; source = __source__)
+  binding(expr, __module__, :PUBLIC; source = __source__)
+  expr isa Symbol || (expr.args[1] = expr.args[1].args[1])
   esc(expr)
 end
 
 macro out(expr)
-  binding(expr, __module__, ", READONLY"; source = __source__)
+  binding(expr, __module__, :READONLY; source = __source__)
+  expr isa Symbol || (expr.args[1] = expr.args[1].args[1])
   esc(expr)
 end
 
@@ -219,18 +217,20 @@ macro readonly(expr)
 end
 
 macro private(expr)
-  binding(expr, __module__, ", PRIVATE"; source = __source__)
+  binding(expr, __module__, :PRIVATE; source = __source__)
+  expr isa Symbol || (expr.args[1] = expr.args[1].args[1])
   esc(expr)
 end
 
 macro jsfn(expr)
-  binding(expr, __module__, ", JSFUNCTION"; source = __source__)
+  binding(expr, __module__, :JSFUNCTION; source = __source__)
+  expr isa Symbol || (expr.args[1] = expr.args[1].args[1])
   esc(expr)
 end
 
 macro mix_in(expr, prefix = "", postfix = "")
-
   init_storage(__module__)
+
   if hasproperty(expr, :head) && expr.head == :(::)
       prefix = string(expr.args[1])
       expr = expr.args[2]
@@ -246,11 +246,16 @@ macro mix_in(expr, prefix = "", postfix = "")
   ff = Symbol.(pre, fieldnames(T), post)
   for (f, type, v) in zip(ff, fieldtypes(T), values)
       v_copy = Stipple._deepcopy(v)
+      expr = :($f::$type = Stipple._deepcopy(v))
       REACTIVE_STORAGE[__module__][f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy)
   end
 
   clear_type(__module__)
-  esc(values)
+  instance = @eval __module__ @type()
+  for p in Stipple.Pages._pages
+    p.context == __module__ && (p.model = instance)
+  end
+  esc(Stipple.Observables.to_value.(values))
 end
 
 #===#

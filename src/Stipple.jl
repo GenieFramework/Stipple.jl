@@ -647,7 +647,7 @@ macro kwredef(expr)
   esc(quote
     Base.@kwdef $expr
     $T_old = $T_new
-    if VERSION < v"1.8-alpha"
+    if VERSION < v"1.8-"
       $curly ? $T_new.body.name.name = $(QuoteNode(T_old)) : $T_new.name.name = $(QuoteNode(T_old)) # fix the name
     end
 
@@ -706,7 +706,12 @@ include("Pages.jl")
 
 #===#
 
+# function _deepcopy(r::R{T}) where T
+#   v_copy = deepcopy(r.o.val)
+#   :(R{$T}($v_copy, $(r.r_mode), $(r.no_backend_watcher), $(r.no_frontend_watcher), $(r.__source__)))
+# end
 _deepcopy(r::R{T}) where T = R(deepcopy(r.o.val), r.r_mode, r.no_backend_watcher, r.no_frontend_watcher)
+
 _deepcopy(x) = deepcopy(x)
 
 """
@@ -779,7 +784,7 @@ macro mixin(expr, prefix = "", postfix = "")
   output = quote end
   for (f, type, v) in zip(Symbol.(pre, fieldnames(T), post), fieldtypes(T), values)
     v_copy = Stipple._deepcopy(v)
-    ReactiveTools.REACTIVE_STORAGE[__module__][f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy)
+    push!(output.args, v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy))
 end
 
   esc(:($output))
