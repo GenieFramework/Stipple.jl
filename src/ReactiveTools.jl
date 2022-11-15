@@ -6,7 +6,7 @@ using MacroTools: postwalk
 using OrderedCollections
 import Genie
 
-export @binding, @readonly, @private, @in, @out, @value, @jsfn, @mix_in
+export @binding, @readonly, @private, @in, @out, @value, @jsfn, @mix_in, @clear
 export @page, @rstruct, @type, @handlers, @init, @model, @onchange, @onchangeany, @onbutton
 export DEFAULT_LAYOUT, Page
 
@@ -93,6 +93,17 @@ end
 
 #===#
 
+macro clear()
+  delete_bindings!(__module__)
+end
+
+macro clear(args...)
+  haskey(REACTIVE_STORAGE, __module__) || return
+  for arg in args
+    delete!(REACTIVE_STORAGE[__module__], arg)
+  end
+end
+
 macro rstruct()
   init_storage(__module__)
   modelname = Symbol(default_struct_name(__module__))
@@ -172,6 +183,7 @@ function parse_expression(expr::Expr, @nospecialize(mode) = nothing, source = no
     expr.args[2] = :($type($(expr.args[2]), $mode, false, false, source))
   end
 
+  expr.args[1] isa Symbol && (expr.args[1] = :($(expr.args[1])::$(typeof(expr.args[2]))))
   expr.args[1].args[1], expr
 end
 
