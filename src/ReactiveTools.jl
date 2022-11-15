@@ -123,7 +123,9 @@ end
 macro model()
   init_storage(__module__)
 
-  :(@type() |> Base.invokelatest)
+  esc(quote
+    @type() |> Base.invokelatest
+  end)
 end
 
 #===#
@@ -194,38 +196,40 @@ function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); sour
   end
 end
 
+macro reportval(expr)
+  val = expr isa Symbol ? expr : expr.args[2]
+  issymbol = val isa Symbol
+  esc(quote
+    $issymbol ? (isdefined(@__MODULE__, $(QuoteNode(val))) ? $val : @info(string("Warning: Variable '", $(QuoteNode(val)), "' not yet defined"))) : Stipple.Observables.to_value($val)
+  end)
+end
+
 # works with
-# @binding a = 2
-# @binding const a = 2
-# @binding const a::Int = 24
-# @binding a::Vector = [1, 2, 3]
-# @binding a::Vector{Int} = [1, 2, 3]
+# @in a = 2
+# @in a::Vector = [1, 2, 3]
+# @in a::Vector{Int} = [1, 2, 3]
 macro in(expr)
   binding(expr, __module__, :PUBLIC; source = __source__)
-  expr isa Symbol || (expr.args[1] = expr.args[1].args[1])
-  esc(expr)
+  esc(:(ReactiveTools.@reportval($expr)))
 end
 
 macro out(expr)
   binding(expr, __module__, :READONLY; source = __source__)
-  expr isa Symbol || (expr.args[1] = expr.args[1].args[1])
-  esc(expr)
+  esc(:(ReactiveTools.@reportval($expr)))
 end
 
 macro readonly(expr)
-  @out(expr) |> esc
+  esc(:(@out($expr)))
 end
 
 macro private(expr)
   binding(expr, __module__, :PRIVATE; source = __source__)
-  expr isa Symbol || (expr.args[1] = expr.args[1].args[1])
-  esc(expr)
+  esc(:(ReactiveTools.@reportval($expr)))
 end
 
 macro jsfn(expr)
   binding(expr, __module__, :JSFUNCTION; source = __source__)
-  expr isa Symbol || (expr.args[1] = expr.args[1].args[1])
-  esc(expr)
+  esc(:(ReactiveTools.@reportval($expr)))
 end
 
 macro mix_in(expr, prefix = "", postfix = "")
