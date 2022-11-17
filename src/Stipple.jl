@@ -23,8 +23,12 @@ using Logging, Mixers, Random, Reexport, Requires
 @reexport using JSON3
 @reexport using StructTypes
 @reexport using Parameters
+@reexport using OrderedCollections
 
 export setchannel, getchannel
+
+# compatibility with Observables 0.3
+isempty(methods(notify, Observables)) && (Base.notify(observable::AbstractObservable) = Observables.notify!(observable))
 
 include("ParsingTools.jl")
 include("ModelStorage.jl")
@@ -57,7 +61,7 @@ is_channels_webtransport() = webtransport() == Genie.WebChannels
 
 #===#
 
-export R, Reactive, ReactiveModel, @R_str, @js_str, client_data
+export R, Reactive, ReactiveModel, @R_str, @js_str, client_data, setmode!
 export PRIVATE, PUBLIC, READONLY, JSFUNCTION, NO_WATCHER, NO_BACKEND_WATCHER, NO_FRONTEND_WATCHER
 export newapp
 export onbutton
@@ -66,6 +70,7 @@ export init
 
 #===#
 
+function setmode! end
 include("ReactiveTools.jl")
 
 #===#
@@ -204,6 +209,31 @@ function channeldefault() :: Union{String,Nothing}
   params(CHANNELPARAM, (haskey(ENV, "$CHANNELPARAM") ? (Genie.Router.params!(CHANNELPARAM, ENV["$CHANNELPARAM"])) : nothing))
 end
 
+@nospecialize
+
+function accessmode_from_pattern!(model::ReactiveModel)
+  for field in fieldnames(typeof(model))
+    if !(field isa Reactive)
+      if occursin(Stipple.SETTINGS.private_pattern, string(field))
+        model._modes[field] = PRIVATE
+      elseif occursin(Stipple.SETTINGS.readonly_pattern, string(field))
+        model._modes[field] = READONLY
+      end
+    end
+  end
+  model
+end
+
+function setmode!(model::ReactiveModel, mode::Int, fieldnames::Symbol...)
+  fieldname in [Stipple.CHANNELFIELDNAME, :_modes] && return
+
+  for fieldname in fieldnames
+    mode == PUBLIC ? delete!(model._modes, fieldname) : model._modes[fieldname] = mode
+  end
+  model._modes
+end
+
+@specialize
 
 """
     function init(::Type{M};
@@ -223,17 +253,19 @@ frontend and perform the 2-way backend-frontend data sync. Returns the instance 
 hs_model = Stipple.init(HelloPie)
 ```
 """
-function init(::Type{M};
-              vue_app_name::S = Stipple.Elements.root(M),
+function init(::Type{M_init};
+              vue_app_name::S = Stipple.Elements.root(M_init),
               endpoint::S = vue_app_name,
               channel::Union{Any,Nothing} = channeldefault(),
               debounce::Int = JS_DEBOUNCE_TIME,
               transport::Module = Genie.WebChannels,
-              core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
+              core_theme::Bool = true)::M_init where {M_init<:ReactiveModel, S<:AbstractString}
 
   webtransport!(transport)
-  concrete_modeltype = (isabstracttype(M) ? Core.eval(Base.parentmodule(M), Symbol(Base.nameof(M), "!")) : M)::Type{<:ReactiveModel}
-  model = Base.invokelatest(concrete_modeltype)
+  # concrete modeltype
+  M = (isabstracttype(M_init) ? Core.eval(Base.parentmodule(M_init), Symbol(Base.nameof(M_init), "!")) : M_init)::Type{<:ReactiveModel}
+  model = M |> Base.invokelatest |> accessmode_from_pattern!
+
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
   ok_response = "OK"
 
@@ -289,6 +321,7 @@ function init(::Type{M};
       end
 
       push!(model, field => newval; channel = channel, except = client)
+      @show field, newval
       update!(model, field, newval, oldval)
 
       ok_response

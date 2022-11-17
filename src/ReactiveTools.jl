@@ -69,10 +69,21 @@ end
 
 function init_storage(m::Module)
   (m == @__MODULE__) && return nothing
-
-  haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = LittleDict{Symbol,Expr}())
+  haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = LittleDict{Symbol,Expr}(
+    :_modes => :(_modes = LittleDict(:_modes => PRIVATE, $(QuoteNode(Stipple.CHANNELFIELDNAME)) => PRIVATE))
+  ))
   haskey(TYPES, m) || (TYPES[m] = nothing)
 
+end
+
+function Stipple.setmode!(expr::Expr, mode::Int, fieldnames::Symbol...)
+  fieldname in [Stipple.CHANNELFIELDNAME, :_modes] && return
+
+  d = eval(expr.args[2])
+  for fieldname in fieldnames
+    mode == PUBLIC ? delete!(d, fieldname) : d[fieldname] = mode
+  end
+  expr.args[2] = QuoteNode(d)
 end
 
 #===#
@@ -100,8 +111,12 @@ end
 macro clear(args...)
   haskey(REACTIVE_STORAGE, __module__) || return
   for arg in args
+    arg in [Stipple.CHANNELFIELDNAME, :_modes] && continue
     delete!(REACTIVE_STORAGE[__module__], arg)
   end
+  # setmode! to PUBLIC clears the entries
+  setmode!(REACTIVE_STORAGE[__module__][:_modes], PUBLIC, args...)
+  REACTIVE_STORAGE[__module__]
 end
 
 macro rstruct()
@@ -112,7 +127,7 @@ macro rstruct()
   ))
     
   esc(quote
-    @type $modelname begin
+    Stipple.@type_pure $modelname begin
       $(output...)
     end
   end)  
@@ -135,7 +150,7 @@ macro model()
   init_storage(__module__)
 
   esc(quote
-    @type() |> Base.invokelatest
+    ReactiveTools.@type() |> Base.invokelatest |> Stipple.accessmode_from_pattern!
   end)
 end
 
@@ -159,9 +174,9 @@ function find_assignment(expr)
   assignment
 end
 
-function parse_expression(expr::Expr, @nospecialize(mode) = nothing, source = nothing)
+function parse_expression(expr::Expr, @nospecialize(mode) = nothing, source = nothing, m::Union{Module, Nothing} = nothing)
   expr = find_assignment(expr)
-
+  Rtype = isnothing(m) || ! isdefined(m, :R) ? :(Stipple.R) : :R
   (isa(expr, Expr) && contains(string(expr.head), "=")) ||
     error("Invalid binding expression -- use it with variables assignment ex `@binding a = 2`")
 
@@ -172,13 +187,14 @@ function parse_expression(expr::Expr, @nospecialize(mode) = nothing, source = no
 
   var = expr.args[1]
   if !isnothing(mode)
+    mode = mode isa Symbol && ! isdefined(m, mode) ? :(Stipple.$mode) : mode
     type = if isa(var, Expr) && var.head == Symbol("::")
       # change type R to type R{T}
-      var.args[2] = :(R{$(var.args[2])})
+      var.args[2] = :($Rtype{$(var.args[2])})
     else
       # add type definition `::R` to the var and return type `R`
-      expr.args[1] = :($var::R)
-      :R
+      expr.args[1] = :($var::$Rtype)
+      Rtype
     end
     expr.args[2] = :($type($(expr.args[2]), $mode, false, false, $source))
   end
@@ -187,22 +203,26 @@ function parse_expression(expr::Expr, @nospecialize(mode) = nothing, source = no
   expr.args[1].args[1], expr
 end
 
-function binding(expr::Symbol, m::Module, @nospecialize(mode::Any = nothing); source = nothing)
-  binding(:($expr = $expr), m, mode; source)
+function binding(expr::Symbol, m::Module, @nospecialize(mode::Any = nothing); source = nothing, reactive = true)
+  binding(:($expr = $expr), m, mode; source, reactive)
 end
 
-function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); source = nothing)
+function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); source = nothing, reactive = true)
   (m == @__MODULE__) && return nothing
 
+  intmode = Core.eval(Stipple, mode)
   init_storage(m)
 
-  var, field_expr = parse_expression(expr, mode, source)
+  var, field_expr = parse_expression(expr, reactive ? mode : nothing, source, m)
   REACTIVE_STORAGE[m][var] = field_expr
+
+  reactive || setmode!(REACTIVE_STORAGE[m][:_modes], intmode, var)
+  reactive && setmode!(REACTIVE_STORAGE[m][:_modes], PUBLIC, var)
 
   # remove cached type and instance
   clear_type(m)
-
-  instance = @eval m @type()
+  
+  instance = @eval m Stipple.@type()
   for p in Stipple.Pages._pages
     p.context == m && (p.model = instance)
   end
@@ -225,10 +245,9 @@ macro in(expr)
   esc(:(ReactiveTools.@reportval($expr)))
 end
 
-
 macro in(flag, expr)
-  flag != :non_reactive && return esc(:(@in($expr)))
-  binding(expr, __module__; source = __source__)
+  flag != :non_reactive && return esc(:(ReactiveTools.@in($expr)))
+  binding(expr, __module__, :PUBLIC; source = __source__, reactive = false)
   esc(:(ReactiveTools.@reportval($expr)))
 end
 
@@ -240,19 +259,16 @@ end
 macro out(flag, expr)
   flag != :non_reactive && return esc(:(@out($expr)))
 
-  varparent = expr.args[1] isa Symbol ? expr : expr.args[1]
-  occursin(Stipple.SETTINGS.readonly_pattern, string(varparent.args[1])) || (varparent.args[1] = Symbol(varparent.args[1], "_"))
-  
-  binding(expr, __module__; source = __source__)
+  binding(expr, __module__, :READONLY; source = __source__, reactive = false)
   esc(:(ReactiveTools.@reportval($expr)))
 end
 
 macro readonly(expr)
-  esc(:(@out($expr)))
+  esc(:(ReactiveTools.@out($expr)))
 end
 
 macro readonly(flag, expr)
-  esc(:(@out($flag, $expr)))
+  esc(:(ReactiveTools.@out($flag, $expr)))
 end
 
 macro private(expr)
@@ -262,12 +278,9 @@ end
 
 
 macro private(flag, expr)
-  flag != :non_reactive && return esc(:(@private($expr)))
+  flag != :non_reactive && return esc(:(ReactiveTools.@private($expr)))
 
-  varparent = expr.args[1] isa Symbol ? expr : expr.args[1]
-  occursin(Stipple.SETTINGS.private_pattern, string(varparent.args[1])) || (varparent.args[1] = Symbol(varparent.args[1], "__"))
-
-  binding(expr, __module__; source = __source__)
+  binding(expr, __module__, :PRIVATE; source = __source__, reactive = false)
   esc(:(ReactiveTools.@reportval($expr)))
 end
 

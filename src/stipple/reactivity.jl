@@ -42,7 +42,7 @@ end
 
 function Base.setindex!(r::Reactive{T}, val, arg1, args...) where T
   setindex!(getfield(r, :o).val, val, arg1, args...)
-  Observables.notify!(r)
+  notify(r)
 end
 
 Base.setindex!(r::Reactive, val, ::typeof(!)) = getfield(r, :o).val = val
@@ -70,7 +70,7 @@ function Base.setproperty!(r::Reactive{T}, field::Symbol, val) where T
       getfield(r, :o).val = val
     else
       setproperty!(getfield(r, :o).val, field, val)
-      Observables.notify!(r)
+      notify(r)
     end
   end
 end
@@ -140,6 +140,13 @@ end
 const AUTOFIELDS = [:isready, :isprocessing] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin
+  _modes::LittleDict{Symbol, Int} = LittleDict(:_modes => PRIVATE, :channel__ => PRIVATE)
+  channel__::Stipple.ChannelName = Stipple.channelfactory()
+  isready::Stipple.R{Bool} = false
+  isprocessing::Stipple.R{Bool} = false
+end
+
+@pour reactors_pure begin
   channel__::Stipple.ChannelName = Stipple.channelfactory()
   isready::Stipple.R{Bool} = false
   isprocessing::Stipple.R{Bool} = false
@@ -154,11 +161,15 @@ end
   Stipple.@reactors
 end
 
+@mix Stipple.@kwredef mutable struct reactive_pure!
+  Stipple.@reactors_pure
+end
+
 macro type(modelname, expr)
   modelconst = Symbol(modelname, '!')
 
   esc(quote
-      abstract type $modelname <: ReactiveModel end
+      abstract type $modelname <: Stipple.ReactiveModel end
       
       @reactive! mutable struct $modelconst <: $modelname
           $(expr.args...)
@@ -166,6 +177,23 @@ macro type(modelname, expr)
 
       delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
       Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
+      
+      $modelconst
+  end)
+end
+
+macro type_pure(modelname, expr)
+  modelconst = Symbol(modelname, '!')
+
+  esc(quote
+      abstract type $modelname <: Stipple.ReactiveModel end
+      
+      Stipple.@reactive_pure! mutable struct $modelconst <: $modelname
+          $(expr.args...)
+      end
+
+      delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
+      Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
       
       $modelconst
   end)
