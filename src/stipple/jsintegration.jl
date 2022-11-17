@@ -6,11 +6,11 @@ in the backend can construct a function.
 """
 function parse_jsfunction(s::AbstractString)
     # look for classical function definition
-    m = match( r"function\s*\(([^)]*)\)\s*{(.*)}", s)
+    m = match( r"function\s*\(([^)]*)\)\s*{(.*)}"s, s)
     !isnothing(m) && length(m.captures) == 2 && return opts(arguments=m[1], body=m[2])
 
     # look for pure function definition
-    m = match( r"\s*\(?([^=)]*?)\)?\s*=>\s*({*.*?}*)\s*$" , s )
+    m = match( r"\s*\(?([^=)]*?)\)?\s*=>\s*({*.*?}*)\s*$"s , s )
     (isnothing(m) || length(m.captures) != 2) && return nothing
 
     # if pure function body is without curly brackets, add a `return`, otherwise strip the brackets

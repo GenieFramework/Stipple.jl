@@ -321,7 +321,6 @@ function init(::Type{M_init};
       end
 
       push!(model, field => newval; channel = channel, except = client)
-      @show field, newval
       update!(model, field, newval, oldval)
 
       ok_response
@@ -438,11 +437,11 @@ function Base.push!(app::M, vals::Pair{Symbol,T};
   end
 end
 
-function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
-                    channel::String = Genie.config.webchannels_default_route,
+function Base.push!(model::M, vals::Pair{Symbol,Reactive{T}};
+                    channel::String = getchannel(model),
                     except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing)::Bool where {T,M<:ReactiveModel}
                     v = vals[2].r_mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
-  push!(app, Symbol(julia_to_vue(vals[1])) => v, channel = channel, except = except)
+  push!(model, Symbol(julia_to_vue(vals[1])) => v; channel, except)
 end
 
 function Base.push!(model::M;
@@ -454,10 +453,15 @@ function Base.push!(model::M;
   for field in fieldnames(M)
     (isprivate(field, model) || field in skip) && continue
 
-    push!(model, field => getproperty(model, field), channel = channel) === false && (result = false)
+    push!(model, field => getproperty(model, field); channel) === false && (result = false)
   end
 
   result
+end
+
+function Base.push!(model::M, field::Symbol; channel::String = getchannel(model))::Bool where {M<:ReactiveModel}
+  isprivate(field, model) && return false
+  push!(model, field => getproperty(model, field); channel)
 end
 
 #===#
