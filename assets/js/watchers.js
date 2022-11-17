@@ -39,6 +39,15 @@ const watcherMixin = {
           console.error(ex);
         }
       }
+    },
+
+    push: function (field) {
+      Genie.WebChannels.sendMessageTo(CHANNEL, 'watchers', {'payload': {
+          'field': field,
+          'newval': this[field],
+          'oldval': null,
+          'sesstoken': document.querySelector("meta[name='sesstoken']")?.getAttribute('content')
+      }})
     }
   }
 }
