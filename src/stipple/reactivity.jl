@@ -101,6 +101,7 @@ const JSFUNCTION = 8
 const NO_BACKEND_WATCHER = 16
 const NO_FRONTEND_WATCHER = 32
 const NO_WATCHER = 48
+const NON_REACTIVE = 64
 
 """
     type ReactiveModel
@@ -165,22 +166,22 @@ end
   Stipple.@reactors_pure
 end
 
-macro type(modelname, expr)
-  modelconst = Symbol(modelname, '!')
-
-  esc(quote
-      abstract type $modelname <: Stipple.ReactiveModel end
+# macro type(modelname, expr)
+#   modelconst = Symbol(modelname, '!')
+#   output = Core.eval(__module__, expr.args)
+#   esc(quote
+#       abstract type $modelname <: Stipple.ReactiveModel end
       
-      @reactive! mutable struct $modelconst <: $modelname
-          $(expr.args...)
-      end
+#       @reactive! mutable struct $modelconst <: $modelname
+#           $(output...)
+#       end
 
-      delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
-      Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
+#       delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
+#       Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
       
-      $modelconst
-  end)
-end
+#       $modelconst
+#   end)
+# end
 
 macro type_pure(modelname, expr)
   modelconst = Symbol(modelname, '!')
@@ -197,6 +198,79 @@ macro type_pure(modelname, expr)
       
       $modelconst
   end)
+end
+
+macro var_storage(expr)
+  if expr.head != :block
+      expr = quote $expr end
+  end
+
+  new_inputmode = true
+  for e in expr.args
+      e isa LineNumberNode && continue
+      e.args[1] isa Symbol && continue
+
+      type = e.args[1].args[2]
+      if startswith(string(type), r"(Stipple\.)?R(eactive)?($|{)")
+          new_inputmode = false
+          break
+      end
+  end
+
+  storage = LittleDict{Symbol,Expr}(:_modes => Stipple.init_modes())
+  
+  source = nothing
+  for e in expr.args
+      if e isa LineNumberNode
+          source = e
+          continue
+      end
+      mode = :PUBLIC
+      reactive = true
+      var, ex = if new_inputmode
+          #check whether flags are set
+          if e.args[end] isa Expr && e.args[end].head == :tuple
+              flags = e.args[end].args[2:end]
+              if length(flags) > 0 && flags[1] ∈ [:READONLY, :PRIVATE, :JSFUNCTION, :NON_REACTIVE]
+                  newmode = intersect(setdiff(flags, [:NON_REACTIVE]), [:READONLY, :PRIVATE, :JSFUNCTION])
+                  length(newmode) > 0 && (mode = newmode[end])
+                  reactive = :NON_REACTIVE ∉ flags
+                  e.args[end] = e.args[end].args[1]
+              end
+          end
+          var, ex = Stipple.ReactiveTools.parse_expression!(e, reactive ? mode : nothing, source, @__MODULE__)
+      else
+          var = e.args[1]
+          if var isa Symbol
+              reactive = false
+          else
+              type = var.args[2]
+              reactive = startswith(string(type), r"(Stipple\.)?R(eactive)?($|{)")
+              var = var.args[1]
+          end
+          if occursin(Stipple.SETTINGS.private_pattern, string(var))
+              mode = :PRIVATE
+          elseif occursin(Stipple.SETTINGS.readonly_pattern, string(var))
+              mode = :READONLY
+          end
+          var, e
+      end
+      if reactive == false && mode != :PUBLIC && mode != PUBLIC
+          Stipple.setmode!(storage[:_modes], Core.eval(Stipple, mode), var)
+      end
+      storage[var] = ex
+  end
+
+  esc(quote $(storage) end)
+end
+
+macro type(modelname, expr)
+  output = Core.eval(__module__, :(values(@var_storage($expr))))
+  esc(quote
+      Stipple.@type_pure $modelname begin
+      $(output...)
+      end
+  end)  
 end
 
 #===#

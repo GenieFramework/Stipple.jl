@@ -6,7 +6,7 @@ using MacroTools: postwalk
 using OrderedCollections
 import Genie
 
-export @binding, @readonly, @private, @in, @out, @value, @jsfn, @mix_in, @clear
+export @binding, @readonly, @private, @in, @out, @value, @jsfn, @mix_in, @clear, @vars, @add_vars
 export @page, @rstruct, @type, @handlers, @init, @model, @onchange, @onchangeany, @onbutton
 export DEFAULT_LAYOUT, Page
 
@@ -70,7 +70,7 @@ end
 function init_storage(m::Module)
   (m == @__MODULE__) && return nothing
   haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = LittleDict{Symbol,Expr}(
-    :_modes => :(_modes = LittleDict(:_modes => PRIVATE, $(QuoteNode(Stipple.CHANNELFIELDNAME)) => PRIVATE))
+    :_modes => Stipple.init_modes()
   ))
   haskey(TYPES, m) || (TYPES[m] = nothing)
 
@@ -122,9 +122,7 @@ end
 macro rstruct()
   init_storage(__module__)
   modelname = Symbol(default_struct_name(__module__))
-  output = Core.eval(__module__, :(
-    values(ReactiveTools.REACTIVE_STORAGE[@__MODULE__])
-  ))
+  output = Core.eval(__module__, :(values(ReactiveTools.REACTIVE_STORAGE[@__MODULE__])))
     
   esc(quote
     Stipple.@type_pure $modelname begin
@@ -144,6 +142,43 @@ macro type()
       ReactiveTools.TYPES[@__MODULE__] = ReactiveTools.@rstruct()
     end
   end)
+end
+
+function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict)
+  m1 = eval(storage_1[:_modes].args[end])
+  m2 = eval(storage_2[:_modes].args[end])
+  modes = merge(m1, m2)
+  for field in keys(storage_2)
+    field == :_modes && continue
+    setmode!(modes, get(m2, field, :PUBLIC), field)
+  end
+  storage = merge(storage_1, storage_2)
+  storage[:_modes] = :(:_modes => $modes)
+
+  storage
+end
+
+macro vars(expr)
+  init_storage(__module__)
+  
+  REACTIVE_STORAGE[__module__] = Core.eval(__module__, :(Stipple.@var_storage($expr)))
+
+  clear_type(__module__)
+  instance = @eval __module__ Stipple.@type()
+  for p in Stipple.Pages._pages
+    p.context == m && (p.model = instance)
+  end
+end
+
+macro add_vars(expr)
+  init_storage(__module__)
+  REACTIVE_STORAGE[__module__] = merge_storage(REACTIVE_STORAGE[__module__], Core.eval(__module__, :(Stipple.@var_storage($expr))))
+
+  clear_type(__module__)
+  instance = @eval __module__ Stipple.@type()
+  for p in Stipple.Pages._pages
+    p.context == m && (p.model = instance)
+  end
 end
 
 macro model()
@@ -174,7 +209,7 @@ function find_assignment(expr)
   assignment
 end
 
-function parse_expression(expr::Expr, @nospecialize(mode) = nothing, source = nothing, m::Union{Module, Nothing} = nothing)
+function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = nothing, m::Union{Module, Nothing} = nothing)
   expr = find_assignment(expr)
   Rtype = isnothing(m) || ! isdefined(m, :R) ? :(Stipple.R) : :R
   (isa(expr, Expr) && contains(string(expr.head), "=")) ||
@@ -213,7 +248,7 @@ function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); sour
   intmode = Core.eval(Stipple, mode)
   init_storage(m)
 
-  var, field_expr = parse_expression(expr, reactive ? mode : nothing, source, m)
+  var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
   REACTIVE_STORAGE[m][var] = field_expr
 
   reactive || setmode!(REACTIVE_STORAGE[m][:_modes], intmode, var)

@@ -226,14 +226,19 @@ end
 
 function setmode!(model::ReactiveModel, mode::Int, fieldnames::Symbol...)
   fieldname in [Stipple.CHANNELFIELDNAME, :_modes] && return
-
-  for fieldname in fieldnames
-    mode == PUBLIC ? delete!(model._modes, fieldname) : model._modes[fieldname] = mode
-  end
-  model._modes
+  setmode!(model._modes, mode, fieldnames...)
 end
 
-@specialize
+function setmode!(dict::AbstractDict, mode, fieldnames::Symbol...)
+  for fieldname in fieldnames
+    mode == PUBLIC ? delete!(dict, fieldname) : dict[fieldname] = Core.eval(Stipple, mode)
+  end
+  dict
+end
+
+function init_modes()
+  :(_modes::LittleDict{Symbol, Any} = LittleDict(:_modes => PRIVATE, $(QuoteNode(Stipple.CHANNELFIELDNAME)) => PRIVATE))
+end
 
 """
     function init(::Type{M};
@@ -464,6 +469,8 @@ function Base.push!(model::M, field::Symbol; channel::String = getchannel(model)
   push!(model, field => getproperty(model, field); channel)
 end
 
+@specialize
+
 #===#
 
 include("stipple/rendering.jl")
@@ -479,6 +486,9 @@ const DEPS = OrderedCollections.LittleDict{Union{Any,AbstractString}, Function}(
 
 Registers the `routes` for all the required JavaScript dependencies (scripts).
 """
+
+@nospecialize
+
 function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool = true) :: Nothing
   if ! Genie.Assets.external_assets(assets_config)
 
@@ -588,6 +598,8 @@ end
 function deps!(m::Any, f::Function)
   DEPS[m] = f
 end
+
+@specialize
 
 macro R_str(s)
   :(Symbol($s))
