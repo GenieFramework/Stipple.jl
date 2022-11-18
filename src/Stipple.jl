@@ -231,7 +231,7 @@ end
 
 function setmode!(dict::AbstractDict, mode, fieldnames::Symbol...)
   for fieldname in fieldnames
-    mode == PUBLIC ? delete!(dict, fieldname) : dict[fieldname] = Core.eval(Stipple, mode)
+    mode == PUBLIC || mode == :PUBLIC ? delete!(dict, fieldname) : dict[fieldname] = Core.eval(Stipple, mode)
   end
   dict
 end
