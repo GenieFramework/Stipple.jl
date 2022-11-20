@@ -371,7 +371,7 @@ end
 
 function routename(::Type{M}) where M<:ReactiveModel
   SM = supertype(M)::Type{<:ReactiveModel}
-  s = replace(string(SM == ReactiveModel ? M : SM), "." => "_", r"^var\"#+" =>"", r"#+" => "_")
+  s = replace(replace(replace(string(SM == ReactiveModel ? M : SM), "." => "_"), r"^var\"#+" =>""), r"#+" => "_")
   replace(s, r"[^0-9a-zA-Z_]+" => "")
 end
 
