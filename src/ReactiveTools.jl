@@ -69,9 +69,7 @@ end
 
 function init_storage(m::Module)
   (m == @__MODULE__) && return nothing
-  haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = LittleDict{Symbol,Expr}(
-    :_modes => Stipple.init_modes()
-  ))
+  haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = Stipple.init_storage())
   haskey(TYPES, m) || (TYPES[m] = nothing)
 
 end
@@ -125,7 +123,7 @@ macro rstruct()
   output = Core.eval(__module__, :(values(ReactiveTools.REACTIVE_STORAGE[@__MODULE__])))
     
   esc(quote
-    Stipple.@type_pure $modelname begin
+    Stipple.@kwredef mutable struct $modelname <: ReactiveModel
       $(output...)
     end
   end)  
@@ -148,9 +146,16 @@ function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict)
   m1 = eval(storage_1[:_modes].args[end])
   m2 = eval(storage_2[:_modes].args[end])
   modes = merge(m1, m2)
-  for field in keys(storage_2)
-    field == :_modes && continue
-    setmode!(modes, get(m2, field, :PUBLIC), field)
+  for (field, expr) in storage_2
+    field in Stipple.AUTOFIELDS && continue
+
+    reactive = startswith(string(Stipple.split_expr(expr)[2]), r"(Stipple\.)?R(eactive)?($|{)")
+    # Reactive fields don't store modes, setting it to PUBLIC removes the value
+    if reactive
+      setmode!(modes, PUBLIC, field)
+    else
+      setmode!(modes, get(m2, field, PUBLIC), field)
+    end
   end
   storage = merge(storage_1, storage_2)
   storage[:_modes] = :(:_modes => $modes)

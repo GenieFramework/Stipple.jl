@@ -138,7 +138,7 @@ function setchannel(m::M, value) where {M<:ReactiveModel}
   setfield!(m, CHANNELFIELDNAME, ChannelName(value))
 end
 
-const AUTOFIELDS = [:isready, :isprocessing] # not DRY but we need a reference to the auto-set fields
+const AUTOFIELDS = [:isready, :isprocessing, :_modes] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin
   _modes::LittleDict{Symbol, Int} = LittleDict(:_modes => PRIVATE, :channel__ => PRIVATE)
@@ -162,62 +162,31 @@ end
   Stipple.@reactors
 end
 
-@mix Stipple.@kwredef mutable struct reactive_pure!
-  Stipple.@reactors_pure
+function split_expr(expr)
+  expr.args[1] isa Symbol ? (expr.args[1], nothing, expr.args[2]) : (expr.args[1].args[1], expr.args[1].args[2], expr.args[2])
 end
 
-# macro type(modelname, expr)
-#   modelconst = Symbol(modelname, '!')
-#   output = Core.eval(__module__, expr.args)
-#   esc(quote
-#       abstract type $modelname <: Stipple.ReactiveModel end
-      
-#       @reactive! mutable struct $modelconst <: $modelname
-#           $(output...)
-#       end
-
-#       delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
-#       Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
-      
-#       $modelconst
-#   end)
-# end
-
-macro type_pure(modelname, expr)
-  modelconst = Symbol(modelname, '!')
-
-  esc(quote
-      abstract type $modelname <: Stipple.ReactiveModel end
-      
-      Stipple.@reactive_pure! mutable struct $modelconst <: $modelname
-          $(expr.args...)
-      end
-
-      delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
-      Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
-      
-      $modelconst
-  end)
-end
-
-macro var_storage(expr)
+macro var_storage(expr, new_inputmode = :auto)
+  @info expr
   if expr.head != :block
       expr = quote $expr end
   end
 
-  new_inputmode = true
-  for e in expr.args
-      e isa LineNumberNode && continue
-      e.args[1] isa Symbol && continue
+  if new_inputmode == :auto
+    new_inputmode = true
+    for e in expr.args
+        e isa LineNumberNode && continue
+        e.args[1] isa Symbol && continue
 
-      type = e.args[1].args[2]
-      if startswith(string(type), r"(Stipple\.)?R(eactive)?($|{)")
-          new_inputmode = false
-          break
-      end
+        type = e.args[1].args[2]
+        if startswith(string(type), r"(Stipple\.)?R(eactive)?($|{)")
+            new_inputmode = false
+            break
+        end
+    end
   end
 
-  storage = LittleDict{Symbol,Expr}(:_modes => Stipple.init_modes())
+  storage = init_storage()
   
   source = nothing
   for e in expr.args
@@ -255,7 +224,9 @@ macro var_storage(expr)
           end
           var, e
       end
-      if reactive == false && mode != :PUBLIC && mode != PUBLIC
+      # prevent overwriting of control fields
+      storage in Stipple.AUTOFIELDS && continue
+      if reactive == false
           Stipple.setmode!(storage[:_modes], Core.eval(Stipple, mode), var)
       end
       storage[var] = ex
@@ -264,13 +235,71 @@ macro var_storage(expr)
   esc(quote $(storage) end)
 end
 
-macro type(modelname, expr)
-  output = Core.eval(__module__, :(values(@var_storage($expr))))
+"""
+`@vars(expr)`
+```
+@vars MyDashboard begin
+  a::Int = 1
+  b::Float64 = 2
+  c::String = "Hello"
+  d::String = "readonly", NON_REACTIVE, READONLY
+  e::String = "private",  NON_REACTIVE, PRIVATE
+end
+```
+This macro replaces the old `@reactive!` and doesn't need the Reactive in the declaration.
+Instead the non_reactives are marked by a flag. The old declaration syntax is still supported
+to make adaptation of old code easier. 
+```
+@vars HHModel begin
+  a::R{Int} = 1
+  b::R{Float64} = 2
+  c::String = "Hello"
+  d_::String = "readonly"
+  e__::String = "private"
+end
+```
+by
+
+```julia
+@reactive! mutual struct HHModel <: ReactiveModel
+  a::R{Int} = 1
+  b::R{Float64} = 2
+  c::String = "Hello"
+  d_::String = "readonly"
+  e__::String = "private"
+end
+```
+
+Old syntax is still supported by @vars and can be forced by the `new_inputmode` argument.
+
+"""
+macro vars(modelname, expr)
+  modelconst = Symbol(modelname, '!')
+  output = Core.eval(__module__, :(values(Stipple.@var_storage($expr))))
+
   esc(quote
-      Stipple.@type_pure $modelname begin
-      $(output...)
+      abstract type $modelname <: Stipple.ReactiveModel end
+      
+      Stipple.@kwredef mutable struct $modelconst <: $modelname
+          $(output...)
       end
-  end)  
+
+      delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
+      Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
+      
+      $modelconst
+  end)
+end
+
+macro new_reactive!(expr)
+  @info("""@reactive! is deprecated, please replace use `@vars` instead.""")
+  
+  output = Core.eval(__module__, :(values(Stipple.@var_storage($(expr.args[3]), false))))
+  expr.args[3] = quote $(output...) end
+
+  esc(quote
+    Stipple.@kwredef $expr
+  end)
 end
 
 #===#

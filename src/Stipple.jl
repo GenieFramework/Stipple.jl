@@ -236,8 +236,13 @@ function setmode!(dict::AbstractDict, mode, fieldnames::Symbol...)
   dict
 end
 
-function init_modes()
-  :(_modes::LittleDict{Symbol, Any} = LittleDict(:_modes => PRIVATE, $(QuoteNode(Stipple.CHANNELFIELDNAME)) => PRIVATE))
+function init_storage()
+  LittleDict{Symbol, Expr}(
+    Stipple.CHANNELFIELDNAME => 
+      :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = Stipple.channelfactory()),
+    :_modes => :(_modes::LittleDict{Symbol, Any} = LittleDict(:_modes => PRIVATE, $(QuoteNode(Stipple.CHANNELFIELDNAME)) => PRIVATE)),
+    :isready => :(isready::Stipple.R{Bool} = false)
+  )
 end
 
 """
