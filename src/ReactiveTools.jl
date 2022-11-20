@@ -129,8 +129,6 @@ macro rstruct()
   end)  
 end
 
-# import Stipple.@type
-
 macro type()
   init_storage(__module__)
   esc(quote
@@ -158,10 +156,12 @@ function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict)
     end
   end
   storage = merge(storage_1, storage_2)
-  storage[:_modes] = :(:_modes => $modes)
+  storage[:_modes] = :(_modes::LittleDict{Symbol, Any} = $modes)
 
   storage
 end
+
+import Stipple.@vars
 
 macro vars(expr)
   init_storage(__module__)
@@ -169,7 +169,7 @@ macro vars(expr)
   REACTIVE_STORAGE[__module__] = Core.eval(__module__, :(Stipple.@var_storage($expr)))
 
   clear_type(__module__)
-  instance = @eval __module__ Stipple.@type()
+  instance = @eval __module__ ReactiveTools.@type()
   for p in Stipple.Pages._pages
     p.context == m && (p.model = instance)
   end

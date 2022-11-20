@@ -13,7 +13,7 @@ using Stipple
 export Page
 export pages
 
-@reactive mutable struct EmptyModel <: ReactiveModel
+@vars EmptyModel begin
 end
 
 mutable struct Page
@@ -73,7 +73,7 @@ function Page(  route::Union{Route,String};
   page
 end
 
-function delete!(page::Page)
+function Base.delete!(page::Page)
   deleteat!(_pages, findall(p -> p == page, _pages))
 end
 

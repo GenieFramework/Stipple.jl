@@ -245,6 +245,10 @@ function init_storage()
   )
 end
 
+function get_concrete_model(::Type{M})::Type{<:ReactiveModel} where M <: ReactiveModel
+  isabstracttype(M) ? Core.eval(Base.parentmodule(M), Symbol(Base.nameof(M), "!")) : M
+end
+
 """
     function init(::Type{M};
                     vue_app_name::S = Stipple.Elements.root(M),
@@ -273,8 +277,8 @@ function init(::Type{M_init};
 
   webtransport!(transport)
   # concrete modeltype
-  M = (isabstracttype(M_init) ? Core.eval(Base.parentmodule(M_init), Symbol(Base.nameof(M_init), "!")) : M_init)::Type{<:ReactiveModel}
-  model = M |> Base.invokelatest |> accessmode_from_pattern!
+  M = Stipple.get_concrete_model(M_init)
+  model = M |> Base.invokelatest
 
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
   ok_response = "OK"

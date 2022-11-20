@@ -123,7 +123,7 @@ end
 abstract type ReactiveModel end
 
 
-export @reactors, @reactive, @reactive!, @type
+export @reactors, @reactive, @reactive!, @vars, @add_vars, @old_reactive, @old_reactive!
 export ChannelName, getchannel
 
 const ChannelName = String
@@ -158,6 +158,19 @@ end
 
 function split_expr(expr)
   expr.args[1] isa Symbol ? (expr.args[1], nothing, expr.args[2]) : (expr.args[1].args[1], expr.args[1].args[2], expr.args[2])
+end
+
+function model_to_storage(::Type{M_init}) where M_init <: ReactiveModel
+  M = get_concrete_model(M_init)
+  fields = fieldnames(M)
+  values = getfield.(Ref(M()), fields)
+  storage = LittleDict{Symbol, Expr}()
+  for (f, type, v) in zip(fields, fieldtypes(M), values)
+    v_copy = Stipple._deepcopy(v)
+    storage[f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy)
+  end
+
+  storage
 end
 
 macro var_storage(expr, new_inputmode = :auto)
@@ -223,9 +236,9 @@ macro var_storage(expr, new_inputmode = :auto)
           Stipple.setmode!(storage[:_modes], Core.eval(Stipple, mode), var)
       end
       storage[var] = ex
-  end
+    end
 
-  esc(quote $(storage) end)
+    esc(quote $(storage) end)
 end
 
 """
@@ -266,9 +279,9 @@ end
 Old syntax is still supported by @vars and can be forced by the `new_inputmode` argument.
 
 """
-macro vars(modelname, expr)
+macro vars(modelname, expr, new_inputmode = :auto)
   modelconst = Symbol(modelname, '!')
-  output = Core.eval(__module__, :(values(Stipple.@var_storage($expr))))
+  output = Core.eval(__module__, :(values(Stipple.@var_storage($expr, $new_inputmode))))
 
   esc(quote
       abstract type $modelname <: Stipple.ReactiveModel end
@@ -284,8 +297,18 @@ macro vars(modelname, expr)
   end)
 end
 
+macro add_vars(modelname, expr, new_inputmode = :auto)
+  old_storage = Core.eval(__module__, :(Stipple.model_to_storage($modelname)))
+  storage = Core.eval(__module__, :(Stipple.@var_storage($expr, $new_inputmode)))
+  new_storage = values(ReactiveTools.merge_storage(old_storage, storage))
+  
+  esc(quote
+    Stipple.@vars $modelname quote $$(new_storage...) end
+  end)
+end
+
 macro reactive!(expr)
-  @info("""@reactive! is deprecated, please replace use `@vars` instead.
+  warning = """@reactive! is deprecated, please replace use `@vars` instead.
   
   In case of errors, please replace `@reactive!` and `@reactive` by `@old_reactive!` and open an issue at
   https://github.com/GenieFramework/Stipple.jl.
@@ -295,18 +318,19 @@ macro reactive!(expr)
   ```
   model = init(MyDashboard) |> accessmode_from_pattern! |> handlers |> ui |> html
   ```
-  """)
+  """
   
   output = Core.eval(__module__, :(values(Stipple.@var_storage($(expr.args[3]), false))))
   expr.args[3] = quote $(output...) end
 
   esc(quote
+    @warn $warning
     Stipple.@kwredef $expr
   end)
 end
 
 macro reactive(expr)
-  @info("""@reactive is deprecated, please replace use `@vars` instead.
+  warning = """@reactive is deprecated, please replace use `@vars` instead.
   
   In case of errors, please replace `@reactive!` and `@reactive` by `@old_reactive!` and open an issue at
   https://github.com/GenieFramework/Stipple.jl.
@@ -316,7 +340,7 @@ macro reactive(expr)
   model = init(MyDashboard) |> accessmode_from_pattern! |> handlers |> ui |> html
   ```
   
-  """)
+  """
   
   output = Core.eval(__module__, :(values(Stipple.@var_storage($(expr.args[3]), false))))
   expr.args[3] = quote $(output...) end
