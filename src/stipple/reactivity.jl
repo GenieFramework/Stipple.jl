@@ -147,18 +147,12 @@ const AUTOFIELDS = [:isready, :isprocessing, :_modes] # not DRY but we need a re
   isprocessing::Stipple.R{Bool} = false
 end
 
-@pour reactors_pure begin
-  channel__::Stipple.ChannelName = Stipple.channelfactory()
-  isready::Stipple.R{Bool} = false
-  isprocessing::Stipple.R{Bool} = false
-end
-
-@mix Stipple.@with_kw mutable struct reactive
+@mix Stipple.@with_kw mutable struct old_reactive
   Stipple.@reactors
 end
 
 
-@mix Stipple.@kwredef mutable struct reactive!
+@mix Stipple.@kwredef mutable struct old_reactive!
   Stipple.@reactors
 end
 
@@ -167,7 +161,6 @@ function split_expr(expr)
 end
 
 macro var_storage(expr, new_inputmode = :auto)
-  @info expr
   if expr.head != :block
       expr = quote $expr end
   end
@@ -291,14 +284,45 @@ macro vars(modelname, expr)
   end)
 end
 
-macro new_reactive!(expr)
-  @info("""@reactive! is deprecated, please replace use `@vars` instead.""")
+macro reactive!(expr)
+  @info("""@reactive! is deprecated, please replace use `@vars` instead.
+  
+  In case of errors, please replace `@reactive!` and `@reactive` by `@old_reactive!` and open an issue at
+  https://github.com/GenieFramework/Stipple.jl.
+
+  If you use `@old_reactive!`, make sure to call `accessmode_from_pattern!()`, because the internals for
+  accessmode have changed, e.g.
+  ```
+  model = init(MyDashboard) |> accessmode_from_pattern! |> handlers |> ui |> html
+  ```
+  """)
   
   output = Core.eval(__module__, :(values(Stipple.@var_storage($(expr.args[3]), false))))
   expr.args[3] = quote $(output...) end
 
   esc(quote
     Stipple.@kwredef $expr
+  end)
+end
+
+macro reactive(expr)
+  @info("""@reactive is deprecated, please replace use `@vars` instead.
+  
+  In case of errors, please replace `@reactive!` and `@reactive` by `@old_reactive!` and open an issue at
+  https://github.com/GenieFramework/Stipple.jl.
+  If you use `@old_reactive!`, make sure to call `accessmode_from_pattern!()`, because the internals for
+  accessmode have changed, e.g.
+  ```
+  model = init(MyDashboard) |> accessmode_from_pattern! |> handlers |> ui |> html
+  ```
+  
+  """)
+  
+  output = Core.eval(__module__, :(values(Stipple.@var_storage($(expr.args[3]), false))))
+  expr.args[3] = quote $(output...) end
+
+  esc(quote
+    Base.@kwdef $expr
   end)
 end
 

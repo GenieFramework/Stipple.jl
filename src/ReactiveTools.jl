@@ -129,7 +129,7 @@ macro rstruct()
   end)  
 end
 
-import Stipple.@type
+# import Stipple.@type
 
 macro type()
   init_storage(__module__)
