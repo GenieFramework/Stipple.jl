@@ -117,27 +117,18 @@ macro clear(args...)
   REACTIVE_STORAGE[__module__]
 end
 
-macro rstruct()
+import Stipple.@type
+macro type()  
   init_storage(__module__)
-  modelname = Symbol(default_struct_name(__module__))
-  output = Core.eval(__module__, :(values(ReactiveTools.REACTIVE_STORAGE[@__MODULE__])))
-    
-  esc(quote
-    Stipple.@kwredef mutable struct $modelname <: Stipple.ReactiveModel
-      $(output...)
-    end
-  end)  
-end
+  type = if TYPES[__module__] !== nothing
+    TYPES[__module__]
+  else
+    modelname = Symbol(default_struct_name(__module__))
+    storage = REACTIVE_STORAGE[__module__]
+    TYPES[__module__] = @eval(__module__, Stipple.@type($modelname, $storage))
+  end
 
-macro type()
-  init_storage(__module__)
-  esc(quote
-    if Stipple.ReactiveTools.TYPES[@__MODULE__] !== nothing
-      ReactiveTools.TYPES[@__MODULE__]
-    else
-      ReactiveTools.TYPES[@__MODULE__] = ReactiveTools.@rstruct()
-    end
-  end)
+  :($type)
 end
 
 function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict)
@@ -166,10 +157,10 @@ import Stipple: @vars, @add_vars
 macro vars(expr)
   init_storage(__module__)
   
-  REACTIVE_STORAGE[__module__] = Core.eval(__module__, :(Stipple.@var_storage($expr)))
+  REACTIVE_STORAGE[__module__] = @eval(__module__, Stipple.@var_storage($expr))
 
   clear_type(__module__)
-  instance = @eval __module__ ReactiveTools.@type()
+  instance = @eval __module__ Stipple.@type()
   for p in Stipple.Pages._pages
     p.context == m && (p.model = instance)
   end
@@ -177,7 +168,7 @@ end
 
 macro add_vars(expr)
   init_storage(__module__)
-  REACTIVE_STORAGE[__module__] = merge_storage(REACTIVE_STORAGE[__module__], Core.eval(__module__, :(Stipple.@var_storage($expr))))
+  REACTIVE_STORAGE[__module__] = merge_storage(REACTIVE_STORAGE[__module__], @eval(__module__, Stipple.@var_storage($expr)))
 
   clear_type(__module__)
   instance = @eval __module__ Stipple.ReactiveTools.@type()
@@ -190,7 +181,7 @@ macro model()
   init_storage(__module__)
 
   esc(quote
-    ReactiveTools.@type() |> Base.invokelatest |> Stipple.accessmode_from_pattern!
+    ReactiveTools.@type() |> Base.invokelatest
   end)
 end
 
@@ -221,7 +212,7 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
   (isa(expr, Expr) && contains(string(expr.head), "=")) ||
     error("Invalid binding expression -- use it with variables assignment ex `@binding a = 2`")
 
-  source = (source !== nothing ? strip(string(source), collect("#= ")) : "")
+  source = (source !== nothing ? String(strip(string(source), collect("#= "))) : "")
 
   var = expr.args[1]
   if !isnothing(mode)

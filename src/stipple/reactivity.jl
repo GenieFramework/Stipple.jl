@@ -240,7 +240,23 @@ macro var_storage(expr, new_inputmode = :auto)
       storage[var] = ex
     end
 
-    esc(quote $(storage) end)
+    esc(:($storage))
+end
+
+macro type(modelname, storage)
+  modelconst = Symbol(modelname, '!')
+  output = @eval(__module__, values($storage))
+  esc(quote
+      abstract type $modelname <: Stipple.ReactiveModel end
+      Stipple.@kwredef mutable struct $modelconst <: $modelname
+          $(output...)
+      end
+
+      delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
+      Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
+      
+      $modelconst
+  end)
 end
 
 """
@@ -283,47 +299,29 @@ Old syntax is still supported by @vars and can be forced by the `new_inputmode` 
 """
 macro vars(modelname, expr, new_inputmode = :auto)
   modelconst = Symbol(modelname, '!')
-  output = Core.eval(__module__, :(values(Stipple.@var_storage($expr, $new_inputmode))))
+  storage = @eval(__module__, values(Stipple.@var_storage($expr, $new_inputmode)))
 
-  esc(quote
-      abstract type $modelname <: Stipple.ReactiveModel end
-      
-      Stipple.@kwredef mutable struct $modelconst <: $modelname
-          $(output...)
-      end
-
-      delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
-      Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
-      
-      $modelconst
-  end)
+  esc(:(Stipple.@type $modelname $storage))
 end
 
 macro add_vars(modelname, expr, new_inputmode = :auto)
   modelconst = Symbol(modelname, '!')
 
-  old_storage = Core.eval(__module__, :(Stipple.model_to_storage($modelname)))
-  storage = Core.eval(__module__, :(Stipple.@var_storage($expr, $new_inputmode)))
-  new_storage = values(ReactiveTools.merge_storage(old_storage, storage))
+  storage = @eval(__module__, Stipple.@var_storage($expr, $new_inputmode))
+  new_storage = if isdefined(__module__, modelname)
+    old_storage = @eval(__module__, Stipple.model_to_storage($modelname))
+    ReactiveTools.merge_storage(old_storage, storage)
+  else
+    storage
+  end
     
-  esc(quote
-      abstract type $modelname <: Stipple.ReactiveModel end
-      
-      Stipple.@kwredef mutable struct $modelconst <: $modelname
-          $(new_storage...)
-      end
-
-      delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
-      Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
-      
-      $modelconst
-  end)
+  esc(:(Stipple.@type $modelname $new_storage))
 end
 
 macro reactive!(expr)
   warning = """@reactive! is deprecated, please replace use `@vars` instead.
   
-  In case of errors, please replace `@reactive!` and `@reactive` by `@old_reactive!` and open an issue at
+  In case of errors, please replace `@reactive!` by `@old_reactive!` and open an issue at
   https://github.com/GenieFramework/Stipple.jl.
 
   If you use `@old_reactive!`, make sure to call `accessmode_from_pattern!()`, because the internals for
@@ -333,7 +331,7 @@ macro reactive!(expr)
   ```
   """
   
-  output = Core.eval(__module__, :(values(Stipple.@var_storage($(expr.args[3]), false))))
+  output = @eval(__module__, values(Stipple.@var_storage($(expr.args[3]), false)))
   expr.args[3] = quote $(output...) end
 
   esc(quote
@@ -345,7 +343,7 @@ end
 macro reactive(expr)
   warning = """@reactive is deprecated, please replace use `@vars` instead.
   
-  In case of errors, please replace `@reactive!` and `@reactive` by `@old_reactive!` and open an issue at
+  In case of errors, please replace `@reactive` by `@old_reactive!` and open an issue at
   https://github.com/GenieFramework/Stipple.jl.
   If you use `@old_reactive!`, make sure to call `accessmode_from_pattern!()`, because the internals for
   accessmode have changed, e.g.
@@ -355,12 +353,10 @@ macro reactive(expr)
   
   """
   
-  output = Core.eval(__module__, :(values(Stipple.@var_storage($(expr.args[3]), false))))
+  output = @eval(__module__, values(Stipple.@var_storage($(expr.args[3]), false)))
   expr.args[3] = quote $(output...) end
 
-  esc(quote
-    Base.@kwdef $expr
-  end)
+  esc(:(Base.@kwdef $expr))
 end
 
 #===#
