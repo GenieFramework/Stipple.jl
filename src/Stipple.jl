@@ -240,12 +240,12 @@ function init_storage()
   LittleDict{Symbol, Expr}(
     Stipple.CHANNELFIELDNAME => 
       :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = Stipple.channelfactory()),
-    :_modes => :(_modes::LittleDict{Symbol, Any} = LittleDict(:_modes => PRIVATE, $(QuoteNode(Stipple.CHANNELFIELDNAME)) => PRIVATE)),
+    :_modes => :(_modes::Stipple.LittleDict{Symbol, Any} = Stipple.LittleDict(:_modes => Stipple.PRIVATE, $(QuoteNode(Stipple.CHANNELFIELDNAME)) => Stipple.PRIVATE)),
     :isready => :(isready::Stipple.R{Bool} = false)
   )
 end
 
-function get_concrete_model(::Type{M})::Type{<:ReactiveModel} where M <: ReactiveModel
+function get_concrete_model(::Type{M})::Type{<:ReactiveModel} where M <: Stipple.ReactiveModel
   isabstracttype(M) ? Core.eval(Base.parentmodule(M), Symbol(Base.nameof(M), "!")) : M
 end
 

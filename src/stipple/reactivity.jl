@@ -8,7 +8,7 @@ mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   Reactive{T}() where {T} = new{T}(Observable{T}(), PUBLIC, false, false, "")
   Reactive{T}(o, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, PUBLIC, no_bw, no_fw, "")
   Reactive{T}(o, mode::Int, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, mode, no_bw, no_fw, "")
-  Reactive{T}(o, mode::Int, no_bw::Bool, no_fw::Bool, s::String) where {T} = new{T}(o, mode, no_bw, no_fw, s)
+  Reactive{T}(o, mode::Int, no_bw::Bool, no_fw::Bool, s::AbstractString) where {T} = new{T}(o, mode, no_bw, no_fw, s)
   Reactive{T}(o, mode::Int, updatemode::Int) where {T} = new{T}(o, mode, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0, "")
 
   # Construct an Reactive{Any} without runtime dispatch
@@ -174,6 +174,7 @@ function model_to_storage(::Type{M_init}) where M_init <: ReactiveModel
 end
 
 macro var_storage(expr, new_inputmode = :auto)
+  m = __module__
   if expr.head != :block
       expr = quote $expr end
   end
@@ -213,7 +214,7 @@ macro var_storage(expr, new_inputmode = :auto)
                   e.args[end] = e.args[end].args[1]
               end
           end
-          var, ex = Stipple.ReactiveTools.parse_expression!(e, reactive ? mode : nothing, source, @__MODULE__)
+          var, ex = Stipple.ReactiveTools.parse_expression!(e, reactive ? mode : nothing, source, m)
       else
           var = e.args[1]
           if var isa Symbol
@@ -231,10 +232,11 @@ macro var_storage(expr, new_inputmode = :auto)
           var, e
       end
       # prevent overwriting of control fields
-      storage in Stipple.AUTOFIELDS && continue
+      var in Stipple.AUTOFIELDS && continue
       if reactive == false
           Stipple.setmode!(storage[:_modes], Core.eval(Stipple, mode), var)
       end
+
       storage[var] = ex
     end
 
@@ -298,12 +300,23 @@ macro vars(modelname, expr, new_inputmode = :auto)
 end
 
 macro add_vars(modelname, expr, new_inputmode = :auto)
+  modelconst = Symbol(modelname, '!')
+
   old_storage = Core.eval(__module__, :(Stipple.model_to_storage($modelname)))
   storage = Core.eval(__module__, :(Stipple.@var_storage($expr, $new_inputmode)))
   new_storage = values(ReactiveTools.merge_storage(old_storage, storage))
-  
+    
   esc(quote
-    Stipple.@vars $modelname quote $$(new_storage...) end
+      abstract type $modelname <: Stipple.ReactiveModel end
+      
+      Stipple.@kwredef mutable struct $modelconst <: $modelname
+          $(new_storage...)
+      end
+
+      delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
+      Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
+      
+      $modelconst
   end)
 end
 

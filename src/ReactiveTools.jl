@@ -123,7 +123,7 @@ macro rstruct()
   output = Core.eval(__module__, :(values(ReactiveTools.REACTIVE_STORAGE[@__MODULE__])))
     
   esc(quote
-    Stipple.@kwredef mutable struct $modelname <: ReactiveModel
+    Stipple.@kwredef mutable struct $modelname <: Stipple.ReactiveModel
       $(output...)
     end
   end)  
@@ -156,12 +156,12 @@ function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict)
     end
   end
   storage = merge(storage_1, storage_2)
-  storage[:_modes] = :(_modes::LittleDict{Symbol, Any} = $modes)
+  storage[:_modes] = :(_modes::Stipple.LittleDict{Symbol, Any} = $modes)
 
   storage
 end
 
-import Stipple.@vars
+import Stipple: @vars, @add_vars
 
 macro vars(expr)
   init_storage(__module__)
@@ -180,7 +180,7 @@ macro add_vars(expr)
   REACTIVE_STORAGE[__module__] = merge_storage(REACTIVE_STORAGE[__module__], Core.eval(__module__, :(Stipple.@var_storage($expr))))
 
   clear_type(__module__)
-  instance = @eval __module__ Stipple.@type()
+  instance = @eval __module__ Stipple.ReactiveTools.@type()
   for p in Stipple.Pages._pages
     p.context == m && (p.model = instance)
   end
@@ -217,13 +217,11 @@ end
 function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = nothing, m::Union{Module, Nothing} = nothing)
   expr = find_assignment(expr)
   Rtype = isnothing(m) || ! isdefined(m, :R) ? :(Stipple.R) : :R
+
   (isa(expr, Expr) && contains(string(expr.head), "=")) ||
     error("Invalid binding expression -- use it with variables assignment ex `@binding a = 2`")
 
-  source = (source !== nothing ? "\"$(strip(replace(replace(string(source), "#="=>""), "=#"=>"")))\"" : "")
-  if Sys.iswindows()
-    source = replace(source, "\\"=>"\\\\")
-  end
+  source = (source !== nothing ? strip(string(source), collect("#= ")) : "")
 
   var = expr.args[1]
   if !isnothing(mode)
