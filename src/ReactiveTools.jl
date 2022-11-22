@@ -5,7 +5,7 @@ using MacroTools
 using MacroTools: postwalk
 using OrderedCollections
 import Genie
-
+import Stipple.delete_mode!
 export @binding, @readonly, @private, @in, @out, @value, @jsfn, @mix_in, @clear, @vars, @add_vars
 export @page, @rstruct, @type, @handlers, @init, @model, @onchange, @onchangeany, @onbutton
 export DEFAULT_LAYOUT, Page
@@ -68,7 +68,7 @@ function default_struct_name(m::Module)
 end
 
 function init_storage(m::Module)
-  (m == @__MODULE__) && return nothing
+  (m == @__MODULE__) && return nothing 
   haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = Stipple.init_storage())
   haskey(TYPES, m) || (TYPES[m] = nothing)
 
@@ -112,8 +112,7 @@ macro clear(args...)
     arg in [Stipple.CHANNELFIELDNAME, :_modes] && continue
     delete!(REACTIVE_STORAGE[__module__], arg)
   end
-  # setmode! to PUBLIC clears the entries
-  setmode!(REACTIVE_STORAGE[__module__][:_modes], PUBLIC, args...)
+  deletemode!(REACTIVE_STORAGE[__module__][:_modes], args...)
   REACTIVE_STORAGE[__module__]
 end
 
@@ -132,16 +131,15 @@ macro type()
 end
 
 function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict)
-  m1 = eval(storage_1[:_modes].args[end])
-  m2 = eval(storage_2[:_modes].args[end])
+  m1 = eval(haskey(storage_1, :_modes) ? storage_1[:_modes].args[end] : LittleDict{Symbol, Any}())
+  m2 = eval(haskey(storage_2, :_modes) ? storage_2[:_modes].args[end] : LittleDict{Symbol, Any}())
   modes = merge(m1, m2)
   for (field, expr) in storage_2
-    field in Stipple.AUTOFIELDS && continue
+    field == :_modes && continue
 
     reactive = startswith(string(Stipple.split_expr(expr)[2]), r"(Stipple\.)?R(eactive)?($|{)")
-    # Reactive fields don't store modes, setting it to PUBLIC removes the value
     if reactive
-      setmode!(modes, PUBLIC, field)
+      deletemode!(modes, field)
     else
       setmode!(modes, get(m2, field, PUBLIC), field)
     end

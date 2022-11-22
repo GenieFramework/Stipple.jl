@@ -138,7 +138,7 @@ function setchannel(m::M, value) where {M<:ReactiveModel}
   setfield!(m, CHANNELFIELDNAME, ChannelName(value))
 end
 
-const AUTOFIELDS = [:isready, :isprocessing, :_modes] # not DRY but we need a reference to the auto-set fields
+const AUTOFIELDS = [:isready, :isprocessing] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin
   _modes::LittleDict{Symbol, Int} = LittleDict(:_modes => PRIVATE, :channel__ => PRIVATE)
@@ -160,13 +160,14 @@ function split_expr(expr)
   expr.args[1] isa Symbol ? (expr.args[1], nothing, expr.args[2]) : (expr.args[1].args[1], expr.args[1].args[2], expr.args[2])
 end
 
-function model_to_storage(::Type{M_init}) where M_init <: ReactiveModel
-  M = get_concrete_model(M_init)
+function model_to_storage(::Type{M_init}, prefix = "", postfix = "") where M_init# <: ReactiveModel
+  M = M_init <: ReactiveModel ? get_concrete_model(M_init) : M_init
   fields = fieldnames(M)
   values = getfield.(Ref(M()), fields)
   storage = LittleDict{Symbol, Expr}()
   for (f, type, v) in zip(fields, fieldtypes(M), values)
     v_copy = Stipple._deepcopy(v)
+    f = f == :_modes ? f : Symbol(prefix, f, postfix)
     storage[f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy)
   end
 
@@ -203,41 +204,61 @@ macro var_storage(expr, new_inputmode = :auto)
       end
       mode = :PUBLIC
       reactive = true
-      var, ex = if new_inputmode
-          #check whether flags are set
-          if e.args[end] isa Expr && e.args[end].head == :tuple
-              flags = e.args[end].args[2:end]
-              if length(flags) > 0 && flags[1] ∈ [:READONLY, :PRIVATE, :JSFUNCTION, :NON_REACTIVE]
-                  newmode = intersect(setdiff(flags, [:NON_REACTIVE]), [:READONLY, :PRIVATE, :JSFUNCTION])
-                  length(newmode) > 0 && (mode = newmode[end])
-                  reactive = :NON_REACTIVE ∉ flags
-                  e.args[end] = e.args[end].args[1]
-              end
-          end
-          var, ex = Stipple.ReactiveTools.parse_expression!(e, reactive ? mode : nothing, source, m)
+      if e.head == :(=)
+        var, ex = if new_inputmode
+            #check whether flags are set
+            if e.args[end] isa Expr && e.args[end].head == :tuple
+                flags = e.args[end].args[2:end]
+                if length(flags) > 0 && flags[1] ∈ [:READONLY, :PRIVATE, :JSFUNCTION, :NON_REACTIVE]
+                    newmode = intersect(setdiff(flags, [:NON_REACTIVE]), [:READONLY, :PRIVATE, :JSFUNCTION])
+                    length(newmode) > 0 && (mode = newmode[end])
+                    reactive = :NON_REACTIVE ∉ flags
+                    e.args[end] = e.args[end].args[1]
+                end
+            end
+            var, ex = Stipple.ReactiveTools.parse_expression!(e, reactive ? mode : nothing, source, m)
+        else
+            var = e.args[1]
+            if var isa Symbol
+                reactive = false
+            else
+                type = var.args[2]
+                reactive = startswith(string(type), r"(Stipple\.)?R(eactive)?($|{)")
+                var = var.args[1]
+            end
+            if occursin(Stipple.SETTINGS.private_pattern, string(var))
+                mode = :PRIVATE
+            elseif occursin(Stipple.SETTINGS.readonly_pattern, string(var))
+                mode = :READONLY
+            end
+            var, e
+        end
+        # prevent overwriting of control fields
+        var ∈ keys(Stipple.init_storage()) && continue
+        if reactive == false
+            Stipple.setmode!(storage[:_modes], Core.eval(Stipple, mode), var)
+        end
+
+        storage[var] = ex
       else
-          var = e.args[1]
-          if var isa Symbol
-              reactive = false
+        # parse @mixin
+        if e.head == :macrocall && e.args[1] == Symbol("@mixin")
+          e.args = filter!(x -> ! isa(x, LineNumberNode), e.args)
+          prefix = postfix = ""
+          if e.args[2] isa Expr && e.args[2].head == :(::)
+            prefix = string(e.args[2].args[1])
+            e.args[2] = e.args[2].args[2]
           else
-              type = var.args[2]
-              reactive = startswith(string(type), r"(Stipple\.)?R(eactive)?($|{)")
-              var = var.args[1]
+            length(e.args) ≥ 3 && (prefix = string(e.args[3]))
+            length(e.args) ≥ 4 && (postfix = string(e.args[4]))
           end
-          if occursin(Stipple.SETTINGS.private_pattern, string(var))
-              mode = :PRIVATE
-          elseif occursin(Stipple.SETTINGS.readonly_pattern, string(var))
-              mode = :READONLY
-          end
-          var, e
-      end
-      # prevent overwriting of control fields
-      var in Stipple.AUTOFIELDS && continue
-      if reactive == false
-          Stipple.setmode!(storage[:_modes], Core.eval(Stipple, mode), var)
+
+          mixin_storage = @eval __module__ Stipple.model_to_storage($(e.args[2]), $prefix, $postfix)
+          storage = ReactiveTools.merge_storage(storage, mixin_storage)
+        end
+        :_modes, e
       end
 
-      storage[var] = ex
     end
 
     esc(:($storage))

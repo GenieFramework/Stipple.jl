@@ -225,22 +225,30 @@ function accessmode_from_pattern!(model::ReactiveModel)
 end
 
 function setmode!(model::ReactiveModel, mode::Int, fieldnames::Symbol...)
-  fieldname in [Stipple.CHANNELFIELDNAME, :_modes] && return
-  setmode!(model._modes, mode, fieldnames...)
+  for fieldname in fieldnames
+    if getfield(model, fieldname) isa Reactive
+      delete!(model._modes, fieldname)
+    else
+      setmode!(model._modes, mode, fieldnames...)
+    end
+  end
 end
 
 function setmode!(dict::AbstractDict, mode, fieldnames::Symbol...)
   for fieldname in fieldnames
+    fieldname in [Stipple.CHANNELFIELDNAME, :_modes] && continue
     mode == PUBLIC || mode == :PUBLIC ? delete!(dict, fieldname) : dict[fieldname] = Core.eval(Stipple, mode)
   end
   dict
 end
 
+deletemode!(modes, fieldnames::Symbol...) = setmode!(modes, PUBLIC, fieldnames...)
+
 function init_storage()
   LittleDict{Symbol, Expr}(
-    Stipple.CHANNELFIELDNAME => 
+    CHANNELFIELDNAME => 
       :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = Stipple.channelfactory()),
-    :_modes => :(_modes::Stipple.LittleDict{Symbol, Any} = Stipple.LittleDict(:_modes => Stipple.PRIVATE, $(QuoteNode(Stipple.CHANNELFIELDNAME)) => Stipple.PRIVATE)),
+    :_modes => :(_modes::Stipple.LittleDict{Symbol, Any} = Stipple.LittleDict{Symbol, Any}()),
     :isready => :(isready::Stipple.R{Bool} = false)
   )
 end
