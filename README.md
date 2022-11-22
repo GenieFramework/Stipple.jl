@@ -163,7 +163,7 @@ route("/") do
   html(ui(model), context = @__MODULE__)
 end
 
-isrunning(:webserver) || up()
+Genie.isrunning(:webserver) || up()
 ```
 
 ## Choosing the transport layer: WebSockets or HTTP
@@ -217,7 +217,7 @@ route("/") do
   html(ui(model), context = @__MODULE__)
 end
 
-isrunning(:webserver) || up()
+Genie.isrunning(:webserver) || up()
 ```
 
 ## Demos
