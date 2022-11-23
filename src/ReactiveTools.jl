@@ -5,8 +5,9 @@ using MacroTools
 using MacroTools: postwalk
 using OrderedCollections
 import Genie
-import Stipple.delete_mode!
-export @binding, @readonly, @private, @in, @out, @value, @jsfn, @mix_in, @clear, @vars, @add_vars
+import Stipple: deletemode!, parse_expression!, init_storage
+
+export @readonly, @private, @in, @out, @value, @jsfn, @mix_in, @clear, @vars, @add_vars
 export @page, @rstruct, @type, @handlers, @init, @model, @onchange, @onchangeany, @onbutton
 export DEFAULT_LAYOUT, Page
 
@@ -67,11 +68,10 @@ function default_struct_name(m::Module)
   "$(m)_ReactiveModel"
 end
 
-function init_storage(m::Module)
+function Stipple.init_storage(m::Module)
   (m == @__MODULE__) && return nothing 
   haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = Stipple.init_storage())
   haskey(TYPES, m) || (TYPES[m] = nothing)
-
 end
 
 function Stipple.setmode!(expr::Expr, mode::Int, fieldnames::Symbol...)
@@ -130,24 +130,13 @@ macro type()
   :($type)
 end
 
-function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict)
-  m1 = eval(haskey(storage_1, :_modes) ? storage_1[:_modes].args[end] : LittleDict{Symbol, Any}())
-  m2 = eval(haskey(storage_2, :_modes) ? storage_2[:_modes].args[end] : LittleDict{Symbol, Any}())
-  modes = merge(m1, m2)
-  for (field, expr) in storage_2
-    field == :_modes && continue
-
-    reactive = startswith(string(Stipple.split_expr(expr)[2]), r"(Stipple\.)?R(eactive)?($|{)")
-    if reactive
-      deletemode!(modes, field)
-    else
-      setmode!(modes, get(m2, field, PUBLIC), field)
-    end
+function update_storage(m::Module)
+  clear_type(m)
+  isempty(Stipple.Pages._pages) && return
+  instance = @eval m Stipple.@type()
+  for p in Stipple.Pages._pages
+    p.context == m && (p.model = instance)
   end
-  storage = merge(storage_1, storage_2)
-  storage[:_modes] = :(_modes::Stipple.LittleDict{Symbol, Any} = $modes)
-
-  storage
 end
 
 import Stipple: @vars, @add_vars
@@ -157,22 +146,14 @@ macro vars(expr)
   
   REACTIVE_STORAGE[__module__] = @eval(__module__, Stipple.@var_storage($expr))
 
-  clear_type(__module__)
-  instance = @eval __module__ Stipple.@type()
-  for p in Stipple.Pages._pages
-    p.context == m && (p.model = instance)
-  end
+  update_storage(__module__)
 end
 
 macro add_vars(expr)
   init_storage(__module__)
-  REACTIVE_STORAGE[__module__] = merge_storage(REACTIVE_STORAGE[__module__], @eval(__module__, Stipple.@var_storage($expr)))
+  REACTIVE_STORAGE[__module__] = Stipple.merge_storage(REACTIVE_STORAGE[__module__], @eval(__module__, Stipple.@var_storage($expr)))
 
-  clear_type(__module__)
-  instance = @eval __module__ Stipple.ReactiveTools.@type()
-  for p in Stipple.Pages._pages
-    p.context == m && (p.model = instance)
-  end
+  update_storage(__module__)
 end
 
 macro model()
@@ -185,51 +166,6 @@ end
 
 #===#
 
-function find_assignment(expr)
-  assignment = nothing
-
-  if isa(expr, Expr) && !contains(string(expr.head), "=")
-    for arg in expr.args
-      assignment = if isa(arg, Expr)
-        find_assignment(arg)
-      end
-    end
-  elseif isa(expr, Expr) && contains(string(expr.head), "=")
-    assignment = expr
-  else
-    assignment = nothing
-  end
-
-  assignment
-end
-
-function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = nothing, m::Union{Module, Nothing} = nothing)
-  expr = find_assignment(expr)
-  Rtype = isnothing(m) || ! isdefined(m, :R) ? :(Stipple.R) : :R
-
-  (isa(expr, Expr) && contains(string(expr.head), "=")) ||
-    error("Invalid binding expression -- use it with variables assignment ex `@binding a = 2`")
-
-  source = (source !== nothing ? String(strip(string(source), collect("#= "))) : "")
-
-  var = expr.args[1]
-  if !isnothing(mode)
-    mode = mode isa Symbol && ! isdefined(m, mode) ? :(Stipple.$mode) : mode
-    type = if isa(var, Expr) && var.head == Symbol("::")
-      # change type R to type R{T}
-      var.args[2] = :($Rtype{$(var.args[2])})
-    else
-      # add type definition `::R` to the var and return type `R`
-      expr.args[1] = :($var::$Rtype)
-      Rtype
-    end
-    expr.args[2] = :($type($(expr.args[2]), $mode, false, false, $source))
-  end
-
-  expr.args[1] isa Symbol && (expr.args[1] = :($(expr.args[1])::$(typeof(expr.args[2]))))
-  expr.args[1].args[1], expr
-end
-
 function binding(expr::Symbol, m::Module, @nospecialize(mode::Any = nothing); source = nothing, reactive = true)
   binding(:($expr = $expr), m, mode; source, reactive)
 end
@@ -237,7 +173,7 @@ end
 function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); source = nothing, reactive = true)
   (m == @__MODULE__) && return nothing
 
-  intmode = Core.eval(Stipple, mode)
+  intmode = @eval Stipple $mode
   init_storage(m)
 
   var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
@@ -246,13 +182,8 @@ function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); sour
   reactive || setmode!(REACTIVE_STORAGE[m][:_modes], intmode, var)
   reactive && setmode!(REACTIVE_STORAGE[m][:_modes], PUBLIC, var)
 
-  # remove cached type and instance
-  clear_type(m)
-  
-  instance = @eval m Stipple.@type()
-  for p in Stipple.Pages._pages
-    p.context == m && (p.model = instance)
-  end
+  # remove cached type and instance, update pages
+  update_storage(m)
 end
 
 macro reportval(expr)
@@ -338,11 +269,7 @@ macro mix_in(expr, prefix = "", postfix = "")
       REACTIVE_STORAGE[__module__][f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy)
   end
 
-  clear_type(__module__)
-  instance = @eval __module__ @type()
-  for p in Stipple.Pages._pages
-    p.context == __module__ && (p.model = instance)
-  end
+  update_storage(__module__)
   esc(Stipple.Observables.to_value.(values))
 end
 

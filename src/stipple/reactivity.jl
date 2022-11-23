@@ -174,6 +174,71 @@ function model_to_storage(::Type{M_init}, prefix = "", postfix = "") where M_ini
   storage
 end
 
+function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict)
+  m1 = eval(haskey(storage_1, :_modes) ? storage_1[:_modes].args[end] : LittleDict{Symbol, Any}())
+  m2 = eval(haskey(storage_2, :_modes) ? storage_2[:_modes].args[end] : LittleDict{Symbol, Any}())
+  modes = merge(m1, m2)
+  for (field, expr) in storage_2
+    field == :_modes && continue
+
+    reactive = startswith(string(Stipple.split_expr(expr)[2]), r"(Stipple\.)?R(eactive)?($|{)")
+    if reactive
+      deletemode!(modes, field)
+    else
+      setmode!(modes, get(m2, field, PUBLIC), field)
+    end
+  end
+  storage = merge(storage_1, storage_2)
+  storage[:_modes] = :(_modes::Stipple.LittleDict{Symbol, Any} = $modes)
+
+  storage
+end
+
+function find_assignment(expr)
+  assignment = nothing
+
+  if isa(expr, Expr) && !contains(string(expr.head), "=")
+    for arg in expr.args
+      assignment = if isa(arg, Expr)
+        find_assignment(arg)
+      end
+    end
+  elseif isa(expr, Expr) && contains(string(expr.head), "=")
+    assignment = expr
+  else
+    assignment = nothing
+  end
+
+  assignment
+end
+
+function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = nothing, m::Union{Module, Nothing} = nothing)
+  expr = find_assignment(expr)
+  Rtype = isnothing(m) || ! isdefined(m, :R) ? :(Stipple.R) : :R
+
+  (isa(expr, Expr) && contains(string(expr.head), "=")) ||
+    error("Invalid binding expression -- use it with variables assignment ex `@binding a = 2`")
+
+  source = (source !== nothing ? String(strip(string(source), collect("#= "))) : "")
+
+  var = expr.args[1]
+  if !isnothing(mode)
+    mode = mode isa Symbol && ! isdefined(m, mode) ? :(Stipple.$mode) : mode
+    type = if isa(var, Expr) && var.head == Symbol("::")
+      # change type R to type R{T}
+      var.args[2] = :($Rtype{$(var.args[2])})
+    else
+      # add type definition `::R` to the var and return type `R`
+      expr.args[1] = :($var::$Rtype)
+      Rtype
+    end
+    expr.args[2] = :($type($(expr.args[2]), $mode, false, false, $source))
+  end
+
+  expr.args[1] isa Symbol && (expr.args[1] = :($(expr.args[1])::$(typeof(expr.args[2]))))
+  expr.args[1].args[1], expr
+end
+
 macro var_storage(expr, new_inputmode = :auto)
   m = __module__
   if expr.head != :block
@@ -216,7 +281,7 @@ macro var_storage(expr, new_inputmode = :auto)
                     e.args[end] = e.args[end].args[1]
                 end
             end
-            var, ex = Stipple.ReactiveTools.parse_expression!(e, reactive ? mode : nothing, source, m)
+            var, ex = parse_expression!(e, reactive ? mode : nothing, source, m)
         else
             var = e.args[1]
             if var isa Symbol
@@ -241,7 +306,7 @@ macro var_storage(expr, new_inputmode = :auto)
 
         storage[var] = ex
       else
-        # parse @mixin
+        # parse @mixin as @mixin wouldn't work here
         if e.head == :macrocall && e.args[1] == Symbol("@mixin")
           e.args = filter!(x -> ! isa(x, LineNumberNode), e.args)
           prefix = postfix = ""

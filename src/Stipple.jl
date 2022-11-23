@@ -71,6 +71,9 @@ export init
 #===#
 
 function setmode! end
+function deletemode! end
+function init_storage end
+
 include("ReactiveTools.jl")
 
 #===#
@@ -242,7 +245,9 @@ function setmode!(dict::AbstractDict, mode, fieldnames::Symbol...)
   dict
 end
 
-deletemode!(modes, fieldnames::Symbol...) = setmode!(modes, PUBLIC, fieldnames...)
+function deletemode!(modes, fieldnames::Symbol...)
+  setmode!(modes, PUBLIC, fieldnames...)
+end
 
 function init_storage()
   LittleDict{Symbol, Expr}(
