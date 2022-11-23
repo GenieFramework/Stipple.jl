@@ -160,8 +160,8 @@ function split_expr(expr)
   expr.args[1] isa Symbol ? (expr.args[1], nothing, expr.args[2]) : (expr.args[1].args[1], expr.args[1].args[2], expr.args[2])
 end
 
-function model_to_storage(::Type{M_init}, prefix = "", postfix = "") where M_init# <: ReactiveModel
-  M = M_init <: ReactiveModel ? get_concrete_model(M_init) : M_init
+function model_to_storage(::Type{T}, prefix = "", postfix = "") where T# <: ReactiveModel
+  M = T <: ReactiveModel ? get_concrete_model(T) : T
   fields = fieldnames(M)
   values = getfield.(Ref(M()), fields)
   storage = LittleDict{Symbol, Expr}()
@@ -319,7 +319,7 @@ macro var_storage(expr, new_inputmode = :auto)
           end
 
           mixin_storage = @eval __module__ Stipple.model_to_storage($(e.args[2]), $prefix, $postfix)
-          storage = ReactiveTools.merge_storage(storage, mixin_storage)
+          storage = merge_storage(storage, mixin_storage)
         end
         :_modes, e
       end
@@ -334,6 +334,7 @@ macro type(modelname, storage)
   output = @eval(__module__, values($storage))
   esc(quote
       abstract type $modelname <: Stipple.ReactiveModel end
+      $modelname() = Base.invokelatest(Stipple.get_concrete_model($modelname))
       Stipple.@kwredef mutable struct $modelconst <: $modelname
           $(output...)
       end

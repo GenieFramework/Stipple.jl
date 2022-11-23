@@ -132,11 +132,11 @@ end
 
 function update_storage(m::Module)
   clear_type(m)
-  isempty(Stipple.Pages._pages) && return
-  instance = @eval m Stipple.@type()
-  for p in Stipple.Pages._pages
-    p.context == m && (p.model = instance)
-  end
+  # isempty(Stipple.Pages._pages) && return
+  # instance = @eval m Stipple.@type()
+  # for p in Stipple.Pages._pages
+  #   p.context == m && (p.model = instance)
+  # end
 end
 
 import Stipple: @vars, @add_vars
@@ -158,7 +158,7 @@ end
 
 macro model()
   esc(quote
-    ReactiveTools.@type() |> Stipple.get_concrete_model |> Base.invokelatest
+    ReactiveTools.@type() |> Base.invokelatest
   end)
 end
 

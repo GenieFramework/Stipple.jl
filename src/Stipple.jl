@@ -280,17 +280,15 @@ frontend and perform the 2-way backend-frontend data sync. Returns the instance 
 hs_model = Stipple.init(HelloPie)
 ```
 """
-function init(::Type{M_init};
-              vue_app_name::S = Stipple.Elements.root(M_init),
+function init(::Type{M};
+              vue_app_name::S = Stipple.Elements.root(M),
               endpoint::S = vue_app_name,
               channel::Union{Any,Nothing} = channeldefault(),
               debounce::Int = JS_DEBOUNCE_TIME,
               transport::Module = Genie.WebChannels,
-              core_theme::Bool = true)::M_init where {M_init<:ReactiveModel, S<:AbstractString}
+              core_theme::Bool = true)::M_init where {M<:ReactiveModel, S<:AbstractString}
 
   webtransport!(transport)
-  # concrete modeltype
-  M = Stipple.get_concrete_model(M_init)
   model = M |> Base.invokelatest
 
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
