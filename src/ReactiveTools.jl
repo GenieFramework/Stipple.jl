@@ -157,10 +157,8 @@ macro add_vars(expr)
 end
 
 macro model()
-  init_storage(__module__)
-
   esc(quote
-    ReactiveTools.@type() |> Base.invokelatest
+    ReactiveTools.@type() |> Stipple.get_concrete_model |> Base.invokelatest
   end)
 end
 

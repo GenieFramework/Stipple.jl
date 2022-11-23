@@ -341,7 +341,7 @@ macro type(modelname, storage)
       delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
       Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
       
-      $modelconst
+      $modelname
   end)
 end
 
