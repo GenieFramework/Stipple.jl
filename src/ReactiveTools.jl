@@ -118,7 +118,7 @@ end
 
 import Stipple.@type
 macro type()  
-  init_storage(__module__)
+  Stipple.init_storage(__module__)
   type = if TYPES[__module__] !== nothing
     TYPES[__module__]
   else

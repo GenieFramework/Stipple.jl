@@ -286,7 +286,7 @@ function init(::Type{M};
               channel::Union{Any,Nothing} = channeldefault(),
               debounce::Int = JS_DEBOUNCE_TIME,
               transport::Module = Genie.WebChannels,
-              core_theme::Bool = true)::M_init where {M<:ReactiveModel, S<:AbstractString}
+              core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
 
   webtransport!(transport)
   model = M |> Base.invokelatest
