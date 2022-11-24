@@ -289,7 +289,8 @@ function init(::Type{M};
               core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
 
   webtransport!(transport)
-  model = M |> Base.invokelatest
+  CM = get_concrete_modeltype(M)
+  model = CM |> Base.invokelatest
 
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
   ok_response = "OK"
@@ -326,17 +327,13 @@ function init(::Type{M};
       field = Symbol(payload["field"])
 
       #check if field exists
-      hasfield(M, field) || return ok_response
+      hasfield(CM, field) || return ok_response
 
-      valtype = Dict(zip(fieldnames(M), M.types))[field]
+      valtype = Dict(zip(fieldnames(CM), CM.types))[field]
       val = valtype <: Reactive ? getfield(model, field) : Ref{valtype}(getfield(model, field))
 
       # reject non-public types
-      if val isa Reactive
-        val.r_mode == PUBLIC || return ok_response
-      elseif occursin(SETTINGS.readonly_pattern, String(field)) || occursin(SETTINGS.private_pattern, String(field))
-        return ok_response
-      end
+      ( isprivate(field, model) || isreadonly(field, model) ) && return ok_response
 
       newval = convertvalue(val, payload["newval"])
       oldval = try
