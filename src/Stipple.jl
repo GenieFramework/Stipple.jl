@@ -258,7 +258,7 @@ function init_storage()
   )
 end
 
-function get_concrete_model(::Type{M})::Type{<:ReactiveModel} where M <: Stipple.ReactiveModel
+function get_concrete_modeltype(::Type{M})::Type{<:ReactiveModel} where M <: Stipple.ReactiveModel
   isabstracttype(M) ? Core.eval(Base.parentmodule(M), Symbol(Base.nameof(M), "!")) : M
 end
 
@@ -578,7 +578,7 @@ function injectdeps(output::Vector{AbstractString}, M::Type{<:ReactiveModel}) ::
     key isa DataType && key <: ReactiveModel && continue
     push!(output, f()...)
   end
-
+  supertype(M) <: ReactiveModel && (M = supertype(M))
   haskey(DEPS, M) && push!(output, DEPS[M]()...)
 
   output

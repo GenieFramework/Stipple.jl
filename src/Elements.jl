@@ -77,7 +77,7 @@ function vue_integration(::Type{M};
 
     ,
     join(
-      [Stipple.watch(string("window.", vue_app_name), field, Stipple.channel_js_name, debounce, model) for field in fieldnames(M)
+      [Stipple.watch(string("window.", vue_app_name), field, Stipple.channel_js_name, debounce, model) for field in fieldnames(Stipple.get_concrete_modeltype(M))
         if Stipple.has_frontend_watcher(field, model)]
     )
     ,
