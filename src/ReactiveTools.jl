@@ -127,7 +127,7 @@ macro type()
     TYPES[__module__] = @eval(__module__, Stipple.@type($modelname, $storage))
   end
 
-  :($type)
+  esc(:($type))
 end
 
 function update_storage(m::Module)
@@ -296,7 +296,9 @@ end
 
 macro init()
   quote
-    @init(@type())
+    let type = @type
+      @init(type)
+    end
   end |> esc
 end
 

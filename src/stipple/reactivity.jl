@@ -161,7 +161,7 @@ function split_expr(expr)
 end
 
 function model_to_storage(::Type{T}, prefix = "", postfix = "") where T# <: ReactiveModel
-  M = T <: ReactiveModel ? get_concrete_modeltype(T) : T
+  M = T <: ReactiveModel ? get_concrete_type(T) : T
   fields = fieldnames(M)
   values = getfield.(Ref(M()), fields)
   storage = LittleDict{Symbol, Expr}()
@@ -332,9 +332,10 @@ end
 macro type(modelname, storage)
   modelconst = Symbol(modelname, '!')
   output = @eval(__module__, values($storage))
+  @info modelname
   esc(quote
       abstract type $modelname <: Stipple.ReactiveModel end
-      $modelname() = Base.invokelatest(Stipple.get_concrete_modeltype($modelname))
+      $modelname() = Base.invokelatest(Stipple.get_concrete_type($modelname))
       Stipple.@kwredef mutable struct $modelconst <: $modelname
           $(output...)
       end

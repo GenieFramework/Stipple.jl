@@ -258,8 +258,12 @@ function init_storage()
   )
 end
 
-function get_concrete_modeltype(::Type{M})::Type{<:ReactiveModel} where M <: Stipple.ReactiveModel
+function get_concrete_type(::Type{M})::Type{<:ReactiveModel} where M <: Stipple.ReactiveModel
   isabstracttype(M) ? Core.eval(Base.parentmodule(M), Symbol(Base.nameof(M), "!")) : M
+end
+
+function get_abstract_type(::Type{M})::Type{<:ReactiveModel} where M <: Stipple.ReactiveModel
+  supertype(M) <: ReactiveModel ? supertype(M) : M
 end
 
 """
@@ -289,7 +293,7 @@ function init(::Type{M};
               core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
 
   webtransport!(transport)
-  CM = get_concrete_modeltype(M)
+  CM = get_concrete_type(M)
   model = CM |> Base.invokelatest
 
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
