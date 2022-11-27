@@ -332,7 +332,7 @@ end
 macro type(modelname, storage)
   modelconst = Symbol(modelname, '!')
   output = @eval(__module__, values($storage))
-  @info modelname
+
   esc(quote
       abstract type $modelname <: Stipple.ReactiveModel end
       $modelname() = Base.invokelatest(Stipple.get_concrete_type($modelname))
