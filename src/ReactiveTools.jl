@@ -385,11 +385,11 @@ macro page(url, view, layout, model, context)
 end
 
 macro page(url, view, layout, model)
-  :(@page($url, $view, $layout, () -> @init, $__module__)) |> esc
+  :(@page($url, $view, $layout, $model, $__module__)) |> esc
 end
 
 macro page(url, view, layout)
-  :(@page($url, $view, $layout, () -> @init)) |> esc
+  :(@page($url, $view, $layout, () -> @eval($__module__, @init()))) |> esc
 end
 
 macro page(url, view)
