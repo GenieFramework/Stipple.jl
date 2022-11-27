@@ -399,6 +399,97 @@ macro page(url, view)
   :(@page($url, $view, Stipple.ReactiveTools.DEFAULT_LAYOUT())) |> esc
 end
 
+# macros for model-specific js functions on the front-end (see Vue.js docs)
 
+export @methods, @watch, @computed, @created, @mouted, @methods_events, @client_data, @add_client_data
+
+macro methods(expr)
+  esc(quote
+    let M = @type
+      Stipple.js_methods(::M) = $expr
+    end
+  end)
+end
+
+macro watch(expr)
+  esc(quote
+    let M = @type
+      Stipple.js_watch(::M) = $expr
+    end
+  end)
+end
+
+macro computed(expr)
+  esc(quote
+    let M = @type
+      Stipple.js_computed(::M) = $expr
+    end
+  end)
+end
+
+macro created(expr)
+  esc(quote
+    let M = @type
+      Stipple.js_created(::M) = $expr
+    end
+  end)
+end
+
+macro mounted(expr)
+  esc(quote
+    let M = @type
+      Stipple.js_mounted(::M) = $expr
+    end
+  end)
+end
+
+macro methods_events(expr)
+  esc(quote
+    let M = @type
+      Stipple.js_methods_events(::M) = $expr
+    end
+  end)
+end
+
+macro client_data(expr)
+  if expr.head != :block
+    expr = quote $expr end
+  end
+
+  output = :(Stipple.client_data())
+  for e in expr.args
+    e isa LineNumberNode && continue
+    e.head = :kw
+    push!(output.args, e)
+  end
+
+  esc(quote
+    let M = @type
+      @info M, $output
+      Stipple.client_data(::M) = $output
+    end
+  end)
+end
+
+macro add_client_data(expr)
+  if expr.head != :block
+    expr = quote $expr end
+  end
+
+  output = :(Stipple.client_data())
+  for e in expr.args
+    e isa LineNumberNode && continue
+    e.head = :kw
+    push!(output.args, e)
+  end
+
+  esc(quote
+    let M = @type
+      cd_old = Stipple.client_data(M())
+      cd_new = $output
+      Stipple.client_data(::M) = merge(d1, d2)
+    end
+  end)
+end
 
 end
