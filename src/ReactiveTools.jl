@@ -113,6 +113,9 @@ macro clear(args...)
     delete!(REACTIVE_STORAGE[__module__], arg)
   end
   deletemode!(REACTIVE_STORAGE[__module__][:_modes], args...)
+
+  update_storage(__module__)
+
   REACTIVE_STORAGE[__module__]
 end
 
