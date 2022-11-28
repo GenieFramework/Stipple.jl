@@ -254,7 +254,8 @@ function init_storage()
     CHANNELFIELDNAME => 
       :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = Stipple.channelfactory()),
     :_modes => :(_modes::Stipple.LittleDict{Symbol, Any} = Stipple.LittleDict{Symbol, Any}()),
-    :isready => :(isready::Stipple.R{Bool} = false)
+    :isready => :(isready::Stipple.R{Bool} = false),
+    :isprocessing => :(isprocessing::Stipple.R{Bool} = false)
   )
 end
 
@@ -263,7 +264,8 @@ function get_concrete_type(::Type{M})::Type{<:ReactiveModel} where M <: Stipple.
 end
 
 function get_abstract_type(::Type{M})::Type{<:ReactiveModel} where M <: Stipple.ReactiveModel
-  supertype(M) <: ReactiveModel ? supertype(M) : M
+  SM = supertype(M)
+  SM <: ReactiveModel && SM != ReactiveModel ? supertype(M) : M
 end
 
 """
@@ -293,6 +295,7 @@ function init(::Type{M};
               core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
 
   webtransport!(transport)
+  AM = get_abstract_type(M)
   CM = get_concrete_type(M)
   model = CM |> Base.invokelatest
 
@@ -372,7 +375,7 @@ function init(::Type{M};
     end
   end
 
-  haskey(DEPS, M) || (DEPS[M] = stipple_deps(M, vue_app_name, debounce, core_theme, endpoint, transport))
+  haskey(DEPS, AM) || (DEPS[AM] = stipple_deps(AM, vue_app_name, debounce, core_theme, endpoint, transport))
 
   setup(model, channel)
 end
@@ -382,8 +385,8 @@ end
 
 
 function routename(::Type{M}) where M<:ReactiveModel
-  SM = supertype(M)::Type{<:ReactiveModel}
-  s = replace(replace(replace(string(SM == ReactiveModel ? M : SM), "." => "_"), r"^var\"#+" =>""), r"#+" => "_")
+  AM = get_abstract_type(M)
+  s = replace(replace(replace(string(AM), "." => "_"), r"^var\"#+" =>""), r"#+" => "_")
   replace(s, r"[^0-9a-zA-Z_]+" => "")
 end
 
@@ -579,8 +582,8 @@ function injectdeps(output::Vector{AbstractString}, M::Type{<:ReactiveModel}) ::
     key isa DataType && key <: ReactiveModel && continue
     push!(output, f()...)
   end
-  supertype(M) <: ReactiveModel && (M = supertype(M))
-  haskey(DEPS, M) && push!(output, DEPS[M]()...)
+  AM = get_abstract_type(M)
+  haskey(DEPS, AM) && push!(output, DEPS[AM]()...)
 
   output
 end
