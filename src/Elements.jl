@@ -20,13 +20,11 @@ export stylesheet
 
 Generates a valid JavaScript object name to be used as the name of the Vue app -- and its respective HTML container.
 """
-function root(app::M)::String where {M<:ReactiveModel}
-  Genie.Generator.validname(typeof(app) |> string)
+function root(::Type{M})::String where {M<:ReactiveModel}
+  Stipple.routename(M)
 end
 
-function root(app::Type{M})::String where {M<:ReactiveModel}
-  Genie.Generator.validname(app |> string)
-end
+root(::M) where M<:ReactiveModel = root(M)
 
 """
     function elem(app::M)::String where {M<:ReactiveModel}
@@ -47,13 +45,13 @@ const vm = root
 Generates the JS/Vue.js code which handles the 2-way data sync between Julia and JavaScript/Vue.js.
 It is called internally by `Stipple.init` which allows for the configuration of all the parameters.
 """
-function vue_integration(m::Type{M};
+function vue_integration(::Type{M};
                           vue_app_name::String = "StippleApp",
                           core_theme::Bool = true,
                           debounce::Int = Stipple.JS_DEBOUNCE_TIME,
                           transport::Module = Genie.WebChannels)::String where {M<:ReactiveModel}
 
-  model = Base.invokelatest(m)
+  model = Base.invokelatest(M)
 
   vue_app = replace(json(model |> Stipple.render), "\"{" => " {")
   vue_app = replace(vue_app, "}\"" => "} ")
@@ -79,7 +77,7 @@ function vue_integration(m::Type{M};
 
     ,
     join(
-      [Stipple.watch(string("window.", vue_app_name), field, Stipple.channel_js_name, debounce, model) for field in fieldnames(m)
+      [Stipple.watch(string("window.", vue_app_name), field, Stipple.channel_js_name, debounce, model) for field in fieldnames(Stipple.get_concrete_type(M))
         if Stipple.has_frontend_watcher(field, model)]
     )
     ,

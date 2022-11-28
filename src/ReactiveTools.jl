@@ -5,8 +5,9 @@ using MacroTools
 using MacroTools: postwalk
 using OrderedCollections
 import Genie
+import Stipple: deletemode!, parse_expression!, init_storage
 
-export @binding, @readonly, @private, @in, @out, @value, @jsfn
+export @readonly, @private, @in, @out, @value, @jsfn, @mix_in, @clear, @vars, @add_vars
 export @page, @rstruct, @type, @handlers, @init, @model, @onchange, @onchangeany, @onbutton
 export DEFAULT_LAYOUT, Page
 
@@ -67,12 +68,20 @@ function default_struct_name(m::Module)
   "$(m)_ReactiveModel"
 end
 
-function init_storage(m::Module)
-  (m == @__MODULE__) && return nothing
-
-  haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = LittleDict{Symbol,Expr}())
+function Stipple.init_storage(m::Module)
+  (m == @__MODULE__) && return nothing 
+  haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = Stipple.init_storage())
   haskey(TYPES, m) || (TYPES[m] = nothing)
+end
 
+function Stipple.setmode!(expr::Expr, mode::Int, fieldnames::Symbol...)
+  fieldname in [Stipple.CHANNELFIELDNAME, :_modes] && return
+
+  d = eval(expr.args[2])
+  for fieldname in fieldnames
+    mode == PUBLIC ? delete!(d, fieldname) : d[fieldname] = mode
+  end
+  expr.args[2] = QuoteNode(d)
 end
 
 #===#
@@ -93,137 +102,176 @@ end
 
 #===#
 
-macro rstruct()
-  init_storage(__module__)
-
-  """
-  @reactive! mutable struct $(default_struct_name(__module__)) <: ReactiveModel
-    $(join(REACTIVE_STORAGE[__module__] |> values |> collect, "\n"))
-  end
-  """ |> Meta.parse |> esc
+macro clear()
+  delete_bindings!(__module__)
 end
 
-macro type()
-  init_storage(__module__)
-
-  """
-  if Stipple.ReactiveTools.TYPES[@__MODULE__] !== nothing
-    ReactiveTools.TYPES[@__MODULE__]
-  else
-    ReactiveTools.TYPES[@__MODULE__] = @eval ReactiveTools.@rstruct()
+macro clear(args...)
+  haskey(REACTIVE_STORAGE, __module__) || return
+  for arg in args
+    arg in [Stipple.CHANNELFIELDNAME, :_modes] && continue
+    delete!(REACTIVE_STORAGE[__module__], arg)
   end
-  """ |> Meta.parse |> esc
+  deletemode!(REACTIVE_STORAGE[__module__][:_modes], args...)
+
+  update_storage(__module__)
+
+  REACTIVE_STORAGE[__module__]
+end
+
+import Stipple.@type
+macro type()  
+  Stipple.init_storage(__module__)
+  type = if TYPES[__module__] !== nothing
+    TYPES[__module__]
+  else
+    modelname = Symbol(default_struct_name(__module__))
+    storage = REACTIVE_STORAGE[__module__]
+    TYPES[__module__] = @eval(__module__, Stipple.@type($modelname, $storage))
+  end
+
+  esc(:($type))
+end
+
+function update_storage(m::Module)
+  clear_type(m)
+  # isempty(Stipple.Pages._pages) && return
+  # instance = @eval m Stipple.@type()
+  # for p in Stipple.Pages._pages
+  #   p.context == m && (p.model = instance)
+  # end
+end
+
+import Stipple: @vars, @add_vars
+
+macro vars(expr)
+  init_storage(__module__)
+  
+  REACTIVE_STORAGE[__module__] = @eval(__module__, Stipple.@var_storage($expr))
+
+  update_storage(__module__)
+end
+
+macro add_vars(expr)
+  init_storage(__module__)
+  REACTIVE_STORAGE[__module__] = Stipple.merge_storage(REACTIVE_STORAGE[__module__], @eval(__module__, Stipple.@var_storage($expr)))
+
+  update_storage(__module__)
 end
 
 macro model()
-  init_storage(__module__)
-
-  :(@type() |> Base.invokelatest)
+  esc(quote
+    ReactiveTools.@type() |> Base.invokelatest
+  end)
 end
 
 #===#
 
-function find_assignment(expr)
-  assignment = nothing
-
-  if isa(expr, Expr) && !contains(string(expr.head), "=")
-    for arg in expr.args
-      assignment = if isa(arg, Expr)
-        find_assignment(arg)
-      end
-    end
-  elseif isa(expr, Expr) && contains(string(expr.head), "=")
-    assignment = expr
-  else
-    assignment = nothing
-  end
-
-  assignment
+function binding(expr::Symbol, m::Module, @nospecialize(mode::Any = nothing); source = nothing, reactive = true)
+  binding(:($expr = $expr), m, mode; source, reactive)
 end
 
-function parse_expression(expr::Expr, opts::String = "", typename::String = "Stipple.Reactive", source = nothing)
-  expr = find_assignment(expr)
-
-  (isa(expr, Expr) && contains(string(expr.head), "=")) ||
-    error("Invalid binding expression -- use it with variables assignment ex `@binding a = 2`")
-
-  var = expr.args[1]
-  rtype = ""
-
-  if ! isempty(opts)
-    rtype = "::R"
-    typename = "R"
-  end
-
-  if isa(var, Expr) && var.head == Symbol("::")
-    rtype = "::R{$(var.args[2])}"
-    var = var.args[1]
-    typename = "R"
-  end
-
-  op = expr.head
-
-  source = (source !== nothing ? "\"$(strip(replace(replace(string(source), "#="=>""), "=#"=>"")))\"" : "")
-  if Sys.iswindows()
-    source = replace(source, "\\"=>"\\\\")
-  end
-
-  val = expr.args[2]
-  isa(val, AbstractString) && (val = "\"$val\"")
-  field = "$var$rtype $op $(typename)(($(val))$(opts),false,false,$source)"
-
-  var, MacroTools.unblock(Meta.parse(field))
-end
-
-function binding(expr::Symbol, m::Module, opts::String = "", typename::String = "Stipple.Reactive"; source = nothing)
-  binding(:($expr = $expr), m, opts, typename; source)
-end
-
-function binding(expr::Expr, m::Module, opts::String = "", typename::String = "Stipple.Reactive"; source = nothing)
+function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); source = nothing, reactive = true)
   (m == @__MODULE__) && return nothing
 
+  intmode = @eval Stipple $mode
   init_storage(m)
 
-  var, field_expr = parse_expression(expr, opts, typename, source)
+  var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
   REACTIVE_STORAGE[m][var] = field_expr
 
-  # remove cached type and instance
-  clear_type(m)
+  reactive || setmode!(REACTIVE_STORAGE[m][:_modes], intmode, var)
+  reactive && setmode!(REACTIVE_STORAGE[m][:_modes], PUBLIC, var)
 
-  instance = @eval m @type()
-  for p in Stipple.Pages._pages
-    p.context == m && (p.model = instance)
-  end
+  # remove cached type and instance, update pages
+  update_storage(m)
+end
+
+macro reportval(expr)
+  val = expr isa Symbol ? expr : expr.args[2]
+  issymbol = val isa Symbol
+  esc(quote
+    $issymbol ? (isdefined(@__MODULE__, $(QuoteNode(val))) ? $val : @info(string("Warning: Variable '", $(QuoteNode(val)), "' not yet defined"))) : Stipple.Observables.to_value($val)
+  end)
 end
 
 # works with
-# @binding a = 2
-# @binding const a = 2
-# @binding const a::Int = 24
-# @binding a::Vector = [1, 2, 3]
-# @binding a::Vector{Int} = [1, 2, 3]
+# @in a = 2
+# @in a::Vector = [1, 2, 3]
+# @in a::Vector{Int} = [1, 2, 3]
 macro in(expr)
-  binding(expr, __module__, ", PUBLIC"; source = __source__)
-  esc(expr)
+  binding(expr, __module__, :PUBLIC; source = __source__)
+  esc(:(ReactiveTools.@reportval($expr)))
+end
+
+macro in(flag, expr)
+  flag != :non_reactive && return esc(:(ReactiveTools.@in($expr)))
+  binding(expr, __module__, :PUBLIC; source = __source__, reactive = false)
+  esc(:(ReactiveTools.@reportval($expr)))
 end
 
 macro out(expr)
-  binding(expr, __module__, ", READONLY"; source = __source__)
-  esc(expr)
+  binding(expr, __module__, :READONLY; source = __source__)
+  esc(:(ReactiveTools.@reportval($expr)))
+end
+
+macro out(flag, expr)
+  flag != :non_reactive && return esc(:(@out($expr)))
+
+  binding(expr, __module__, :READONLY; source = __source__, reactive = false)
+  esc(:(ReactiveTools.@reportval($expr)))
 end
 
 macro readonly(expr)
-  @out(expr) |> esc
+  esc(:(ReactiveTools.@out($expr)))
+end
+
+macro readonly(flag, expr)
+  esc(:(ReactiveTools.@out($flag, $expr)))
 end
 
 macro private(expr)
-  binding(expr, __module__, ", PRIVATE"; source = __source__)
-  esc(expr)
+  binding(expr, __module__, :PRIVATE; source = __source__)
+  esc(:(ReactiveTools.@reportval($expr)))
+end
+
+
+macro private(flag, expr)
+  flag != :non_reactive && return esc(:(ReactiveTools.@private($expr)))
+
+  binding(expr, __module__, :PRIVATE; source = __source__, reactive = false)
+  esc(:(ReactiveTools.@reportval($expr)))
 end
 
 macro jsfn(expr)
-  binding(expr, __module__, ", JSFUNCTION"; source = __source__)
-  esc(expr)
+  binding(expr, __module__, :JSFUNCTION; source = __source__)
+  esc(:(ReactiveTools.@reportval($expr)))
+end
+
+macro mix_in(expr, prefix = "", postfix = "")
+  init_storage(__module__)
+
+  if hasproperty(expr, :head) && expr.head == :(::)
+      prefix = string(expr.args[1])
+      expr = expr.args[2]
+  end
+
+  x = Core.eval(__module__, expr)
+  pre = Core.eval(__module__, prefix)
+  post = Core.eval(__module__, postfix)
+
+  T = x isa DataType ? x : typeof(x)
+  mix = x isa DataType ? x() : x
+  values = getfield.(Ref(mix), fieldnames(T))
+  ff = Symbol.(pre, fieldnames(T), post)
+  for (f, type, v) in zip(ff, fieldtypes(T), values)
+      v_copy = Stipple._deepcopy(v)
+      expr = :($f::$type = Stipple._deepcopy(v))
+      REACTIVE_STORAGE[__module__][f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy)
+  end
+
+  update_storage(__module__)
+  esc(Stipple.Observables.to_value.(values))
 end
 
 #===#
@@ -251,7 +299,9 @@ end
 
 macro init()
   quote
-    @init(@type())
+    let type = @type
+      @init(type)
+    end
   end |> esc
 end
 
@@ -338,17 +388,108 @@ macro page(url, view, layout, model, context)
 end
 
 macro page(url, view, layout, model)
-  :(@page($url, $view, $layout, () -> @init, $__module__)) |> esc
+  :(@page($url, $view, $layout, $model, $__module__)) |> esc
 end
 
 macro page(url, view, layout)
-  :(@page($url, $view, $layout, () -> @init)) |> esc
+  :(@page($url, $view, $layout, () -> @eval($__module__, @init()))) |> esc
 end
 
 macro page(url, view)
   :(@page($url, $view, Stipple.ReactiveTools.DEFAULT_LAYOUT())) |> esc
 end
 
+# macros for model-specific js functions on the front-end (see Vue.js docs)
 
+export @methods, @watch, @computed, @created, @mouted, @methods_events, @client_data, @add_client_data
+
+macro methods(expr)
+  esc(quote
+    let M = @type
+      Stipple.js_methods(::M) = $expr
+    end
+  end)
+end
+
+macro watch(expr)
+  esc(quote
+    let M = @type
+      Stipple.js_watch(::M) = $expr
+    end
+  end)
+end
+
+macro computed(expr)
+  esc(quote
+    let M = @type
+      Stipple.js_computed(::M) = $expr
+    end
+  end)
+end
+
+macro created(expr)
+  esc(quote
+    let M = @type
+      Stipple.js_created(::M) = $expr
+    end
+  end)
+end
+
+macro mounted(expr)
+  esc(quote
+    let M = @type
+      Stipple.js_mounted(::M) = $expr
+    end
+  end)
+end
+
+macro methods_events(expr)
+  esc(quote
+    let M = @type
+      Stipple.js_methods_events(::M) = $expr
+    end
+  end)
+end
+
+macro client_data(expr)
+  if expr.head != :block
+    expr = quote $expr end
+  end
+
+  output = :(Stipple.client_data())
+  for e in expr.args
+    e isa LineNumberNode && continue
+    e.head = :kw
+    push!(output.args, e)
+  end
+
+  esc(quote
+    let M = @type
+      @info M, $output
+      Stipple.client_data(::M) = $output
+    end
+  end)
+end
+
+macro add_client_data(expr)
+  if expr.head != :block
+    expr = quote $expr end
+  end
+
+  output = :(Stipple.client_data())
+  for e in expr.args
+    e isa LineNumberNode && continue
+    e.head = :kw
+    push!(output.args, e)
+  end
+
+  esc(quote
+    let M = @type
+      cd_old = Stipple.client_data(M())
+      cd_new = $output
+      Stipple.client_data(::M) = merge(d1, d2)
+    end
+  end)
+end
 
 end

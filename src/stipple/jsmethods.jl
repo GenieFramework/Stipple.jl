@@ -134,7 +134,7 @@ In order to use the data you most probably also want to define [`js_methods`](@r
 import Stipple.client_data
 client_data(m::Example) = client_data(client_name = js"null", client_age = js"null", accept = false)
 ```
-will define the additional fields `client_name`, `clientage` and `accept` for the model `Example`. These should, of course, not overlap with existing fields of your model.
+will define the additional fields `client_name`, `client_age` and `accept` for the model `Example`. These should, of course, not overlap with existing fields of your model.
 """
 client_data(app::T) where T <: ReactiveModel = Dict{String, Any}()
 

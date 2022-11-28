@@ -4,24 +4,18 @@
 isprivate(field::Reactive) = field.r_mode == PRIVATE
 
 function isprivate(fieldname::Symbol, model::M)::Bool where {M<:ReactiveModel}
+  fieldname in [Stipple.CHANNELFIELDNAME, :_modes] && return true
+
   field = getfield(model, fieldname)
-  if field isa Reactive
-    isprivate(field)
-  else
-    occursin(Stipple.SETTINGS.private_pattern, String(fieldname))
-  end
+  field isa Reactive ? isprivate(field) : get(model._modes, fieldname, 0) == PRIVATE
 end
 
 
-isreadonly(field::Reactive) = field.r_mode == READONLY
+isreadonly(field::Reactive) = field.r_mode  ∈ [READONLY, JSFUNCTION]
 
 function isreadonly(fieldname::Symbol, model::M)::Bool where {M<:ReactiveModel}
   field = getfield(model, fieldname)
-  if field isa Reactive
-    isreadonly(field)
-  else
-    occursin(Stipple.SETTINGS.readonly_pattern, String(fieldname))
-  end
+  field isa Reactive ? isreadonly(field) : get(model._modes, fieldname, 0) == READONLY
 end
 
 

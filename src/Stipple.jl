@@ -23,8 +23,12 @@ using Logging, Mixers, Random, Reexport, Requires
 @reexport using JSON3
 @reexport using StructTypes
 @reexport using Parameters
+@reexport using OrderedCollections
 
 export setchannel, getchannel
+
+# compatibility with Observables 0.3
+isempty(methods(notify, Observables)) && (Base.notify(observable::AbstractObservable) = Observables.notify!(observable))
 
 include("ParsingTools.jl")
 include("ModelStorage.jl")
@@ -57,7 +61,7 @@ is_channels_webtransport() = webtransport() == Genie.WebChannels
 
 #===#
 
-export R, Reactive, ReactiveModel, @R_str, @js_str, client_data
+export R, Reactive, ReactiveModel, @R_str, @js_str, client_data, setmode!
 export PRIVATE, PUBLIC, READONLY, JSFUNCTION, NO_WATCHER, NO_BACKEND_WATCHER, NO_FRONTEND_WATCHER
 export newapp
 export onbutton
@@ -65,6 +69,10 @@ export @kwredef
 export init
 
 #===#
+
+function setmode! end
+function deletemode! end
+function init_storage end
 
 include("ReactiveTools.jl")
 
@@ -204,10 +212,65 @@ function channeldefault() :: Union{String,Nothing}
   params(CHANNELPARAM, (haskey(ENV, "$CHANNELPARAM") ? (Genie.Router.params!(CHANNELPARAM, ENV["$CHANNELPARAM"])) : nothing))
 end
 
+@nospecialize
+
+function accessmode_from_pattern!(model::ReactiveModel)
+  for field in fieldnames(typeof(model))
+    if !(field isa Reactive)
+      if occursin(Stipple.SETTINGS.private_pattern, string(field))
+        model._modes[field] = PRIVATE
+      elseif occursin(Stipple.SETTINGS.readonly_pattern, string(field))
+        model._modes[field] = READONLY
+      end
+    end
+  end
+  model
+end
+
+function setmode!(model::ReactiveModel, mode::Int, fieldnames::Symbol...)
+  for fieldname in fieldnames
+    if getfield(model, fieldname) isa Reactive
+      delete!(model._modes, fieldname)
+    else
+      setmode!(model._modes, mode, fieldnames...)
+    end
+  end
+end
+
+function setmode!(dict::AbstractDict, mode, fieldnames::Symbol...)
+  for fieldname in fieldnames
+    fieldname in [Stipple.CHANNELFIELDNAME, :_modes] && continue
+    mode == PUBLIC || mode == :PUBLIC ? delete!(dict, fieldname) : dict[fieldname] = Core.eval(Stipple, mode)
+  end
+  dict
+end
+
+function deletemode!(modes, fieldnames::Symbol...)
+  setmode!(modes, PUBLIC, fieldnames...)
+end
+
+function init_storage()
+  LittleDict{Symbol, Expr}(
+    CHANNELFIELDNAME => 
+      :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = Stipple.channelfactory()),
+    :_modes => :(_modes::Stipple.LittleDict{Symbol, Any} = Stipple.LittleDict{Symbol, Any}()),
+    :isready => :(isready::Stipple.R{Bool} = false),
+    :isprocessing => :(isprocessing::Stipple.R{Bool} = false)
+  )
+end
+
+function get_concrete_type(::Type{M})::Type{<:ReactiveModel} where M <: Stipple.ReactiveModel
+  isabstracttype(M) ? Core.eval(Base.parentmodule(M), Symbol(Base.nameof(M), "!")) : M
+end
+
+function get_abstract_type(::Type{M})::Type{<:ReactiveModel} where M <: Stipple.ReactiveModel
+  SM = supertype(M)
+  SM <: ReactiveModel && SM != ReactiveModel ? supertype(M) : M
+end
 
 """
-    function init(m::Type{M};
-                    vue_app_name::S = Stipple.Elements.root(m),
+    function init(::Type{M};
+                    vue_app_name::S = Stipple.Elements.root(M),
                     endpoint::S = vue_app_name,
                     channel::Union{Any,Nothing} = nothing,
                     debounce::Int = JS_DEBOUNCE_TIME,
@@ -223,8 +286,8 @@ frontend and perform the 2-way backend-frontend data sync. Returns the instance 
 hs_model = Stipple.init(HelloPie)
 ```
 """
-function init(m::Type{M};
-              vue_app_name::S = Stipple.Elements.root(m),
+function init(::Type{M};
+              vue_app_name::S = Stipple.Elements.root(M),
               endpoint::S = vue_app_name,
               channel::Union{Any,Nothing} = channeldefault(),
               debounce::Int = JS_DEBOUNCE_TIME,
@@ -232,7 +295,10 @@ function init(m::Type{M};
               core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
 
   webtransport!(transport)
-  model = Base.invokelatest(m)
+  AM = get_abstract_type(M)
+  CM = get_concrete_type(M)
+  model = CM |> Base.invokelatest
+
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
   ok_response = "OK"
 
@@ -268,17 +334,13 @@ function init(m::Type{M};
       field = Symbol(payload["field"])
 
       #check if field exists
-      hasfield(M, field) || return ok_response
+      hasfield(CM, field) || return ok_response
 
-      valtype = Dict(zip(fieldnames(M), M.types))[field]
+      valtype = Dict(zip(fieldnames(CM), CM.types))[field]
       val = valtype <: Reactive ? getfield(model, field) : Ref{valtype}(getfield(model, field))
 
       # reject non-public types
-      if val isa Reactive
-        val.r_mode == PUBLIC || return ok_response
-      elseif occursin(SETTINGS.readonly_pattern, String(field)) || occursin(SETTINGS.private_pattern, String(field))
-        return ok_response
-      end
+      ( isprivate(field, model) || isreadonly(field, model) ) && return ok_response
 
       newval = convertvalue(val, payload["newval"])
       oldval = try
@@ -313,7 +375,7 @@ function init(m::Type{M};
     end
   end
 
-  haskey(DEPS, M) || (DEPS[M] = stipple_deps(m, vue_app_name, debounce, core_theme, endpoint, transport))
+  haskey(DEPS, AM) || (DEPS[AM] = stipple_deps(AM, vue_app_name, debounce, core_theme, endpoint, transport))
 
   setup(model, channel)
 end
@@ -322,12 +384,18 @@ function init(m::M; kwargs...)::M where {M<:ReactiveModel}
 end
 
 
-function stipple_deps(m::Type{M}, vue_app_name, debounce, core_theme, endpoint, transport)::Function where {M<:ReactiveModel}
+function routename(::Type{M}) where M<:ReactiveModel
+  AM = get_abstract_type(M)
+  s = replace(replace(replace(string(AM), "." => "_"), r"^var\"#+" =>""), r"#+" => "_")
+  replace(s, r"[^0-9a-zA-Z_]+" => "")
+end
+
+function stipple_deps(::Type{M}, vue_app_name, debounce, core_theme, endpoint, transport)::Function where {M<:ReactiveModel}
   () -> begin
     if ! Genie.Assets.external_assets(assets_config)
-      if ! Genie.Router.isroute(Symbol(m))
-        Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file = endpoint), named = Symbol(m)) do
-          Stipple.Elements.vue_integration(m; vue_app_name, debounce, core_theme, transport) |> Genie.Renderer.Js.js
+      if ! Genie.Router.isroute(Symbol(routename(M)))
+        Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file = endpoint), named = Symbol(routename(M))) do
+          Stipple.Elements.vue_integration(M; vue_app_name, debounce, core_theme, transport) |> Genie.Renderer.Js.js
         end
       end
     end
@@ -337,7 +405,7 @@ function stipple_deps(m::Type{M}, vue_app_name, debounce, core_theme, endpoint, 
         Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file = vue_app_name), defer = true)
       else
         Genie.Renderer.Html.script([
-          (Stipple.Elements.vue_integration(m; vue_app_name, core_theme, debounce) |> Genie.Renderer.Js.js).body |> String
+          (Stipple.Elements.vue_integration(M; vue_app_name, core_theme, debounce) |> Genie.Renderer.Js.js).body |> String
         ])
       end
     ]
@@ -398,11 +466,11 @@ function Base.push!(app::M, vals::Pair{Symbol,T};
   end
 end
 
-function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
-                    channel::String = Genie.config.webchannels_default_route,
+function Base.push!(model::M, vals::Pair{Symbol,Reactive{T}};
+                    channel::String = getchannel(model),
                     except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing)::Bool where {T,M<:ReactiveModel}
                     v = vals[2].r_mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
-  push!(app, Symbol(julia_to_vue(vals[1])) => v, channel = channel, except = except)
+  push!(model, Symbol(julia_to_vue(vals[1])) => v; channel, except)
 end
 
 function Base.push!(model::M;
@@ -414,11 +482,18 @@ function Base.push!(model::M;
   for field in fieldnames(M)
     (isprivate(field, model) || field in skip) && continue
 
-    push!(model, field => getproperty(model, field), channel = channel) === false && (result = false)
+    push!(model, field => getproperty(model, field); channel) === false && (result = false)
   end
 
   result
 end
+
+function Base.push!(model::M, field::Symbol; channel::String = getchannel(model))::Bool where {M<:ReactiveModel}
+  isprivate(field, model) && return false
+  push!(model, field => getproperty(model, field); channel)
+end
+
+@specialize
 
 #===#
 
@@ -435,6 +510,9 @@ const DEPS = OrderedCollections.LittleDict{Union{Any,AbstractString}, Function}(
 
 Registers the `routes` for all the required JavaScript dependencies (scripts).
 """
+
+@nospecialize
+
 function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool = true) :: Nothing
   if ! Genie.Assets.external_assets(assets_config)
 
@@ -504,8 +582,8 @@ function injectdeps(output::Vector{AbstractString}, M::Type{<:ReactiveModel}) ::
     key isa DataType && key <: ReactiveModel && continue
     push!(output, f()...)
   end
-
-  haskey(DEPS, M) && push!(output, DEPS[M]()...)
+  AM = get_abstract_type(M)
+  haskey(DEPS, AM) && push!(output, DEPS[AM]()...)
 
   output
 end
@@ -544,6 +622,8 @@ end
 function deps!(m::Any, f::Function)
   DEPS[m] = f
 end
+
+@specialize
 
 macro R_str(s)
   :(Symbol($s))
@@ -640,7 +720,7 @@ macro kwredef(expr)
   esc(quote
     Base.@kwdef $expr
     $T_old = $T_new
-    if VERSION < v"1.8-alpha"
+    if VERSION < v"1.8-"
       $curly ? $T_new.body.name.name = $(QuoteNode(T_old)) : $T_new.name.name = $(QuoteNode(T_old)) # fix the name
     end
 
@@ -699,7 +779,12 @@ include("Pages.jl")
 
 #===#
 
+# function _deepcopy(r::R{T}) where T
+#   v_copy = deepcopy(r.o.val)
+#   :(R{$T}($v_copy, $(r.r_mode), $(r.no_backend_watcher), $(r.no_frontend_watcher), $(r.__source__)))
+# end
 _deepcopy(r::R{T}) where T = R(deepcopy(r.o.val), r.r_mode, r.no_backend_watcher, r.no_frontend_watcher)
+
 _deepcopy(x) = deepcopy(x)
 
 """
@@ -771,8 +856,9 @@ macro mixin(expr, prefix = "", postfix = "")
   values = getfield.(Ref(mix), fieldnames(T))
   output = quote end
   for (f, type, v) in zip(Symbol.(pre, fieldnames(T), post), fieldtypes(T), values)
-      push!(output.args, :($f::$type = Stipple._deepcopy($v)) )
-  end
+    v_copy = Stipple._deepcopy(v)
+    push!(output.args, v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy))
+end
 
   esc(:($output))
 end

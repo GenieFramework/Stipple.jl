@@ -19,12 +19,15 @@ function callwatchers(field, val, keys...; notify)
   isempty(keys) && return field
 
   count = 1
-  for f in Observables.listeners(field.o)
+  for x in Observables.listeners(field.o)
     if in(count, keys)
       count += 1
 
       continue
     end
+    
+    # compatibility with Observables 0.5
+    f = x isa Pair ? x[2] : x
 
     if notify(f)
       try

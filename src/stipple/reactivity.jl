@@ -8,7 +8,7 @@ mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   Reactive{T}() where {T} = new{T}(Observable{T}(), PUBLIC, false, false, "")
   Reactive{T}(o, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, PUBLIC, no_bw, no_fw, "")
   Reactive{T}(o, mode::Int, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, mode, no_bw, no_fw, "")
-  Reactive{T}(o, mode::Int, no_bw::Bool, no_fw::Bool, s::String) where {T} = new{T}(o, mode, no_bw, no_fw, s)
+  Reactive{T}(o, mode::Int, no_bw::Bool, no_fw::Bool, s::AbstractString) where {T} = new{T}(o, mode, no_bw, no_fw, s)
   Reactive{T}(o, mode::Int, updatemode::Int) where {T} = new{T}(o, mode, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0, "")
 
   # Construct an Reactive{Any} without runtime dispatch
@@ -42,7 +42,7 @@ end
 
 function Base.setindex!(r::Reactive{T}, val, arg1, args...) where T
   setindex!(getfield(r, :o).val, val, arg1, args...)
-  Observables.notify!(r)
+  notify(r)
 end
 
 Base.setindex!(r::Reactive, val, ::typeof(!)) = getfield(r, :o).val = val
@@ -70,7 +70,7 @@ function Base.setproperty!(r::Reactive{T}, field::Symbol, val) where T
       getfield(r, :o).val = val
     else
       setproperty!(getfield(r, :o).val, field, val)
-      Observables.notify!(r)
+      notify(r)
     end
   end
 end
@@ -101,6 +101,7 @@ const JSFUNCTION = 8
 const NO_BACKEND_WATCHER = 16
 const NO_FRONTEND_WATCHER = 32
 const NO_WATCHER = 48
+const NON_REACTIVE = 64
 
 """
     type ReactiveModel
@@ -122,36 +123,328 @@ end
 abstract type ReactiveModel end
 
 
-export @reactors, @reactive, @reactive!
+export @reactors, @reactive, @reactive!, @vars, @add_vars, @old_reactive, @old_reactive!
 export ChannelName, getchannel
 
 const ChannelName = String
 const CHANNELFIELDNAME = :channel__
 
-function getchannel(m::T) where {T<:ReactiveModel}
+function getchannel(m::M) where {M<:ReactiveModel}
   getfield(m, CHANNELFIELDNAME)
 end
 
 
-function setchannel(m::T, value) where {T<:ReactiveModel}
+function setchannel(m::M, value) where {M<:ReactiveModel}
   setfield!(m, CHANNELFIELDNAME, ChannelName(value))
 end
 
 const AUTOFIELDS = [:isready, :isprocessing] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin
+  _modes::LittleDict{Symbol, Int} = LittleDict(:_modes => PRIVATE, :channel__ => PRIVATE)
   channel__::Stipple.ChannelName = Stipple.channelfactory()
   isready::Stipple.R{Bool} = false
   isprocessing::Stipple.R{Bool} = false
 end
 
-@mix Stipple.@with_kw mutable struct reactive
+@mix Stipple.@with_kw mutable struct old_reactive
   Stipple.@reactors
 end
 
 
-@mix Stipple.@kwredef mutable struct reactive!
+@mix Stipple.@kwredef mutable struct old_reactive!
   Stipple.@reactors
+end
+
+function split_expr(expr)
+  expr.args[1] isa Symbol ? (expr.args[1], nothing, expr.args[2]) : (expr.args[1].args[1], expr.args[1].args[2], expr.args[2])
+end
+
+function model_to_storage(::Type{T}, prefix = "", postfix = "") where T# <: ReactiveModel
+  M = T <: ReactiveModel ? get_concrete_type(T) : T
+  fields = fieldnames(M)
+  values = getfield.(Ref(M()), fields)
+  storage = LittleDict{Symbol, Expr}()
+  for (f, type, v) in zip(fields, fieldtypes(M), values)
+    v_copy = Stipple._deepcopy(v)
+    f = f == :_modes ? f : Symbol(prefix, f, postfix)
+    storage[f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy)
+  end
+
+  storage
+end
+
+function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict)
+  m1 = eval(haskey(storage_1, :_modes) ? storage_1[:_modes].args[end] : LittleDict{Symbol, Any}())
+  m2 = eval(haskey(storage_2, :_modes) ? storage_2[:_modes].args[end] : LittleDict{Symbol, Any}())
+  modes = merge(m1, m2)
+  for (field, expr) in storage_2
+    field == :_modes && continue
+
+    reactive = startswith(string(Stipple.split_expr(expr)[2]), r"(Stipple\.)?R(eactive)?($|{)")
+    if reactive
+      deletemode!(modes, field)
+    else
+      setmode!(modes, get(m2, field, PUBLIC), field)
+    end
+  end
+  storage = merge(storage_1, storage_2)
+  storage[:_modes] = :(_modes::Stipple.LittleDict{Symbol, Any} = $modes)
+
+  storage
+end
+
+function find_assignment(expr)
+  assignment = nothing
+
+  if isa(expr, Expr) && !contains(string(expr.head), "=")
+    for arg in expr.args
+      assignment = if isa(arg, Expr)
+        find_assignment(arg)
+      end
+    end
+  elseif isa(expr, Expr) && contains(string(expr.head), "=")
+    assignment = expr
+  else
+    assignment = nothing
+  end
+
+  assignment
+end
+
+function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = nothing, m::Union{Module, Nothing} = nothing)
+  expr = find_assignment(expr)
+  Rtype = isnothing(m) || ! isdefined(m, :R) ? :(Stipple.R) : :R
+
+  (isa(expr, Expr) && contains(string(expr.head), "=")) ||
+    error("Invalid binding expression -- use it with variables assignment ex `@binding a = 2`")
+
+  source = (source !== nothing ? String(strip(string(source), collect("#= "))) : "")
+
+  var = expr.args[1]
+  if !isnothing(mode)
+    mode = mode isa Symbol && ! isdefined(m, mode) ? :(Stipple.$mode) : mode
+    type = if isa(var, Expr) && var.head == Symbol("::")
+      # change type R to type R{T}
+      var.args[2] = :($Rtype{$(var.args[2])})
+    else
+      # add type definition `::R` to the var and return type `R`
+      expr.args[1] = :($var::$Rtype)
+      Rtype
+    end
+    expr.args[2] = :($type($(expr.args[2]), $mode, false, false, $source))
+  end
+
+  expr.args[1] isa Symbol && (expr.args[1] = :($(expr.args[1])::$(typeof(expr.args[2]))))
+  expr.args[1].args[1], expr
+end
+
+macro var_storage(expr, new_inputmode = :auto)
+  m = __module__
+  if expr.head != :block
+      expr = quote $expr end
+  end
+
+  if new_inputmode == :auto
+    new_inputmode = true
+    for e in expr.args
+        e isa LineNumberNode && continue
+        e.args[1] isa Symbol && continue
+
+        type = e.args[1].args[2]
+        if startswith(string(type), r"(Stipple\.)?R(eactive)?($|{)")
+            new_inputmode = false
+            break
+        end
+    end
+  end
+
+  storage = init_storage()
+  
+  source = nothing
+  for e in expr.args
+      if e isa LineNumberNode
+          source = e
+          continue
+      end
+      mode = :PUBLIC
+      reactive = true
+      if e.head == :(=)
+        var, ex = if new_inputmode
+            #check whether flags are set
+            if e.args[end] isa Expr && e.args[end].head == :tuple
+                flags = e.args[end].args[2:end]
+                if length(flags) > 0 && flags[1] ∈ [:READONLY, :PRIVATE, :JSFUNCTION, :NON_REACTIVE]
+                    newmode = intersect(setdiff(flags, [:NON_REACTIVE]), [:READONLY, :PRIVATE, :JSFUNCTION])
+                    length(newmode) > 0 && (mode = newmode[end])
+                    reactive = :NON_REACTIVE ∉ flags
+                    e.args[end] = e.args[end].args[1]
+                end
+            end
+            var, ex = parse_expression!(e, reactive ? mode : nothing, source, m)
+        else
+            var = e.args[1]
+            if var isa Symbol
+                reactive = false
+            else
+                type = var.args[2]
+                reactive = startswith(string(type), r"(Stipple\.)?R(eactive)?($|{)")
+                var = var.args[1]
+            end
+            if occursin(Stipple.SETTINGS.private_pattern, string(var))
+                mode = :PRIVATE
+            elseif occursin(Stipple.SETTINGS.readonly_pattern, string(var))
+                mode = :READONLY
+            end
+            var, e
+        end
+        # prevent overwriting of control fields
+        var ∈ keys(Stipple.init_storage()) && continue
+        if reactive == false
+            Stipple.setmode!(storage[:_modes], Core.eval(Stipple, mode), var)
+        end
+
+        storage[var] = ex
+      else
+        # parse @mixin as @mixin wouldn't work here
+        if e.head == :macrocall && e.args[1] == Symbol("@mixin")
+          e.args = filter!(x -> ! isa(x, LineNumberNode), e.args)
+          prefix = postfix = ""
+          if e.args[2] isa Expr && e.args[2].head == :(::)
+            prefix = string(e.args[2].args[1])
+            e.args[2] = e.args[2].args[2]
+          else
+            length(e.args) ≥ 3 && (prefix = string(e.args[3]))
+            length(e.args) ≥ 4 && (postfix = string(e.args[4]))
+          end
+
+          mixin_storage = @eval __module__ Stipple.model_to_storage($(e.args[2]), $prefix, $postfix)
+          storage = merge_storage(storage, mixin_storage)
+        end
+        :_modes, e
+      end
+
+    end
+
+    esc(:($storage))
+end
+
+macro type(modelname, storage)
+  modelconst = Symbol(modelname, '!')
+  output = @eval(__module__, values($storage))
+
+  esc(quote
+      abstract type $modelname <: Stipple.ReactiveModel end
+      $modelname() = Base.invokelatest(Stipple.get_concrete_type($modelname))
+      Stipple.@kwredef mutable struct $modelconst <: $modelname
+          $(output...)
+      end
+
+      delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
+      Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
+      
+      $modelname
+  end)
+end
+
+"""
+`@vars(expr)`
+```
+@vars MyDashboard begin
+  a::Int = 1
+  b::Float64 = 2
+  c::String = "Hello"
+  d::String = "readonly", NON_REACTIVE, READONLY
+  e::String = "private",  NON_REACTIVE, PRIVATE
+end
+```
+This macro replaces the old `@reactive!` and doesn't need the Reactive in the declaration.
+Instead the non_reactives are marked by a flag. The old declaration syntax is still supported
+to make adaptation of old code easier. 
+```
+@vars HHModel begin
+  a::R{Int} = 1
+  b::R{Float64} = 2
+  c::String = "Hello"
+  d_::String = "readonly"
+  e__::String = "private"
+end
+```
+by
+
+```julia
+@reactive! mutual struct HHModel <: ReactiveModel
+  a::R{Int} = 1
+  b::R{Float64} = 2
+  c::String = "Hello"
+  d_::String = "readonly"
+  e__::String = "private"
+end
+```
+
+Old syntax is still supported by @vars and can be forced by the `new_inputmode` argument.
+
+"""
+macro vars(modelname, expr, new_inputmode = :auto)
+  modelconst = Symbol(modelname, '!')
+  storage = @eval(__module__, values(Stipple.@var_storage($expr, $new_inputmode)))
+
+  esc(:(Stipple.@type $modelname $storage))
+end
+
+macro add_vars(modelname, expr, new_inputmode = :auto)
+  modelconst = Symbol(modelname, '!')
+
+  storage = @eval(__module__, Stipple.@var_storage($expr, $new_inputmode))
+  new_storage = if isdefined(__module__, modelname)
+    old_storage = @eval(__module__, Stipple.model_to_storage($modelname))
+    ReactiveTools.merge_storage(old_storage, storage)
+  else
+    storage
+  end
+    
+  esc(:(Stipple.@type $modelname $new_storage))
+end
+
+macro reactive!(expr)
+  warning = """@reactive! is deprecated, please replace use `@vars` instead.
+  
+  In case of errors, please replace `@reactive!` by `@old_reactive!` and open an issue at
+  https://github.com/GenieFramework/Stipple.jl.
+
+  If you use `@old_reactive!`, make sure to call `accessmode_from_pattern!()`, because the internals for
+  accessmode have changed, e.g.
+  ```
+  model = init(MyDashboard) |> accessmode_from_pattern! |> handlers |> ui |> html
+  ```
+  """
+  
+  output = @eval(__module__, values(Stipple.@var_storage($(expr.args[3]), false)))
+  expr.args[3] = quote $(output...) end
+
+  esc(quote
+    @warn $warning
+    Stipple.@kwredef $expr
+  end)
+end
+
+macro reactive(expr)
+  warning = """@reactive is deprecated, please replace use `@vars` instead.
+  
+  In case of errors, please replace `@reactive` by `@old_reactive!` and open an issue at
+  https://github.com/GenieFramework/Stipple.jl.
+  If you use `@old_reactive!`, make sure to call `accessmode_from_pattern!()`, because the internals for
+  accessmode have changed, e.g.
+  ```
+  model = init(MyDashboard) |> accessmode_from_pattern! |> handlers |> ui |> html
+  ```
+  
+  """
+  
+  output = @eval(__module__, values(Stipple.@var_storage($(expr.args[3]), false)))
+  expr.args[3] = quote $(output...) end
+
+  esc(:(Base.@kwdef $expr))
 end
 
 #===#

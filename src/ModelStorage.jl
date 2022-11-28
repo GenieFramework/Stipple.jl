@@ -8,14 +8,15 @@ import GenieSessionFileSession
 
 export init_from_storage
 
-function init_from_storage(m::Type{T};
+function init_from_storage(::Type{M};
                             channel::Union{Any,Nothing} = Stipple.channeldefault(),
-                            kwargs...) where T
-  model_id = Symbol(m)
-  model = Stipple.init(m; channel, kwargs...)
+                            kwargs...) where M
+  model_id = Symbol(Stipple.routename(M))
+  model = Stipple.init(M; channel, kwargs...)
   stored_model = GenieSession.get(model_id, nothing)
 
-  for f in fieldnames(T)
+  CM = Stipple.get_concrete_type(M)
+  for f in fieldnames(CM)
     field = getfield(model, f)
     if field isa Reactive
       # restore fields only if a stored model exists, if the field is not part of the internal fields and is not write protected
