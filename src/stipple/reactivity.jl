@@ -225,17 +225,22 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
   if !isnothing(mode)
     mode = mode isa Symbol && ! isdefined(m, mode) ? :(Stipple.$mode) : mode
     type = if isa(var, Expr) && var.head == Symbol("::")
-      # change type R to type R{T}
+      # change type T to type R{T}
       var.args[2] = :($Rtype{$(var.args[2])})
     else
-      # add type definition `::R` to the var and return type `R`
-      expr.args[1] = :($var::$Rtype)
+      # add type definition `::R{T}` to the var where T is the type of the default value
+      T = @eval m typeof($(expr.args[2]))
+      expr.args[1] = :($var::$Rtype{$T})
       Rtype
     end
     expr.args[2] = :($type($(expr.args[2]), $mode, false, false, $source))
   end
 
-  expr.args[1] isa Symbol && (expr.args[1] = :($(expr.args[1])::$(typeof(expr.args[2]))))
+  # if no type is defined, set the type of the default value
+  if expr.args[1] isa Symbol
+    T = @eval m typeof($(expr.args[2]))
+    expr.args[1] = :($(expr.args[1])::$T)
+  end
   expr.args[1].args[1], expr
 end
 
