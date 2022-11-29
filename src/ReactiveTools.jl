@@ -401,7 +401,7 @@ end
 
 # macros for model-specific js functions on the front-end (see Vue.js docs)
 
-export @methods, @watch, @computed, @created, @mouted, @methods_events, @client_data, @add_client_data
+export @methods, @watch, @computed, @created, @mounted, @methods_events, @client_data, @add_client_data
 
 macro methods(expr)
   esc(quote
