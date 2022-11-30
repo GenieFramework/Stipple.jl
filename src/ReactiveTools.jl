@@ -333,6 +333,13 @@ macro process_handler_input()
   end |> esc
 end
 
+macro process_handler_expr()
+  quote
+    known_vars = push!(Stipple.ReactiveTools.REACTIVE_STORAGE[__module__] |> keys |> collect, :isready, :isprocessing) # add mixins
+    expr = postwalk(x -> isa(x, Symbol) && in(x, known_vars) ? :(__model__.$x[]) : x, expr)
+  end |> esc
+end
+
 macro onchange(var, expr)
   @process_handler_input()
 
@@ -444,10 +451,10 @@ macro mounted(expr)
 end
 
 macro event(event, expr)
-  @info typeof(event)
+  @process_handler_expr()
   esc(quote
     let M = @type, T = $(event isa QuoteNode ? event : QuoteNode(event))
-      function Base.notify(model::M, ::Val{T}, @nospecialize(event))
+      function Base.notify(__model__::M, ::Val{T}, @nospecialize(event))
         $expr
       end
     end
