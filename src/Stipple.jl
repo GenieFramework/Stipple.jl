@@ -369,8 +369,10 @@ function init(::Type{M};
       # get event name
       event = Genie.Requests.payload(:payload)["event"]
       # form handler parameter & call event notifier
-      handler = Val(Symbol(get(event, "name", nothing)))
-      notify(model, handler)
+      handler = Symbol(get(event, "name", nothing))
+      event_info = get(event, "event", nothing)
+      isempty(methods(notify, (M, Val{handler}))) || notify(model, Val(handler))
+      isempty(methods(notify, (M, Val{handler}, Any))) || notify(model, Val(handler), event_info)
       return ok_response
     end
   end

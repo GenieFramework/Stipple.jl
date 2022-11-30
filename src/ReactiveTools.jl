@@ -401,7 +401,7 @@ end
 
 # macros for model-specific js functions on the front-end (see Vue.js docs)
 
-export @methods, @watch, @computed, @created, @mounted, @methods_events, @client_data, @add_client_data
+export @methods, @watch, @computed, @created, @mounted, @event, @client_data, @add_client_data
 
 macro methods(expr)
   esc(quote
@@ -443,10 +443,13 @@ macro mounted(expr)
   end)
 end
 
-macro methods_events(expr)
+macro event(event, expr)
+  @info typeof(event)
   esc(quote
-    let M = @type
-      Stipple.js_methods_events(::M) = $expr
+    let M = @type, T = $(event isa QuoteNode ? event : QuoteNode(event))
+      function Base.notify(model::M, ::Val{T}, @nospecialize(event))
+        $expr
+      end
     end
   end)
 end

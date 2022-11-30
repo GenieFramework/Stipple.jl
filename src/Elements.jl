@@ -295,9 +295,19 @@ handler function for a corresponding event with the name `expr`.
 
 ```julia
 julia> Stipple.notify(model, ::Val{:my_click}) = println("clicked")
-
-julia> @on("click", :my_click)
-"v-on:click='handle_event(\$event, 'my_click')'"
+```
+or if event information is needed
+```julia
+Stipple.notify(model, ::Val{:my_click}, event_info) = println(event_info)
+```
+Note that in the handler `model` refers to the receiving model and event is a Dict of event information.
+The handler is linked in the ui-element
+```julia
+btn("Event test", @on("click", :my_click))
+```
+Sometimes preprocessing of the events is necessary, e.g. to add or skip information
+```julia
+@on(:uploaded, :uploaded, "for (f in event.files) { event.files[f].fname = event.files[f].name }")
 ```
 """
 macro on(args, expr)
@@ -305,13 +315,27 @@ macro on(args, expr)
     e = string($(esc(args)))
     x = $(esc(expr))
     if typeof(x) <: Symbol
-        "v-on:$e='handle_event(\$event, \"$x\")'"
+        "v-on:$e='function(event) { handle_event(event, \"$x\") }'"
     else
         "v-on:$(string($(esc(args))))='$(replace(x,"'" => raw"\'"))'"
     end
   end
 end
 
+macro on(event, handler, preprocess)
+  quote
+    e = string($(esc(event)))
+    x = $(esc(handler))
+    if x isa Symbol
+        replace("""v-on:$e='function(event) { 
+            const preprocess = (event) => { """ * replace($preprocess, ''' => raw"\'") * """; return event };
+            handle_event(preprocess(event), "uploaded")
+        }'""", '\n' => ';')
+    else
+        throw("Error in using `@on(event, handler, preprocess)`. `handler` needs to be a Symbol")
+    end
+  end
+end
 
 """
     @showif(expr, [type])

@@ -25,7 +25,8 @@ function js_methods_events()::String
   handle_event: function (event, handler) {
     Genie.WebChannels.sendMessageTo(window.CHANNEL, 'events', {
         'event': {
-            'name': handler
+            'name': handler,
+            'event': event
         }
     })
   }
