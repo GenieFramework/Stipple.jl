@@ -7,7 +7,8 @@ using OrderedCollections
 import Genie
 import Stipple: deletemode!, parse_expression!, init_storage
 
-export @readonly, @private, @in, @out, @value, @jsfn, @mix_in, @clear, @vars, @add_vars
+export @readonly, @private, @in, @out, @jsfn, @readonly!, @private!, @in!, @out!, @jsfn!
+export @mix_in, @clear, @vars, @add_vars
 export @page, @rstruct, @type, @handlers, @init, @model, @onchange, @onchangeany, @onbutton
 export DEFAULT_LAYOUT, Page
 
@@ -187,12 +188,31 @@ function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); sour
   update_storage(m)
 end
 
-macro reportval(expr)
-  val = expr isa Symbol ? expr : expr.args[2]
-  issymbol = val isa Symbol
-  esc(quote
-    $issymbol ? (isdefined(@__MODULE__, $(QuoteNode(val))) ? $val : @info(string("Warning: Variable '", $(QuoteNode(val)), "' not yet defined"))) : Stipple.Observables.to_value($val)
-  end)
+# this macro needs to run in a macro where `expr`is already defined
+macro report_val()
+  quote
+    val = expr isa Symbol ? expr : expr.args[2]
+    issymbol = val isa Symbol
+    :(if $issymbol
+      if isdefined(@__MODULE__, $(QuoteNode(val)))
+        $val
+      else
+        @info(string("Warning: Variable '", $(QuoteNode(val)), "' not yet defined"))
+      end
+    else
+      Stipple.Observables.to_value($val)
+    end) |> esc
+  end |> esc
+end
+
+# this macro needs to run in a macro where `expr`is already defined
+macro define_var()
+  quote
+    ( expr isa Symbol || expr.head !== :(=) ) && return expr
+    var = expr.args[1] isa Symbol ? expr.args[1] : expr.args[1].args[1]
+    new_expr = :($var = Stipple.Observables.to_value($(expr.args[2])))
+    esc(:($new_expr))
+  end |> esc
 end
 
 # works with
@@ -200,26 +220,53 @@ end
 # @in a::Vector = [1, 2, 3]
 # @in a::Vector{Int} = [1, 2, 3]
 macro in(expr)
-  binding(expr, __module__, :PUBLIC; source = __source__)
-  esc(:(ReactiveTools.@reportval($expr)))
+  binding(copy(expr), __module__, :PUBLIC; source = __source__)
+  # @define_var()
+  esc(:($expr))
 end
 
 macro in(flag, expr)
   flag != :non_reactive && return esc(:(ReactiveTools.@in($expr)))
+  binding(copy(expr), __module__, :PUBLIC; source = __source__, reactive = false)
+  # @define_var()
+  esc(:($expr))
+end
+
+macro in!(expr)
+  binding(expr, __module__, :PUBLIC; source = __source__)
+  @report_val()
+end
+
+macro in!(flag, expr)
+  flag != :non_reactive && return esc(:(ReactiveTools.@in($expr)))
   binding(expr, __module__, :PUBLIC; source = __source__, reactive = false)
-  esc(:(ReactiveTools.@reportval($expr)))
+  @report_val()
 end
 
 macro out(expr)
-  binding(expr, __module__, :READONLY; source = __source__)
-  esc(:(ReactiveTools.@reportval($expr)))
+  binding(copy(expr), __module__, :READONLY; source = __source__)
+  # @define_var()
+  esc(:($expr))
 end
 
 macro out(flag, expr)
   flag != :non_reactive && return esc(:(@out($expr)))
 
+  binding(copy(expr), __module__, :READONLY; source = __source__, reactive = false)
+  # @define_var()
+  esc(:($expr))
+end
+
+macro out!(expr)
+  binding(expr, __module__, :READONLY; source = __source__)
+  @report_val()
+end
+
+macro out!(flag, expr)
+  flag != :non_reactive && return esc(:(@out($expr)))
+
   binding(expr, __module__, :READONLY; source = __source__, reactive = false)
-  esc(:(ReactiveTools.@reportval($expr)))
+  @report_val()
 end
 
 macro readonly(expr)
@@ -230,22 +277,49 @@ macro readonly(flag, expr)
   esc(:(ReactiveTools.@out($flag, $expr)))
 end
 
-macro private(expr)
-  binding(expr, __module__, :PRIVATE; source = __source__)
-  esc(:(ReactiveTools.@reportval($expr)))
+macro readonly!(expr)
+  esc(:(ReactiveTools.@out!($expr)))
 end
 
+macro readonly!(flag, expr)
+  esc(:(ReactiveTools.@out!($flag, $expr)))
+end
+
+macro private(expr)
+  binding(copy(expr), __module__, :PRIVATE; source = __source__)
+  # @define_var()
+  esc(:($expr))
+end
 
 macro private(flag, expr)
   flag != :non_reactive && return esc(:(ReactiveTools.@private($expr)))
 
+  binding(copy(expr), __module__, :PRIVATE; source = __source__, reactive = false)
+  # @define_var()
+  esc(:($expr))
+end
+
+macro private!(expr)
+  binding(expr, __module__, :PRIVATE; source = __source__)
+  @report_val()
+end
+
+macro private!(flag, expr)
+  flag != :non_reactive && return esc(:(ReactiveTools.@private($expr)))
+
   binding(expr, __module__, :PRIVATE; source = __source__, reactive = false)
-  esc(:(ReactiveTools.@reportval($expr)))
+  @report_val()
 end
 
 macro jsfn(expr)
+  binding(copy(expr), __module__, :JSFUNCTION; source = __source__)
+  # @define_var()
+  esc(:($expr))
+end
+
+macro jsfn!(expr)
   binding(expr, __module__, :JSFUNCTION; source = __source__)
-  esc(:(ReactiveTools.@reportval($expr)))
+  @report_val()
 end
 
 macro mix_in(expr, prefix = "", postfix = "")
@@ -475,7 +549,6 @@ macro client_data(expr)
 
   esc(quote
     let M = @type
-      @info M, $output
       Stipple.client_data(::M) = $output
     end
   end)
