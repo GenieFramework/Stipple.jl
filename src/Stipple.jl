@@ -15,7 +15,7 @@ existing Vue.js libraries.
 """
 module Stipple
 
-using Logging, Mixers, Random, Reexport, Requires
+using Logging, Mixers, Random, Reexport, Requires, Dates
 
 @reexport using Observables
 @reexport using Genie
@@ -51,6 +51,59 @@ const OptDict = Dict{Symbol, Any}
 opts(;kwargs...) = OptDict(kwargs...)
 
 const IF_ITS_THAT_LONG_IT_CANT_BE_A_FILENAME = 500
+
+const LAST_ACTIVITY = Dict{Symbol, DateTime}()
+const PURGE_TIME_LIMIT = Ref{Period}(Day(10))
+const PURGE_NUMBER_LIMIT = Ref(1000)
+
+"""
+`function sorted_channels()`
+
+return the active channels sorted by latest activity, latest appear first
+"""
+function sorted_channels()
+  getindex.(sort(rev = true, collect(zip(values(LAST_ACTIVITY), keys(LAST_ACTIVITY)))), 2)
+end
+
+"""
+`function delete_channels(channelname::Union{Symbol, AbstractString})`
+
+delete all channels that are associated with this channelname
+"""
+function delete_channels(channelname::Union{Symbol, AbstractString})
+  r = Regex("/?$channelname", "i")
+  for c in Genie.Router.channels()
+    startswith(String(c.name), r) && delete!(Genie.Router._channels, c.name)
+  end
+end
+
+function isendoflive(@nospecialize(m::ReactiveModel))
+  channel = Symbol(getchannel(m))
+  last_activity = get!(now, LAST_ACTIVITY, channel)
+  now() - last_activity > PURGE_TIME_LIMIT[] ||
+    length(LAST_ACTIVITY) > PURGE_NUMBER_LIMIT[] &&
+    last_activity ≤ LAST_ACTIVITY[sorted_channels()[PURGE_NUMBER_LIMIT[] + 1]]
+end
+
+function setup_purge_checker(model)
+  modelref = Ref(model)
+  channel = Symbol(getchannel(model))
+  function(timer)
+      if ! isnothing(modelref[]) && Stipple.isendoflive(modelref[])
+          println("deleting ", channel)
+          Stipple.delete_channels(channel)
+          delete!(Stipple.LAST_ACTIVITY, channel)
+          # it seems that deleting the channels is sufficient
+          # in case that in future we know better, there is room to do
+          # some model-specific clean-up here, e.g.
+          # striphandlers(modelref[])
+          # modelref[] = nothing
+          close(timer)
+      else
+          # @info "purge_checker of $channel is alive"
+      end
+  end
+end
 
 #===#
 
@@ -310,6 +363,12 @@ function init(::Type{M};
     setchannel(model, channelfactory())
   end
 
+  # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
+  modelref = Ref{Union{ReactiveModel, Nothing}}(model)
+  LAST_ACTIVITY[Symbol(getchannel(model))] = now()
+    
+  Timer(setup_purge_checker(model), 2, interval = 5)
+
   if is_channels_webtransport()
     Genie.Assets.channels_subscribe(channel)
   else
@@ -352,6 +411,7 @@ function init(::Type{M};
       push!(model, field => newval; channel = channel, except = client)
       update!(model, field, newval, oldval)
 
+      LAST_ACTIVITY[Symbol(channel)] = now()
       ok_response
     end
   end
@@ -359,6 +419,7 @@ function init(::Type{M};
   ch = "/$channel/keepalive"
   if ! Genie.Router.ischannel(Symbol(ch))
     Genie.Router.channel(ch, named = Symbol(ch)) do
+      LAST_ACTIVITY[Symbol(channel)] = now()
       ok_response
     end
   end
@@ -373,7 +434,8 @@ function init(::Type{M};
       event_info = get(event, "event", nothing)
       isempty(methods(notify, (M, Val{handler}))) || notify(model, Val(handler))
       isempty(methods(notify, (M, Val{handler}, Any))) || notify(model, Val(handler), event_info)
-      return ok_response
+      LAST_ACTIVITY[Symbol(channel)] = now()
+      ok_response
     end
   end
 
@@ -937,6 +999,12 @@ off!(@nospecialize(o::Observables.AbstractObservable), index::Integer) = off!(o,
 Remove all listeners from an observable.
 """
 off!(@nospecialize(o::Observables.AbstractObservable)) = off!(o, 1:length(Observables.listeners(o)))
+
+function striphandlers(m::M) where M <: ReactiveModel
+  for (f, T) in zip(fieldnames(M), fieldtypes(M))
+      T <: Reactive && off!(getfield(m, f))
+  end
+end
 
 #===#
 
