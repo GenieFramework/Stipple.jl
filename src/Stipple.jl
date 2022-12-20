@@ -87,7 +87,7 @@ function isendoflive(@nospecialize(m::ReactiveModel))
   if limit_reached
     # prevent removal of clients that are still connected (should not happen, though)
     cc = Genie.WebChannels.connected_clients()
-    isempty(cc) || getchannel(modelref[]) ∉ reduce(vcat, getfield.(cc, :channels))
+    isempty(cc) || getchannel(m) ∉ reduce(vcat, getfield.(cc, :channels))
   else
     false
   end
