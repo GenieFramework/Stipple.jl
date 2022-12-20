@@ -53,8 +53,9 @@ opts(;kwargs...) = OptDict(kwargs...)
 const IF_ITS_THAT_LONG_IT_CANT_BE_A_FILENAME = 500
 
 const LAST_ACTIVITY = Dict{Symbol, DateTime}()
-const PURGE_TIME_LIMIT = Ref{Period}(Day(10))
+const PURGE_TIME_LIMIT = Ref{Period}(Day(1))
 const PURGE_NUMBER_LIMIT = Ref(1000)
+const PURGE_CHECK_DELAY = Ref(60)
 
 """
 `function sorted_channels()`
@@ -80,14 +81,21 @@ end
 function isendoflive(@nospecialize(m::ReactiveModel))
   channel = Symbol(getchannel(m))
   last_activity = get!(now, LAST_ACTIVITY, channel)
-  now() - last_activity > PURGE_TIME_LIMIT[] ||
+  limit_reached = now() - last_activity > PURGE_TIME_LIMIT[] ||
     length(LAST_ACTIVITY) > PURGE_NUMBER_LIMIT[] &&
     last_activity ≤ LAST_ACTIVITY[sorted_channels()[PURGE_NUMBER_LIMIT[] + 1]]
+  if limit_reached
+    # prevent removal of clients that are still connected (should not happen, though)
+    cc = Genie.WebChannels.connected_clients()
+    isempty(cc) || getchannel(modelref[]) ∉ reduce(vcat, getfield.(cc, :channels))
+  else
+    false
+  end
 end
 
-function setup_purge_checker(model)
-  modelref = Ref(model)
-  channel = Symbol(getchannel(model))
+function setup_purge_checker(@nospecialize(m::ReactiveModel))
+  modelref = Ref(m)
+  channel = Symbol(getchannel(m))
   function(timer)
       if ! isnothing(modelref[]) && Stipple.isendoflive(modelref[])
           println("deleting ", channel)
@@ -367,7 +375,7 @@ function init(::Type{M};
   modelref = Ref{Union{ReactiveModel, Nothing}}(model)
   LAST_ACTIVITY[Symbol(getchannel(model))] = now()
     
-  Timer(setup_purge_checker(model), 2, interval = 5)
+  Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
 
   if is_channels_webtransport()
     Genie.Assets.channels_subscribe(channel)
