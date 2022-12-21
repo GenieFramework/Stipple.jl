@@ -123,7 +123,8 @@ is_channels_webtransport() = webtransport() == Genie.WebChannels
 #===#
 
 export R, Reactive, ReactiveModel, @R_str, @js_str, client_data, setmode!
-export PRIVATE, PUBLIC, READONLY, JSFUNCTION, NO_WATCHER, NO_BACKEND_WATCHER, NO_FRONTEND_WATCHER
+export PRIVATE, PUBLIC, READONLY, JSFUNCTION, NON_REACTIVE
+export NO_WATCHER, NO_BACKEND_WATCHER, NO_FRONTEND_WATCHER
 export newapp
 export onbutton
 export @kwredef
