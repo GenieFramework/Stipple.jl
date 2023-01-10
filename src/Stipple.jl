@@ -373,7 +373,6 @@ function init(::Type{M};
   end
 
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
-  modelref = Ref{Union{ReactiveModel, Nothing}}(model)
   LAST_ACTIVITY[Symbol(getchannel(model))] = now()
     
   Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
