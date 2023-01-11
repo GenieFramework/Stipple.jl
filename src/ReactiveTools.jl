@@ -393,6 +393,24 @@ macro handlers(expr)
   end |> esc
 end
 
+function fieldnames_to_fields(vars, expr)
+  postwalk(expr) do x
+    x isa Symbol && x ∈ vars ? :(__model__.$x) : x
+  end
+end
+
+function fieldnames_to_fieldcontent(vars, expr)
+  postwalk(expr) do x
+    # revert replacement if fieldname was used as keyword in a function
+    if x isa Expr && x.head == :kw && x.args[1] isa Expr
+        @show x.args[1].args[1].args[2].value
+        x.args[1] = x.args[1].args[1].args[2].value
+    end
+    # replace fieldname by content of model field
+    x isa Symbol && x ∈ vars ? :(__model__.$x[]) : x
+  end
+end
+
 macro process_handler_input()
   quote
     known_vars = push!(Stipple.ReactiveTools.REACTIVE_STORAGE[__module__] |> keys |> collect, :isready, :isprocessing) # add mixins
@@ -403,14 +421,14 @@ macro process_handler_input()
       error("Unknown binding $var")
     end
 
-    expr = postwalk(x -> isa(x, Symbol) && in(x, known_vars) ? :(__model__.$x[]) : x, expr)
+    Stipple.ReactiveTools.fieldnames_to_fieldcontent(known_vars, expr)
   end |> esc
 end
 
 macro process_handler_expr()
   quote
     known_vars = push!(Stipple.ReactiveTools.REACTIVE_STORAGE[__module__] |> keys |> collect, :isready, :isprocessing) # add mixins
-    expr = postwalk(x -> isa(x, Symbol) && in(x, known_vars) ? :(__model__.$x[]) : x, expr)
+    Stipple.ReactiveTools.fieldnames_to_fieldcontent(known_vars, expr)
   end |> esc
 end
 
@@ -430,8 +448,8 @@ end
 macro onchangeany(vars, expr)
   known_vars = push!(Stipple.ReactiveTools.REACTIVE_STORAGE[__module__] |> keys |> collect, :isready, :isprocessing) # add mixins
 
-  va = postwalk(x -> isa(x, Symbol) && in(x, known_vars) ? :(__model__.$x) : x, vars)
-  exp = postwalk(x -> isa(x, Symbol) && in(x, known_vars) ? :(__model__.$x[]) : x, expr)
+  va = Stipple.ReactiveTools.fieldnames_to_fields(known_vars, vars)
+  exp = Stipple.ReactiveTools.fieldnames_to_fieldcontent(known_vars, expr)  
 
   quote
     push!(__HANDLERS__, (
