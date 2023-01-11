@@ -403,8 +403,14 @@ function fieldnames_to_fieldcontent(vars, expr)
   postwalk(expr) do x
     # revert replacement if fieldname was used as keyword in a function
     if x isa Expr && x.head == :kw && x.args[1] isa Expr
-        @show x.args[1].args[1].args[2].value
-        x.args[1] = x.args[1].args[1].args[2].value
+      x.args[1] = x.args[1].args[1].args[2].value
+    elseif x isa Expr && x.head == :parameters
+      for (i, a) in enumerate(x.args)
+        a isa LineNumberNode && continue
+        if a isa Expr && a.head != :kw
+          x.args[i] = :($(Expr(:kw, a.args[1].args[2].value, a))) 
+        end
+      end
     end
     # replace fieldname by content of model field
     x isa Symbol && x ∈ vars ? :(__model__.$x[]) : x
@@ -421,14 +427,14 @@ macro process_handler_input()
       error("Unknown binding $var")
     end
 
-    Stipple.ReactiveTools.fieldnames_to_fieldcontent(known_vars, expr)
+    expr = Stipple.ReactiveTools.fieldnames_to_fieldcontent(known_vars, expr)
   end |> esc
 end
 
 macro process_handler_expr()
   quote
     known_vars = push!(Stipple.ReactiveTools.REACTIVE_STORAGE[__module__] |> keys |> collect, :isready, :isprocessing) # add mixins
-    Stipple.ReactiveTools.fieldnames_to_fieldcontent(known_vars, expr)
+    expr = Stipple.ReactiveTools.fieldnames_to_fieldcontent(known_vars, expr)
   end |> esc
 end
 
