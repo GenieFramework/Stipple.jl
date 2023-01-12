@@ -380,7 +380,7 @@ macro init()
 end
 
 macro handlers(expr)
-  isdefined(__module__, :__HANDLERS__) || @eval(__module__, __HANDLERS__ = Expr[])
+  isdefined(__module__, :__HANDLERS__) || @eval(__module__, const __HANDLERS__ = Expr[])
   quote
     println(@__MODULE__)
     isdefined(@__MODULE__, :__HANDLERS__) || @eval __HANDLERS__ = Expr[] #Stipple.Observables.ObserverFunction[]
