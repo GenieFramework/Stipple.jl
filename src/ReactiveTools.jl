@@ -380,16 +380,18 @@ macro init()
 end
 
 macro handlers(expr)
+  isdefined(__module__, :__HANDLERS__) || @eval(__module__, __HANDLERS__ = Expr[])
   quote
-    isdefined(@__MODULE__, :__HANDLERS__) || @eval const __HANDLERS__ = Stipple.Observables.ObserverFunction[]
+    println(@__MODULE__)
+    isdefined(@__MODULE__, :__HANDLERS__) || @eval __HANDLERS__ = Expr[] #Stipple.Observables.ObserverFunction[]
+    empty!(__HANDLERS__)
 
-    function __GF_AUTO_HANDLERS__(__model__)
-      empty!(__HANDLERS__)
-
-      $expr
+    $expr
+    eval(:(function __GF_AUTO_HANDLERS__(__model__)
+      $(__HANDLERS__...)
 
       return __model__
-    end
+    end))
   end |> esc
 end
 
@@ -418,63 +420,56 @@ function fieldnames_to_fieldcontent(vars, expr)
   end
 end
 
-macro process_handler_input()
-  quote
-    known_vars = push!(Stipple.ReactiveTools.REACTIVE_STORAGE[__module__] |> keys |> collect, :isready, :isprocessing) # add mixins
-
-    if isa(var, Symbol) && in(var, known_vars)
-      var = :(__model__.$var)
-    else
-      error("Unknown binding $var")
-    end
-
-    expr = Stipple.ReactiveTools.fieldnames_to_fieldcontent(known_vars, expr)
-  end |> esc
-end
-
-macro process_handler_expr()
-  quote
-    known_vars = push!(Stipple.ReactiveTools.REACTIVE_STORAGE[__module__] |> keys |> collect, :isready, :isprocessing) # add mixins
-    expr = Stipple.ReactiveTools.fieldnames_to_fieldcontent(known_vars, expr)
-  end |> esc
+function get_known_vars(M::Module)
+  push!(REACTIVE_STORAGE[M] |> keys |> collect, :isready, :isprocessing)
 end
 
 macro onchange(var, expr)
-  @process_handler_input()
+  known_vars = get_known_vars(__module__)
+  va = fieldnames_to_fields(known_vars, var)
+
+  known_vars = setdiff(known_vars, [var])
+  expr = fieldnames_to_fieldcontent(known_vars, expr)
+
+  output = Expr[:(
+    on($va) do $var
+      $expr
+    end
+  )]
 
   quote
-    push!(__HANDLERS__, (
-      on($var) do __value__
-        $expr
-      end
-      )
-    )
+    println(:($output))
+    push!(__HANDLERS__, $output...)
   end |> esc
 end
 
 macro onchangeany(vars, expr)
-  known_vars = push!(Stipple.ReactiveTools.REACTIVE_STORAGE[__module__] |> keys |> collect, :isready, :isprocessing) # add mixins
+  known_vars = get_known_vars(__module__)
+  va = fieldnames_to_fields(known_vars, vars)
 
-  va = Stipple.ReactiveTools.fieldnames_to_fields(known_vars, vars)
-  exp = Stipple.ReactiveTools.fieldnames_to_fieldcontent(known_vars, expr)  
+  known_vars = setdiff(known_vars, vars.args)
+  exp = fieldnames_to_fieldcontent(known_vars, expr)  
 
   quote
-    push!(__HANDLERS__, (
-      onany($va...) do (__values__...)
+    push!(__HANDLERS__,
+      :(onany($(va.args...)) do $(vars.args...)
         $exp
-      end
-      )...
+      end)
     )
   end |> esc
 end
 
 macro onbutton(var, expr)
-  @process_handler_input()
+  known_vars = get_known_vars(__module__)
+  va = fieldnames_to_fields(known_vars, var)
+
+  known_vars = setdiff(known_vars, [var])
+  expr = fieldnames_to_fieldcontent(known_vars, expr)
 
   quote
-    push!(__HANDLERS__, (
-      onbutton($var) do __value__
-        $expr
+    push!(__HANDLERS__, :(
+      onbutton($$va) do $$var
+        $$expr
       end
       )
     )
@@ -550,7 +545,9 @@ macro mounted(expr)
 end
 
 macro event(event, expr)
-  @process_handler_expr()
+  known_vars = get_known_vars(__module__)
+  expr = fieldnames_to_fieldcontent(known_vars, expr)
+  
   esc(quote
     let M = @type, T = $(event isa QuoteNode ? event : QuoteNode(event))
       function Base.notify(__model__::M, ::Val{T}, @nospecialize(event))
