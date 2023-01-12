@@ -382,7 +382,6 @@ end
 macro handlers(expr)
   isdefined(__module__, :__HANDLERS__) || @eval(__module__, const __HANDLERS__ = Expr[])
   quote
-    println(@__MODULE__)
     isdefined(@__MODULE__, :__HANDLERS__) || @eval __HANDLERS__ = Expr[] #Stipple.Observables.ObserverFunction[]
     empty!(__HANDLERS__)
 
@@ -438,7 +437,6 @@ macro onchange(var, expr)
   )]
 
   quote
-    println(:($output))
     push!(__HANDLERS__, $output...)
   end |> esc
 end
@@ -450,29 +448,29 @@ macro onchangeany(vars, expr)
   known_vars = setdiff(known_vars, vars.args)
   exp = fieldnames_to_fieldcontent(known_vars, expr)  
 
+  output = Expr[:(
+    onany($(va.args...)) do $(vars.args...)
+      $exp
+    end
+  )]
   quote
-    push!(__HANDLERS__,
-      :(onany($(va.args...)) do $(vars.args...)
-        $exp
-      end)
-    )
+    push!(__HANDLERS__, $output...)
   end |> esc
 end
 
 macro onbutton(var, expr)
   known_vars = get_known_vars(__module__)
-  va = fieldnames_to_fields(known_vars, var)
-
-  known_vars = setdiff(known_vars, [var])
+  var = fieldnames_to_fields(known_vars, var)
   expr = fieldnames_to_fieldcontent(known_vars, expr)
 
+  output = Expr[:(
+    onbutton($var) do
+      $expr
+    end
+  )]
+
   quote
-    push!(__HANDLERS__, :(
-      onbutton($$va) do $$var
-        $$expr
-      end
-      )
-    )
+    push!(__HANDLERS__, $output...)
   end |> esc
 end
 
