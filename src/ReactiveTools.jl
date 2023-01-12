@@ -423,18 +423,26 @@ function get_known_vars(M::Module)
   push!(REACTIVE_STORAGE[M] |> keys |> collect, :isready, :isprocessing)
 end
 
-macro onchange(var, expr)
+macro onchange(vars, expr)
   known_vars = get_known_vars(__module__)
-  va = fieldnames_to_fields(known_vars, var)
+  va = fieldnames_to_fields(known_vars, vars)
 
-  known_vars = setdiff(known_vars, [var])
+  known_vars = setdiff(known_vars, vars isa Symbol ? [vars] : vars.args)
   expr = fieldnames_to_fieldcontent(known_vars, expr)
 
-  output = Expr[:(
-    on($va) do $var
-      $expr
-    end
-  )]
+  output = if vars isa Symbol
+    Expr[:(
+      on($va) do $vars
+        $expr
+      end
+    )]
+  else
+    Expr[:(
+      onany($(va.args...)) do $(vars.args...)
+        $expr
+      end
+    )]
+  end
 
   quote
     push!(__HANDLERS__, $output...)
