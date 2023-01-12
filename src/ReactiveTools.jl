@@ -426,19 +426,30 @@ end
 macro onchange(vars, expr)
   known_vars = get_known_vars(__module__)
   va = fieldnames_to_fields(known_vars, vars)
+  do_vars = if vars isa Symbol
+    vars
+  elseif vars.head == :tuple
+    xx = :()
+    for a in vars.args
+      push!(xx.args, a isa Symbol ? a : :_)
+    end
+    xx
+  else
+    :_
+  end
 
   known_vars = setdiff(known_vars, vars isa Symbol ? [vars] : vars.args)
   expr = fieldnames_to_fieldcontent(known_vars, expr)
 
-  output = if vars isa Symbol
+  output = if vars isa Symbol || vars.head != :tuple
     Expr[:(
-      on($va) do $vars
+      on($va) do $do_vars
         $expr
       end
     )]
   else
     Expr[:(
-      onany($(va.args...)) do $(vars.args...)
+      onany($(va.args...)) do $(do_vars.args...)
         $expr
       end
     )]
