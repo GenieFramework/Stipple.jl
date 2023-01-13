@@ -13,6 +13,7 @@ export @page, @rstruct, @type, @handlers, @init, @model, @onchange, @onchangeany
 export DEFAULT_LAYOUT, Page
 
 const REACTIVE_STORAGE = LittleDict{Module,LittleDict{Symbol,Expr}}()
+const HANDLERS = LittleDict{Module,Vector{Expr}}()
 const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
 
 function DEFAULT_LAYOUT(; title::String = "Genie App")
@@ -94,6 +95,7 @@ end
 function delete_bindings!(m::Module)
   clear_type(m)
   delete!(REACTIVE_STORAGE, m)
+  delete!(HANDLERS, m)
 end
 
 function bindings(m)
@@ -351,6 +353,9 @@ end
 #===#
 
 macro init(modeltype)
+  if isdefined(__module__, :__GF_AUTO_HANDLERS__)
+    @eval(__module__, length(methods(__GF_AUTO_HANDLERS__)) == 0 && @handlers)
+  end
   quote
     local initfn =  if isdefined($__module__, :init_from_storage)
                       $__module__.init_from_storage
@@ -379,42 +384,78 @@ macro init()
   end |> esc
 end
 
-macro handlers(expr)
-  isdefined(__module__, :__HANDLERS__) || @eval(__module__, const __HANDLERS__ = Expr[])
+macro handlers()
+  handlers = get!(Vector{Expr}, HANDLERS, __module__)
   quote
-    isdefined(@__MODULE__, :__HANDLERS__) || @eval __HANDLERS__ = Expr[] #Stipple.Observables.ObserverFunction[]
-    empty!(__HANDLERS__)
+    function __GF_AUTO_HANDLERS__(__model__)
+      $(handlers...)
 
+      return __model__
+    end
+  end |> esc
+end
+
+macro handlers(expr)
+  handlers = get!(Vector{Expr}, HANDLERS, __module__)
+  empty!(handlers)
+  quote
     $expr
     eval(:(function __GF_AUTO_HANDLERS__(__model__)
-      $(__HANDLERS__...)
+      $(handlers...)
 
       return __model__
     end))
   end |> esc
 end
 
-function fieldnames_to_fields(vars, expr)
+function wrap(expr, wrapper = nothing)
+  if wrapper !== nothing && (! isa(expr, Expr) || expr.head != wrapper)
+    Expr(wrapper, expr)
+  else
+    expr
+  end
+end
+
+function transform(expr, vars::Vector{Symbol}, test_fn::Function, replace_fn::Function)
+  replaced_vars = Symbol[]
+  ex = postwalk(expr) do x
+      if x isa Expr
+          if x.head == :call
+              f = x
+              while f.args[1] isa Expr && f.args[1].head == :ref
+                  f = f.args[1]
+              end
+              if f.args[1] isa Symbol && test_fn(f.args[1])
+                  union!(push!(replaced_vars, f.args[1]))
+                  f.args[1] = replace_fn(f.args[1])
+              end
+          elseif x.head == :kw && test_fn(x.args[1])
+              x.args[1] = replace_fn(x.args[1])
+          elseif x.head == :parameters
+              for (i, a) in enumerate(x.args)
+                  if a isa Symbol && test_fn(a)
+                    new_a = replace_fn(a)
+                    x.args[i] = new_a in vars ? :($(Expr(:kw, new_a, :(__model__.$new_a[])))) : new_a
+                  end
+              end
+          end
+      end
+      x
+  end
+  ex, replaced_vars
+end
+
+mask(expr, vars::Vector{Symbol}) = transform(expr, vars, in(vars), x -> Symbol("_mask_$x"))
+unmask(expr, vars = Symbol[]) = transform(expr, vars, x -> startswith(string(x), "_mask_"), x -> Symbol(string(x)[7:end]))[1]
+
+function fieldnames_to_fields(expr, vars)
   postwalk(expr) do x
     x isa Symbol && x ∈ vars ? :(__model__.$x) : x
   end
 end
 
-function fieldnames_to_fieldcontent(vars, expr)
+function fieldnames_to_fieldcontent(expr, vars)
   postwalk(expr) do x
-    # revert replacement if fieldname was used as keyword in a function
-    if x isa Expr
-      if x.head == :kw && x.args[1] isa Expr
-        x.args[1] = x.args[1].args[1].args[2].value
-      elseif x.head == :parameters
-        for (i, a) in enumerate(x.args)
-          if a isa Expr && a.head != :kw
-            x.args[i] = :($(Expr(:kw, a.args[1].args[2].value, a))) 
-          end
-        end
-      end
-    end
-    # replace fieldname by content of model field
     x isa Symbol && x ∈ vars ? :(__model__.$x[]) : x
   end
 end
@@ -424,72 +465,64 @@ function get_known_vars(M::Module)
 end
 
 macro onchange(vars, expr)
+  vars = wrap(vars, :tuple)
+  expr = wrap(expr, :block)
+
+  get!(Vector{Expr}, HANDLERS, __module__)
+
   known_vars = get_known_vars(__module__)
-  va = fieldnames_to_fields(known_vars, vars)
-  do_vars = if vars isa Symbol
-    vars
-  elseif vars.head == :tuple
-    xx = :()
-    for a in vars.args
-      push!(xx.args, a isa Symbol ? a : :_)
+  on_vars = fieldnames_to_fields(vars, known_vars)
+
+  expr, used_vars = mask(expr, known_vars)
+  do_vars = :()
+
+  for a in vars.args
+    push!(do_vars.args, a isa Symbol && ! in(a, used_vars) ? a : :_)
+  end
+
+  known_vars = setdiff(known_vars, setdiff(vars.args, used_vars)) |> Vector{Symbol}
+  expr = unmask(fieldnames_to_fieldcontent(expr, known_vars), known_vars)
+
+  fn = length(vars.args) == 1 ? :on : :onany
+  ex = quote
+    $fn($(on_vars.args...)) do $(do_vars.args...)
+        $(expr.args...)
     end
-    xx
-  else
-    :_
   end
 
-  known_vars = setdiff(known_vars, vars isa Symbol ? [vars] : vars.args)
-  expr = fieldnames_to_fieldcontent(known_vars, expr)
-
-  output = if vars isa Symbol || vars.head != :tuple
-    Expr[:(
-      on($va) do $do_vars
-        $expr
-      end
-    )]
-  else
-    Expr[:(
-      onany($(va.args...)) do $(do_vars.args...)
-        $expr
-      end
-    )]
-  end
+  push!(HANDLERS[__module__], ex)
 
   quote
-    push!(__HANDLERS__, $output...)
+    function __GF_AUTO_HANDLERS__ end
+    Base.delete_method.(methods(__GF_AUTO_HANDLERS__))
+    Stipple.ReactiveTools.HANDLERS[@__MODULE__][end]
   end |> esc
 end
 
 macro onchangeany(vars, expr)
-  known_vars = get_known_vars(__module__)
-  va = fieldnames_to_fields(known_vars, vars)
-
-  known_vars = setdiff(known_vars, vars.args)
-  exp = fieldnames_to_fieldcontent(known_vars, expr)  
-
-  output = Expr[:(
-    onany($(va.args...)) do $(vars.args...)
-      $exp
-    end
-  )]
   quote
-    push!(__HANDLERS__, $output...)
+    @warn("The macro `@onchangeany` is deprecated and should be replaced by `@onchange`")
+    @onchange $vars $expr
   end |> esc
 end
 
 macro onbutton(var, expr)
+  expr = wrap(expr, :block)
+  get!(Vector{Expr}, HANDLERS, __module__)
+
   known_vars = get_known_vars(__module__)
   var = fieldnames_to_fields(known_vars, var)
   expr = fieldnames_to_fieldcontent(known_vars, expr)
 
-  output = Expr[:(
-    onbutton($var) do
-      $expr
-    end
-  )]
-
+  ex = :(onbutton($var) do
+    $(expr.args...)
+  end)
+  push!(HANDLERS[__module__], ex)
+  
   quote
-    push!(__HANDLERS__, $output...)
+    function __GF_AUTO_HANDLERS__ end
+    Base.delete_method.(methods(__GF_AUTO_HANDLERS__))
+    Stipple.ReactiveTools.HANDLERS[@__MODULE__][end]
   end |> esc
 end
 
@@ -565,13 +598,13 @@ macro event(event, expr)
   known_vars = get_known_vars(__module__)
   expr = fieldnames_to_fieldcontent(known_vars, expr)
   
-  esc(quote
+  quote
     let M = @type, T = $(event isa QuoteNode ? event : QuoteNode(event))
       function Base.notify(__model__::M, ::Val{T}, @nospecialize(event))
         $expr
       end
     end
-  end)
+  end |> esc
 end
 
 macro client_data(expr)
