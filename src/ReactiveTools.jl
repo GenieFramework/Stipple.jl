@@ -400,11 +400,8 @@ macro handlers(expr)
   empty!(handlers)
   quote
     $expr
-    eval(:(function __GF_AUTO_HANDLERS__(__model__)
-      $(handlers...)
-
-      return __model__
-    end))
+    
+    @handlers
   end |> esc
 end
 
