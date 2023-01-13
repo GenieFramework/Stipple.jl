@@ -123,7 +123,7 @@ end
 abstract type ReactiveModel end
 
 
-export @reactors, @reactive, @reactive!, @vars, @add_vars, @old_reactive, @old_reactive!
+export @reactors, @reactive, @reactive!, @vars, @add_vars, @define_mixin, @old_reactive, @old_reactive!
 export ChannelName, getchannel
 
 const ChannelName = String
@@ -166,7 +166,7 @@ function model_to_storage(::Type{T}, prefix = "", postfix = "") where T# <: Reac
   values = getfield.(Ref(M()), fields)
   storage = LittleDict{Symbol, Expr}()
   for (f, type, v) in zip(fields, fieldtypes(M), values)
-    f = f == :_modes ? f : Symbol(prefix, f, postfix)
+    f = f in [:channel__, :_modes, AUTOFIELDS...] ? f : Symbol(prefix, f, postfix)
     storage[f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = Stipple._deepcopy($v))
   end
 
@@ -310,8 +310,8 @@ macro var_storage(expr, new_inputmode = :auto)
 
         storage[var] = ex
       else
-        # parse @mixin as @mixin wouldn't work here
-        if e.head == :macrocall && e.args[1] == Symbol("@mixin")
+        # parse @mixin / @mix_in as @mixin or @mix_in wouldn't work here
+        if e.head == :macrocall && (e.args[1] == Symbol("@mixin") || e.args[1] == Symbol("@mix_in"))
           e.args = filter!(x -> ! isa(x, LineNumberNode), e.args)
           prefix = postfix = ""
           if e.args[2] isa Expr && e.args[2].head == :(::)
@@ -408,6 +408,17 @@ macro add_vars(modelname, expr, new_inputmode = :auto)
   end
     
   esc(:(Stipple.@type $modelname $new_storage))
+end
+
+macro define_mixin(mixin_name, expr)
+  storage = @eval(__module__, Stipple.@var_storage($expr))
+  delete!.(Ref(storage),  [:channel__, Stipple.AUTOFIELDS...])
+
+  quote
+      Base.@kwdef struct $mixin_name
+          $(values(storage)...)
+      end
+  end |> esc
 end
 
 macro reactive!(expr)

@@ -327,7 +327,7 @@ end
 
 function get_abstract_type(::Type{M})::Type{<:ReactiveModel} where M <: Stipple.ReactiveModel
   SM = supertype(M)
-  SM <: ReactiveModel && SM != ReactiveModel ? supertype(M) : M
+  SM <: ReactiveModel && SM != ReactiveModel ? SM : M
 end
 
 """
@@ -925,12 +925,14 @@ macro mixin(expr, prefix = "", postfix = "")
 
   T = x isa DataType ? x : typeof(x)
   mix = x isa DataType ? x() : x
-  values = getfield.(Ref(mix), fieldnames(T))
+  fnames = fieldnames(get_concrete_type(T))
+  values = getfield.(Ref(mix), fnames)
   output = quote end
-  for (f, type, v) in zip(Symbol.(pre, fieldnames(T), post), fieldtypes(T), values)
+  for (f, type, v) in zip(Symbol.(pre, fnames, post), fieldtypes(get_concrete_type(T)), values)
+    f in Symbol.(prefix, [:channel__, :_modes, AUTOFIELDS...], postfix) && continue
     v_copy = Stipple._deepcopy(v)
     push!(output.args, v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy))
-end
+  end
 
   esc(:($output))
 end
