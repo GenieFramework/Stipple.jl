@@ -511,8 +511,10 @@ macro onbutton(var, expr)
   get!(Vector{Expr}, HANDLERS, __module__)
 
   known_vars = get_known_vars(__module__)
-  var = fieldnames_to_fields(known_vars, var)
-  expr = fieldnames_to_fieldcontent(known_vars, expr)
+  var = fieldnames_to_fields(var, known_vars)
+
+  expr, used_vars = mask(expr, known_vars)
+  expr = unmask(fieldnames_to_fieldcontent(expr, known_vars), known_vars)
 
   ex = :(onbutton($var) do
     $(expr.args...)
@@ -596,7 +598,9 @@ end
 
 macro event(event, expr)
   known_vars = get_known_vars(__module__)
-  expr = fieldnames_to_fieldcontent(known_vars, expr)
+
+  expr, used_vars = mask(expr, known_vars)
+  expr = unmask(fieldnames_to_fieldcontent(expr, known_vars), known_vars)
   
   quote
     let M = @type, T = $(event isa QuoteNode ? event : QuoteNode(event))
