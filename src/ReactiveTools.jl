@@ -8,7 +8,7 @@ import Genie
 import Stipple: deletemode!, parse_expression!, init_storage
 
 export @readonly, @private, @in, @out, @jsfn, @readonly!, @private!, @in!, @out!, @jsfn!
-export @mix_in, @clear, @vars, @add_vars
+export @mix_in, @clear, @vars, @add_vars, @clear_vars, @clear_handlers
 export @page, @rstruct, @type, @handlers, @init, @model, @onchange, @onchangeany, @onbutton
 export DEFAULT_LAYOUT, Page
 
@@ -95,7 +95,7 @@ end
 function delete_bindings!(m::Module)
   clear_type(m)
   delete!(REACTIVE_STORAGE, m)
-  delete!(HANDLERS, m)
+  nothing
 end
 
 function bindings(m)
@@ -103,10 +103,19 @@ function bindings(m)
   REACTIVE_STORAGE[m]
 end
 
+function delete_handlers!(m::Module)
+  delete!(HANDLERS, m)
+  if isdefined(m, :__GF_AUTO_HANDLERS__)
+    Base.delete_method.(methods(m.__GF_AUTO_HANDLERS__))
+  end
+  nothing
+end
+
 #===#
 
 macro clear()
   delete_bindings!(__module__)
+  delete_handlers!(__module__)
 end
 
 macro clear(args...)
@@ -120,6 +129,14 @@ macro clear(args...)
   update_storage(__module__)
 
   REACTIVE_STORAGE[__module__]
+end
+
+macro clear_vars()
+  delete_bindings!(__module__)
+end
+
+macro clear_handlers()
+  delete_handlers!(__module__)
 end
 
 import Stipple.@type
@@ -166,6 +183,20 @@ macro model()
   esc(quote
     ReactiveTools.@type() |> Base.invokelatest
   end)
+end
+
+macro model(expr)
+  init_handlers(__module__)
+  init_storage(__module__)
+
+  delete_bindings!(__module__)
+  delete_handlers!(__module__)
+
+  quote
+    $expr
+    
+    @handlers
+  end |> esc
 end
 
 #===#
@@ -352,6 +383,10 @@ end
 
 #===#
 
+function init_handlers(m::Module)
+  get!(Vector{Expr}, HANDLERS, m)
+end
+
 macro init(modeltype)
   quote
     local new_handlers = false
@@ -387,7 +422,8 @@ macro init()
 end
 
 macro handlers()
-  handlers = get!(Vector{Expr}, HANDLERS, __module__)
+  handlers = init_handlers(__module__)
+
   quote
     function __GF_AUTO_HANDLERS__(__model__)
       $(handlers...)
@@ -398,8 +434,9 @@ macro handlers()
 end
 
 macro handlers(expr)
-  handlers = get!(Vector{Expr}, HANDLERS, __module__)
-  empty!(handlers)
+  init_handlers(m)
+  delete_handlers!(__module__)
+
   quote
     $expr
     
@@ -460,6 +497,7 @@ function fieldnames_to_fieldcontent(expr, vars)
 end
 
 function get_known_vars(M::Module)
+  init_storage(M)
   push!(REACTIVE_STORAGE[M] |> keys |> collect, :isready, :isprocessing)
 end
 
@@ -467,7 +505,7 @@ macro onchange(vars, expr)
   vars = wrap(vars, :tuple)
   expr = wrap(expr, :block)
 
-  get!(Vector{Expr}, HANDLERS, __module__)
+  init_handlers(__module__)
 
   known_vars = get_known_vars(__module__)
   on_vars = fieldnames_to_fields(vars, known_vars)
@@ -507,7 +545,7 @@ end
 
 macro onbutton(var, expr)
   expr = wrap(expr, :block)
-  get!(Vector{Expr}, HANDLERS, __module__)
+  init_handlers(__module__)
 
   known_vars = get_known_vars(__module__)
   var = fieldnames_to_fields(var, known_vars)
