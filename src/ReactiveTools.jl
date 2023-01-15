@@ -353,22 +353,24 @@ end
 #===#
 
 macro init(modeltype)
-  if isdefined(__module__, :__GF_AUTO_HANDLERS__)
-    @eval(__module__, length(methods(__GF_AUTO_HANDLERS__)) == 0 && @handlers)
-  end
   quote
+    local new_handlers = false
     local initfn =  if isdefined($__module__, :init_from_storage)
                       $__module__.init_from_storage
                     else
                       $__module__.init
                     end
     local handlersfn =  if isdefined($__module__, :__GF_AUTO_HANDLERS__)
+                          if length(methods($__module__.__GF_AUTO_HANDLERS__)) == 0
+                            @eval(@handlers())
+                            new_handlers = true
+                          end
                           $__module__.__GF_AUTO_HANDLERS__
                         else
                           identity
                         end
 
-    instance = $modeltype |> initfn |> handlersfn
+    instance = new_handlers ? Base.invokelatest(handlersfn, $modeltype |> initfn) : $modeltype |> initfn |> handlersfn
     for p in Stipple.Pages._pages
       p.context == $__module__ && (p.model = instance)
     end
