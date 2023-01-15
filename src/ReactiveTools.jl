@@ -108,6 +108,10 @@ function delete_handlers!(m::Module)
   if isdefined(m, :__GF_AUTO_HANDLERS__)
     Base.delete_method.(methods(m.__GF_AUTO_HANDLERS__))
   end
+  if haskey(TYPES, m)
+    Base.delete_method.(methods(Base.notify, (TYPES[m], Val{T} where T, Any)))
+    Base.delete_method.(methods(Base.notify, (TYPES[m], Val{T} where T)))
+  end
   nothing
 end
 
