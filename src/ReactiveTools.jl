@@ -461,23 +461,32 @@ function transform(expr, vars::Vector{Symbol}, test_fn::Function, replace_fn::Fu
   ex = postwalk(expr) do x
       if x isa Expr
           if x.head == :call
-              f = x
-              while f.args[1] isa Expr && f.args[1].head == :ref
-                  f = f.args[1]
+            f = x
+            while f.args[1] isa Expr && f.args[1].head == :ref
+              f = f.args[1]
+            end
+            if f.args[1] isa Symbol && test_fn(f.args[1])
+              union!(push!(replaced_vars, f.args[1]))
+              f.args[1] = replace_fn(f.args[1])
+            end
+            if x.args[1] == :notify && length(x.args) == 2
+              if @capture(x.args[2], __model__.fieldname_[])
+                x.args[2] = :(__model__.$fieldname)
+              elseif x.args[2] isa Symbol
+                x.args[2] = :(__model__.$(x.args[2]))
               end
-              if f.args[1] isa Symbol && test_fn(f.args[1])
-                  union!(push!(replaced_vars, f.args[1]))
-                  f.args[1] = replace_fn(f.args[1])
-              end
+            end
           elseif x.head == :kw && test_fn(x.args[1])
-              x.args[1] = replace_fn(x.args[1])
+            x.args[1] = replace_fn(x.args[1])
           elseif x.head == :parameters
-              for (i, a) in enumerate(x.args)
-                  if a isa Symbol && test_fn(a)
-                    new_a = replace_fn(a)
-                    x.args[i] = new_a in vars ? :($(Expr(:kw, new_a, :(__model__.$new_a[])))) : new_a
-                  end
+            for (i, a) in enumerate(x.args)
+              if a isa Symbol && test_fn(a)
+                new_a = replace_fn(a)
+                x.args[i] = new_a in vars ? :($(Expr(:kw, new_a, :(__model__.$new_a[])))) : new_a
               end
+            end
+          elseif x.head == :ref && length(x.args) == 2 && x.args[2] == :!
+            @capture(x.args[1], __model__.fieldname_[]) && (x.args[1] = :(__model__.$fieldname))
           end
       end
       x
@@ -500,6 +509,21 @@ function fieldnames_to_fieldcontent(expr, vars)
   end
 end
 
+function fieldnames_to_fieldcontent(expr, vars, replace_vars)
+  postwalk(expr) do x
+    if x isa Symbol
+      x ∈ replace_vars && return :(__model__.$x[])
+    elseif x isa Expr
+      if x.head == Symbol("=")
+        x.args[1] = postwalk(x.args[1]) do y
+          y ∈ vars ? :(__model__.$y[]) : y
+        end
+      end
+    end
+    x
+  end
+end
+
 function get_known_vars(M::Module)
   init_storage(M)
   push!(REACTIVE_STORAGE[M] |> keys |> collect, :isready, :isprocessing)
@@ -515,18 +539,18 @@ macro onchange(vars, expr)
   on_vars = fieldnames_to_fields(vars, known_vars)
 
   expr, used_vars = mask(expr, known_vars)
-  do_vars = :()
+  do_vars = Symbol[]
 
   for a in vars.args
-    push!(do_vars.args, a isa Symbol && ! in(a, used_vars) ? a : :_)
+    push!(do_vars, a isa Symbol && ! in(a, used_vars) ? a : :_)
   end
 
-  known_vars = setdiff(known_vars, setdiff(vars.args, used_vars)) |> Vector{Symbol}
-  expr = unmask(fieldnames_to_fieldcontent(expr, known_vars), known_vars)
+  replace_vars = setdiff(known_vars, do_vars)
+  expr = unmask(fieldnames_to_fieldcontent(expr, known_vars, replace_vars), replace_vars)
 
   fn = length(vars.args) == 1 ? :on : :onany
   ex = quote
-    $fn($(on_vars.args...)) do $(do_vars.args...)
+    $fn($(on_vars.args...)) do $(do_vars...)
         $(expr.args...)
     end
   end
