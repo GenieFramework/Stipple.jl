@@ -108,7 +108,7 @@ function delete_handlers!(m::Module)
   if isdefined(m, :__GF_AUTO_HANDLERS__)
     Base.delete_method.(methods(m.__GF_AUTO_HANDLERS__))
   end
-  if haskey(TYPES, m)
+  if haskey(TYPES, m) && TYPES[m] isa DataType
     Base.delete_method.(methods(Base.notify, (TYPES[m], Val{T} where T, Any)))
     Base.delete_method.(methods(Base.notify, (TYPES[m], Val{T} where T)))
   end
@@ -257,7 +257,7 @@ end
 # @in a::Vector = [1, 2, 3]
 # @in a::Vector{Int} = [1, 2, 3]
 macro in(expr)
-  binding(copy(expr), __module__, :PUBLIC; source = __source__)
+  binding(expr isa Symbol ? expr : copy(expr), __module__, :PUBLIC; source = __source__)
   # @define_var()
   esc(:($expr))
 end
