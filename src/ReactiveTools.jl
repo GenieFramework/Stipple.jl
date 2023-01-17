@@ -438,7 +438,7 @@ macro handlers()
 end
 
 macro handlers(expr)
-  init_handlers(m)
+  init_handlers(__module__)
   delete_handlers!(__module__)
 
   quote
