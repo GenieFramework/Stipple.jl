@@ -36,8 +36,8 @@ function DEFAULT_LAYOUT(; title::String = "Genie App")
       ._genie_logo {
         background:url('/stipple.jl/master/assets/img/genie-logo.img') no-repeat;background-size:40px;
         padding-top:22px;padding-right:10px;color:transparent;font-size:9pt;
-      ._genie .row .col-12 { width:50%;margin:auto; }
       }
+      ._genie .row .col-12 { width:50%;margin:auto; }
     </style>
   </head>
   <body>
@@ -66,8 +66,23 @@ function DEFAULT_LAYOUT(; title::String = "Genie App")
 """
 end
 
-function default_struct_name(m::Module)
-  "$(m)_ReactiveModel"
+function model_typename(m::Module)
+  isdefined(m, :__typename__) ? m.__typename__[] : "$(m)_ReactiveModel"
+end
+
+macro modelname(expr)
+  expr isa Symbol || (expr = Symbol(@eval(__module__, $expr)))
+  clear_type(__module__)
+  ex = quote end
+  if isdefined(__module__, expr)
+    push!(ex.args, :(Stipple.ReactiveTools.clear_handlers_fn($__module__, $expr)))
+  end
+  if isconst(__module__, :__typename__)
+    push!(ex.args, :(__typename__[] = $(string(expr))))
+  else
+    push!(ex.args, :(const __typename__ = Ref{String}($expr)))
+  end
+  :($ex) |> esc
 end
 
 function Stipple.init_storage(m::Module)
@@ -103,15 +118,23 @@ function bindings(m)
   REACTIVE_STORAGE[m]
 end
 
-function delete_handlers!(m::Module)
-  delete!(HANDLERS, m)
+function clear_handlers_fn(m::Module, ::Type{T}) where T
+  # clear handlers_fn
   if isdefined(m, :__GF_AUTO_HANDLERS__)
     Base.delete_method.(methods(m.__GF_AUTO_HANDLERS__))
   end
-  if haskey(TYPES, m) && TYPES[m] isa DataType
-    Base.delete_method.(methods(Base.notify, (TYPES[m], Val{T} where T, Any)))
-    Base.delete_method.(methods(Base.notify, (TYPES[m], Val{T} where T)))
+  # clear event functions
+  Base.delete_method.(methods(Base.notify, (T, Val{T} where T, Any)))
+  Base.delete_method.(methods(Base.notify, (T, Val{T} where T)))
   end
+
+function clear_handlers_fn(m::Module)  
+  haskey(TYPES, m) && TYPES[m] isa DataType && clear_handlers_fn(m, TYPES[m])
+end
+
+function delete_handlers!(m::Module)
+  delete!(HANDLERS, m)
+  clear_handlers_fn(m)
   nothing
 end
 
@@ -149,7 +172,7 @@ macro type()
   type = if TYPES[__module__] !== nothing
     TYPES[__module__]
   else
-    modelname = Symbol(default_struct_name(__module__))
+    modelname = Symbol(model_typename(__module__))
     storage = REACTIVE_STORAGE[__module__]
     TYPES[__module__] = @eval(__module__, Stipple.@type($modelname, $storage))
   end
@@ -487,6 +510,8 @@ function transform(expr, vars::Vector{Symbol}, test_fn::Function, replace_fn::Fu
             end
           elseif x.head == :ref && length(x.args) == 2 && x.args[2] == :!
             @capture(x.args[1], __model__.fieldname_[]) && (x.args[1] = :(__model__.$fieldname))
+          elseif x.head == :macrocall && x.args[1] == Symbol("@push")
+            x = :(push!(__model__))
           end
       end
       x
@@ -529,7 +554,10 @@ function get_known_vars(M::Module)
   push!(REACTIVE_STORAGE[M] |> keys |> collect, :isready, :isprocessing)
 end
 
-macro onchange(vars, expr)
+function get_known_vars(::Type{M}) where M<:ReactiveModel
+  setdiff(fieldnames(Stipple.get_concrete_type(M)), [:channel__, :_modes])
+end
+
   vars = wrap(vars, :tuple)
   expr = wrap(expr, :block)
 
@@ -661,18 +689,23 @@ macro mounted(expr)
   end)
 end
 
-macro event(event, expr)
-  known_vars = get_known_vars(__module__)
+macro event(M, event, expr)
+  known_vars = get_known_vars(@eval(__module__, $M))
 
   expr, used_vars = mask(expr, known_vars)
   expr = unmask(fieldnames_to_fieldcontent(expr, known_vars), known_vars)
+  T = event isa QuoteNode ? event : QuoteNode(event)
   
   quote
-    let M = @type, T = $(event isa QuoteNode ? event : QuoteNode(event))
-      function Base.notify(__model__::M, ::Val{T}, @nospecialize(event))
+    function Base.notify(__model__::$M, ::Val{$T}, @nospecialize(event))
         $expr
       end
+  end |> esc
     end
+
+macro event(event, expr)
+  quote
+    @event @type() $event $expr
   end |> esc
 end
 
