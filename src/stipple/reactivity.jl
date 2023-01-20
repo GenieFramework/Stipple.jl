@@ -166,7 +166,7 @@ function model_to_storage(::Type{T}, prefix = "", postfix = "") where T# <: Reac
   values = getfield.(Ref(M()), fields)
   storage = LittleDict{Symbol, Expr}()
   for (f, type, v) in zip(fields, fieldtypes(M), values)
-    f = f in [:channel__, :_modes, AUTOFIELDS...] ? f : Symbol(prefix, f, postfix)
+    f = f in [:channel__, :modes__, AUTOFIELDS...] ? f : Symbol(prefix, f, postfix)
     storage[f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = Stipple._deepcopy($v))
   end
 
