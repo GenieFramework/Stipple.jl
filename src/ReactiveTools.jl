@@ -77,10 +77,10 @@ macro modelname(expr)
   if isdefined(__module__, expr)
     push!(ex.args, :(Stipple.ReactiveTools.clear_handlers_fn($__module__, $expr)))
   end
-  if isconst(__module__, :__typename__)
+  if isdefined(__module__, :__typename__) && __module__.__typename__ isa Ref{String}
     push!(ex.args, :(__typename__[] = $(string(expr))))
   else
-    push!(ex.args, :(const __typename__ = Ref{String}($expr)))
+    push!(ex.args, :(const __typename__ = Ref{String}($(string(expr)))))
   end
   :($ex) |> esc
 end
@@ -471,6 +471,30 @@ macro handlers(expr)
   end |> esc
 end
 
+macro handlers(typename, expr, handlers_fn_name = :handlers)
+  expr = wrap(expr, :block)
+  index = [ex isa Expr && ex.head == :macrocall && ex.args[1] in Symbol.(["@onbutton", "@onchange"]) for ex in expr.args]
+  initcode = expr.args[.! index]
+  handlercode = quote end
+
+  for ex in expr.args[index]
+    ex_index = isa.(ex.args, Union{Symbol, Expr})
+    if sum(ex_index) < 4
+      pos = findall(ex_index)[2]
+      insert!(ex.args, pos, typename)
+      push!(handlercode.args, @eval(__module__, $ex).args...)
+    end
+  end
+
+  quote    
+    function $handlers_fn_name(__model__)
+      $(handlercode.args...)
+
+      __model__
+    end
+  end |> esc
+end
+
 function wrap(expr, wrapper = nothing)
   if wrapper !== nothing && (! isa(expr, Expr) || expr.head != wrapper)
     Expr(wrapper, expr)
@@ -559,12 +583,18 @@ function get_known_vars(::Type{M}) where M<:ReactiveModel
 end
 
 macro onchange(var, expr)
+  quote
+    @onchange $__module__ $var $expr
+  end |> esc
+end
+
+macro onchange(location, vars, expr)
+  loc::Union{Module, Type{<:M}} where M<:ReactiveModel = @eval __module__ $location
   vars = wrap(vars, :tuple)
   expr = wrap(expr, :block)
 
-  init_handlers(__module__)
-
-  known_vars = get_known_vars(__module__)
+  loc isa Module && init_handlers(loc)
+  known_vars = get_known_vars(loc)
   on_vars = fieldnames_to_fields(vars, known_vars)
 
   expr, used_vars = mask(expr, known_vars)
@@ -584,16 +614,16 @@ macro onchange(var, expr)
     end
   end
 
-  push!(HANDLERS[__module__], ex)
-
+  loc isa Module && push!(HANDLERS[__module__], ex)
+  output = [ex]
   quote
     function __GF_AUTO_HANDLERS__ end
     Base.delete_method.(methods(__GF_AUTO_HANDLERS__))
-    Stipple.ReactiveTools.HANDLERS[@__MODULE__][end]
+    $output[end]
   end |> esc
 end
 
-macro onchangeany(vars, expr)
+macro onchangeany(var, expr)
   quote
     @warn("The macro `@onchangeany` is deprecated and should be replaced by `@onchange`")
     @onchange $vars $expr
@@ -601,10 +631,17 @@ macro onchangeany(vars, expr)
 end
 
 macro onbutton(var, expr)
-  expr = wrap(expr, :block)
-  init_handlers(__module__)
+  quote
+    @onbutton $__module__ $var $expr
+  end |> esc
+end
 
-  known_vars = get_known_vars(__module__)
+macro onbutton(location, var, expr)
+  loc::Union{Module, Type{<:M}} where M<:ReactiveModel = @eval __module__ $location
+  expr = wrap(expr, :block)
+  loc isa Module && init_handlers(loc)
+
+  known_vars = get_known_vars(loc)
   var = fieldnames_to_fields(var, known_vars)
 
   expr, used_vars = mask(expr, known_vars)
@@ -613,12 +650,13 @@ macro onbutton(var, expr)
   ex = :(onbutton($var) do
     $(expr.args...)
   end)
-  push!(HANDLERS[__module__], ex)
+  loc isa Module && push!(HANDLERS[__module__], ex)
+  output = [ex]
   
   quote
     function __GF_AUTO_HANDLERS__ end
     Base.delete_method.(methods(__GF_AUTO_HANDLERS__))
-    Stipple.ReactiveTools.HANDLERS[@__MODULE__][end]
+    $output[end]
   end |> esc
 end
 
