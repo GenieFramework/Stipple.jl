@@ -86,7 +86,7 @@ macro modelname(expr)
 end
 
 function Stipple.init_storage(m::Module)
-  (m == @__MODULE__) && return nothing 
+  (m == @__MODULE__) && return nothing
   haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = Stipple.init_storage())
   haskey(TYPES, m) || (TYPES[m] = nothing)
 end
@@ -167,7 +167,7 @@ macro clear_handlers()
 end
 
 import Stipple.@type
-macro type()  
+macro type()
   Stipple.init_storage(__module__)
   type = if TYPES[__module__] !== nothing
     TYPES[__module__]
@@ -193,7 +193,7 @@ import Stipple: @vars, @add_vars
 
 macro vars(expr)
   init_storage(__module__)
-  
+
   REACTIVE_STORAGE[__module__] = @eval(__module__, Stipple.@var_storage($expr))
 
   update_storage(__module__)
