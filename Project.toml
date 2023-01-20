@@ -1,7 +1,7 @@
 name = "Stipple"
 uuid = "4acbeb90-81a0-11ea-1966-bdaff8155998"
 authors = ["Adrian <e@essenciary.com>"]
-version = "0.25.15"
+version = "0.25.16"
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
