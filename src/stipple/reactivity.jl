@@ -141,7 +141,7 @@ end
 const AUTOFIELDS = [:isready, :isprocessing] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin
-  _modes::LittleDict{Symbol, Int} = LittleDict(:_modes => PRIVATE, :channel__ => PRIVATE)
+  modes__::LittleDict{Symbol, Int} = LittleDict(:modes__ => PRIVATE, :channel__ => PRIVATE)
   channel__::Stipple.ChannelName = Stipple.channelfactory()
   isready::Stipple.R{Bool} = false
   isprocessing::Stipple.R{Bool} = false
@@ -166,7 +166,7 @@ function model_to_storage(::Type{T}, prefix = "", postfix = "") where T# <: Reac
   values = getfield.(Ref(M()), fields)
   storage = LittleDict{Symbol, Expr}()
   for (f, type, v) in zip(fields, fieldtypes(M), values)
-    f = f == :_modes ? f : Symbol(prefix, f, postfix)
+    f = f == :modes__ ? f : Symbol(prefix, f, postfix)
     storage[f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = Stipple._deepcopy($v))
   end
 
@@ -174,11 +174,11 @@ function model_to_storage(::Type{T}, prefix = "", postfix = "") where T# <: Reac
 end
 
 function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict)
-  m1 = eval(haskey(storage_1, :_modes) ? storage_1[:_modes].args[end] : LittleDict{Symbol, Any}())
-  m2 = eval(haskey(storage_2, :_modes) ? storage_2[:_modes].args[end] : LittleDict{Symbol, Any}())
+  m1 = eval(haskey(storage_1, :modes__) ? storage_1[:modes__].args[end] : LittleDict{Symbol, Any}())
+  m2 = eval(haskey(storage_2, :modes__) ? storage_2[:modes__].args[end] : LittleDict{Symbol, Any}())
   modes = merge(m1, m2)
   for (field, expr) in storage_2
-    field == :_modes && continue
+    field == :modes__ && continue
 
     reactive = startswith(string(Stipple.split_expr(expr)[2]), r"(Stipple\.)?R(eactive)?($|{)")
     if reactive
@@ -188,7 +188,7 @@ function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict)
     end
   end
   storage = merge(storage_1, storage_2)
-  storage[:_modes] = :(_modes::Stipple.LittleDict{Symbol, Any} = $modes)
+  storage[:modes__] = :(modes__::Stipple.LittleDict{Symbol, Any} = $modes)
 
   storage
 end
@@ -264,7 +264,7 @@ macro var_storage(expr, new_inputmode = :auto)
   end
 
   storage = init_storage()
-  
+
   source = nothing
   for e in expr.args
       if e isa LineNumberNode
@@ -305,7 +305,7 @@ macro var_storage(expr, new_inputmode = :auto)
         # prevent overwriting of control fields
         var ∈ keys(Stipple.init_storage()) && continue
         if reactive == false
-            Stipple.setmode!(storage[:_modes], Core.eval(Stipple, mode), var)
+            Stipple.setmode!(storage[:modes__], Core.eval(Stipple, mode), var)
         end
 
         storage[var] = ex
@@ -325,7 +325,7 @@ macro var_storage(expr, new_inputmode = :auto)
           mixin_storage = @eval __module__ Stipple.model_to_storage($(e.args[2]), $prefix, $postfix)
           storage = merge_storage(storage, mixin_storage)
         end
-        :_modes, e
+        :modes__, e
       end
 
     end
@@ -346,7 +346,7 @@ macro type(modelname, storage)
 
       delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
       Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
-      
+
       $modelname
   end)
 end
@@ -364,7 +364,7 @@ end
 ```
 This macro replaces the old `@reactive!` and doesn't need the Reactive in the declaration.
 Instead the non_reactives are marked by a flag. The old declaration syntax is still supported
-to make adaptation of old code easier. 
+to make adaptation of old code easier.
 ```
 @vars HHModel begin
   a::R{Int} = 1
@@ -406,13 +406,13 @@ macro add_vars(modelname, expr, new_inputmode = :auto)
   else
     storage
   end
-    
+
   esc(:(Stipple.@type $modelname $new_storage))
 end
 
 macro reactive!(expr)
   warning = """@reactive! is deprecated, please replace use `@vars` instead.
-  
+
   In case of errors, please replace `@reactive!` by `@old_reactive!` and open an issue at
   https://github.com/GenieFramework/Stipple.jl.
 
@@ -422,7 +422,7 @@ macro reactive!(expr)
   model = init(MyDashboard) |> accessmode_from_pattern! |> handlers |> ui |> html
   ```
   """
-  
+
   output = @eval(__module__, values(Stipple.@var_storage($(expr.args[3]), false)))
   expr.args[3] = quote $(output...) end
 
@@ -434,7 +434,7 @@ end
 
 macro reactive(expr)
   warning = """@reactive is deprecated, please replace use `@vars` instead.
-  
+
   In case of errors, please replace `@reactive` by `@old_reactive!` and open an issue at
   https://github.com/GenieFramework/Stipple.jl.
   If you use `@old_reactive!`, make sure to call `accessmode_from_pattern!()`, because the internals for
@@ -442,9 +442,9 @@ macro reactive(expr)
   ```
   model = init(MyDashboard) |> accessmode_from_pattern! |> handlers |> ui |> html
   ```
-  
+
   """
-  
+
   output = @eval(__module__, values(Stipple.@var_storage($(expr.args[3]), false)))
   expr.args[3] = quote $(output...) end
 

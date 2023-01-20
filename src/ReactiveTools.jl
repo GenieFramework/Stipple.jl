@@ -70,13 +70,13 @@ function default_struct_name(m::Module)
 end
 
 function Stipple.init_storage(m::Module)
-  (m == @__MODULE__) && return nothing 
+  (m == @__MODULE__) && return nothing
   haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = Stipple.init_storage())
   haskey(TYPES, m) || (TYPES[m] = nothing)
 end
 
 function Stipple.setmode!(expr::Expr, mode::Int, fieldnames::Symbol...)
-  fieldname in [Stipple.CHANNELFIELDNAME, :_modes] && return
+  fieldname in [Stipple.CHANNELFIELDNAME, :modes__] && return
 
   d = eval(expr.args[2])
   for fieldname in fieldnames
@@ -110,10 +110,10 @@ end
 macro clear(args...)
   haskey(REACTIVE_STORAGE, __module__) || return
   for arg in args
-    arg in [Stipple.CHANNELFIELDNAME, :_modes] && continue
+    arg in [Stipple.CHANNELFIELDNAME, :modes__] && continue
     delete!(REACTIVE_STORAGE[__module__], arg)
   end
-  deletemode!(REACTIVE_STORAGE[__module__][:_modes], args...)
+  deletemode!(REACTIVE_STORAGE[__module__][:modes__], args...)
 
   update_storage(__module__)
 
@@ -121,7 +121,7 @@ macro clear(args...)
 end
 
 import Stipple.@type
-macro type()  
+macro type()
   Stipple.init_storage(__module__)
   type = if TYPES[__module__] !== nothing
     TYPES[__module__]
@@ -147,7 +147,7 @@ import Stipple: @vars, @add_vars
 
 macro vars(expr)
   init_storage(__module__)
-  
+
   REACTIVE_STORAGE[__module__] = @eval(__module__, Stipple.@var_storage($expr))
 
   update_storage(__module__)
@@ -181,8 +181,8 @@ function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); sour
   var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
   REACTIVE_STORAGE[m][var] = field_expr
 
-  reactive || setmode!(REACTIVE_STORAGE[m][:_modes], intmode, var)
-  reactive && setmode!(REACTIVE_STORAGE[m][:_modes], PUBLIC, var)
+  reactive || setmode!(REACTIVE_STORAGE[m][:modes__], intmode, var)
+  reactive && setmode!(REACTIVE_STORAGE[m][:modes__], PUBLIC, var)
 
   # remove cached type and instance, update pages
   update_storage(m)

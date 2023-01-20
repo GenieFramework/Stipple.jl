@@ -280,9 +280,9 @@ function accessmode_from_pattern!(model::ReactiveModel)
   for field in fieldnames(typeof(model))
     if !(field isa Reactive)
       if occursin(Stipple.SETTINGS.private_pattern, string(field))
-        model._modes[field] = PRIVATE
+        model.modes__[field] = PRIVATE
       elseif occursin(Stipple.SETTINGS.readonly_pattern, string(field))
-        model._modes[field] = READONLY
+        model.modes__[field] = READONLY
       end
     end
   end
@@ -292,16 +292,16 @@ end
 function setmode!(model::ReactiveModel, mode::Int, fieldnames::Symbol...)
   for fieldname in fieldnames
     if getfield(model, fieldname) isa Reactive
-      delete!(model._modes, fieldname)
+      delete!(model.modes__, fieldname)
     else
-      setmode!(model._modes, mode, fieldnames...)
+      setmode!(model.modes__, mode, fieldnames...)
     end
   end
 end
 
 function setmode!(dict::AbstractDict, mode, fieldnames::Symbol...)
   for fieldname in fieldnames
-    fieldname in [Stipple.CHANNELFIELDNAME, :_modes] && continue
+    fieldname in [Stipple.CHANNELFIELDNAME, :modes__] && continue
     mode == PUBLIC || mode == :PUBLIC ? delete!(dict, fieldname) : dict[fieldname] = Core.eval(Stipple, mode)
   end
   dict
@@ -313,9 +313,9 @@ end
 
 function init_storage()
   LittleDict{Symbol, Expr}(
-    CHANNELFIELDNAME => 
+    CHANNELFIELDNAME =>
       :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = Stipple.channelfactory()),
-    :_modes => :(_modes::Stipple.LittleDict{Symbol, Any} = Stipple.LittleDict{Symbol, Any}()),
+    :modes__ => :(modes__::Stipple.LittleDict{Symbol, Any} = Stipple.LittleDict{Symbol, Any}()),
     :isready => :(isready::Stipple.R{Bool} = false),
     :isprocessing => :(isprocessing::Stipple.R{Bool} = false)
   )
@@ -374,7 +374,7 @@ function init(::Type{M};
 
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
   LAST_ACTIVITY[Symbol(getchannel(model))] = now()
-    
+
   Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
 
   if is_channels_webtransport()
