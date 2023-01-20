@@ -92,7 +92,7 @@ function Stipple.init_storage(m::Module)
 end
 
 function Stipple.setmode!(expr::Expr, mode::Int, fieldnames::Symbol...)
-  fieldname in [Stipple.CHANNELFIELDNAME, :_modes] && return
+  fieldname in [Stipple.CHANNELFIELDNAME, :modes__] && return
 
   d = eval(expr.args[2])
   for fieldname in fieldnames
@@ -148,10 +148,10 @@ end
 macro clear(args...)
   haskey(REACTIVE_STORAGE, __module__) || return
   for arg in args
-    arg in [Stipple.CHANNELFIELDNAME, :_modes] && continue
+    arg in [Stipple.CHANNELFIELDNAME, :modes__] && continue
     delete!(REACTIVE_STORAGE[__module__], arg)
   end
-  deletemode!(REACTIVE_STORAGE[__module__][:_modes], args...)
+  deletemode!(REACTIVE_STORAGE[__module__][:modes__], args...)
 
   update_storage(__module__)
 
@@ -241,8 +241,8 @@ function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); sour
   var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
   REACTIVE_STORAGE[m][var] = field_expr
 
-  reactive || setmode!(REACTIVE_STORAGE[m][:_modes], intmode, var)
-  reactive && setmode!(REACTIVE_STORAGE[m][:_modes], PUBLIC, var)
+  reactive || setmode!(REACTIVE_STORAGE[m][:modes__], intmode, var)
+  reactive && setmode!(REACTIVE_STORAGE[m][:modes__], PUBLIC, var)
 
   # remove cached type and instance, update pages
   update_storage(m)
@@ -555,7 +555,7 @@ function get_known_vars(M::Module)
 end
 
 function get_known_vars(::Type{M}) where M<:ReactiveModel
-  setdiff(fieldnames(Stipple.get_concrete_type(M)), [:channel__, :_modes])
+  setdiff(fieldnames(Stipple.get_concrete_type(M)), [:channel__, :modes__])
 end
 
 macro onchange(var, expr)
