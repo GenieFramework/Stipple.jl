@@ -129,6 +129,7 @@ export newapp
 export onbutton
 export @kwredef
 export init
+export isconnected
 
 #===#
 
