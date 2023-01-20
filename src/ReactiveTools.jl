@@ -487,6 +487,8 @@ function transform(expr, vars::Vector{Symbol}, test_fn::Function, replace_fn::Fu
             end
           elseif x.head == :ref && length(x.args) == 2 && x.args[2] == :!
             @capture(x.args[1], __model__.fieldname_[]) && (x.args[1] = :(__model__.$fieldname))
+          elseif x.head == :macrocall && x.args[1] == Symbol("@push")
+            x = :(push!(__model__))
           end
       end
       x
