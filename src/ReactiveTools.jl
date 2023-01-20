@@ -558,6 +558,7 @@ function get_known_vars(::Type{M}) where M<:ReactiveModel
   setdiff(fieldnames(Stipple.get_concrete_type(M)), [:channel__, :_modes])
 end
 
+macro onchange(var, expr)
   vars = wrap(vars, :tuple)
   expr = wrap(expr, :block)
 
