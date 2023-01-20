@@ -36,8 +36,8 @@ function DEFAULT_LAYOUT(; title::String = "Genie App")
       ._genie_logo {
         background:url('/stipple.jl/master/assets/img/genie-logo.img') no-repeat;background-size:40px;
         padding-top:22px;padding-right:10px;color:transparent;font-size:9pt;
-      ._genie .row .col-12 { width:50%;margin:auto; }
       }
+      ._genie .row .col-12 { width:50%;margin:auto; }
     </style>
   </head>
   <body>
