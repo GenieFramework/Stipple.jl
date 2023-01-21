@@ -75,7 +75,8 @@ macro modelname(expr)
   clear_type(__module__)
   ex = quote end
   if isdefined(__module__, expr)
-    push!(ex.args, :(Stipple.ReactiveTools.clear_handlers_fn($__module__, $expr)))
+    push!(ex.args, :(Stipple.ReactiveTools.delete_handlers_fn($__module__)))
+    push!(ex.args, :(Stipple.ReactiveTools.delete_events($expr)))
   end
   if isdefined(__module__, :__typename__) && __module__.__typename__ isa Ref{String}
     push!(ex.args, :(__typename__[] = $(string(expr))))
@@ -118,23 +119,33 @@ function bindings(m)
   REACTIVE_STORAGE[m]
 end
 
-function clear_handlers_fn(m::Module, ::Type{T}) where T
-  # clear handlers_fn
+function delete_handlers_fn(m::Module)
   if isdefined(m, :__GF_AUTO_HANDLERS__)
     Base.delete_method.(methods(m.__GF_AUTO_HANDLERS__))
   end
-  # clear event functions
-  Base.delete_method.(methods(Base.notify, (T, Val{T} where T, Any)))
-  Base.delete_method.(methods(Base.notify, (T, Val{T} where T)))
-  end
-
-function clear_handlers_fn(m::Module)  
-  haskey(TYPES, m) && TYPES[m] isa DataType && clear_handlers_fn(m, TYPES[m])
 end
+
+function delete_events(m::Module)
+  haskey(TYPES, m) && TYPES[m] isa DataType && delete_events(TYPES[m])
+end
+
+function delete_events(::Type{M}) where M
+  # delete event functions
+  mm = methods(Base.notify)
+  for m in mm
+    hasproperty(m.sig, :parameters) || continue
+    T =  m.sig.parameters[2]
+    if T <: M || T == Type{M} || T == Type{<:M}
+      Base.delete_method(m)
+    end
+  end
+  nothing
+ end
 
 function delete_handlers!(m::Module)
   delete!(HANDLERS, m)
-  clear_handlers_fn(m)
+  delete_handlers_fn(m)
+  delete_events(m)
   nothing
 end
 
@@ -452,6 +463,7 @@ macro handlers()
   handlers = init_handlers(__module__)
 
   quote
+    @handlers 
     function __GF_AUTO_HANDLERS__(__model__)
       $(handlers...)
 
@@ -465,30 +477,36 @@ macro handlers(expr)
   delete_handlers!(__module__)
 
   quote
-    $expr
-    
-    @handlers
+    @handlers nothing $expr __GF_AUTO_HANDLERS__
   end |> esc
 end
 
 macro handlers(typename, expr, handlers_fn_name = :handlers)
   expr = wrap(expr, :block)
-  index = [ex isa Expr && ex.head == :macrocall && ex.args[1] in Symbol.(["@onbutton", "@onchange"]) for ex in expr.args]
-  initcode = expr.args[.! index]
-  handlercode = quote end
+  handlercode = []
 
-  for ex in expr.args[index]
-    ex_index = isa.(ex.args, Union{Symbol, Expr})
-    if sum(ex_index) < 4
-      pos = findall(ex_index)[2]
-      insert!(ex.args, pos, typename)
-      push!(handlercode.args, @eval(__module__, $ex).args...)
+  for ex in expr.args
+    if ex isa Expr && ex.head == :macrocall && ex.args[1] in Symbol.(["@onbutton", "@onchange"])
+      ex_index = isa.(ex.args, Union{Symbol, Expr})
+      if sum(ex_index) < 4
+        pos = findall(ex_index)[2]
+        typename != :nothing && insert!(ex.args, pos, typename)
+        push!(handlercode, @eval(__module__, $ex).args...)
+      else
+        push!(handlercode, ex)
+      end
+    else
+      push!(handlercode, ex)
     end
   end
 
-  quote    
+  prefix = Expr[]
+  typename != :nothing && push!(prefix, :(Stipple.ReactiveTools.delete_events($typename)))
+  
+  quote
+    $(prefix...)
     function $handlers_fn_name(__model__)
-      $(handlercode.args...)
+      $(handlercode...)
 
       __model__
     end
@@ -728,19 +746,19 @@ macro mounted(expr)
   end)
 end
 
-macro event(M, event, expr)
+macro event(M, eventname, expr)
   known_vars = get_known_vars(@eval(__module__, $M))
 
   expr, used_vars = mask(expr, known_vars)
   expr = unmask(fieldnames_to_fieldcontent(expr, known_vars), known_vars)
-  T = event isa QuoteNode ? event : QuoteNode(event)
+  T = eventname isa QuoteNode ? eventname : QuoteNode(eventname)
   
   quote
     function Base.notify(__model__::$M, ::Val{$T}, @nospecialize(event))
         $expr
-      end
-  end |> esc
     end
+  end |> esc
+end
 
 macro event(event, expr)
   quote
