@@ -930,7 +930,7 @@ macro mixin(expr, prefix = "", postfix = "")
   values = getfield.(Ref(mix), fnames)
   output = quote end
   for (f, type, v) in zip(Symbol.(pre, fnames, post), fieldtypes(get_concrete_type(T)), values)
-    f in Symbol.(prefix, [:channel__, :_modes, AUTOFIELDS...], postfix) && continue
+    f in Symbol.(prefix, [:channel__, :modes__, AUTOFIELDS...], postfix) && continue
     v_copy = Stipple._deepcopy(v)
     push!(output.args, v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy))
   end

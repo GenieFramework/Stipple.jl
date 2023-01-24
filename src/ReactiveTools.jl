@@ -90,6 +90,7 @@ function Stipple.init_storage(m::Module)
   (m == @__MODULE__) && return nothing
   haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = Stipple.init_storage())
   haskey(TYPES, m) || (TYPES[m] = nothing)
+  REACTIVE_STORAGE[m]
 end
 
 function Stipple.setmode!(expr::Expr, mode::Int, fieldnames::Symbol...)
@@ -208,6 +209,7 @@ macro vars(expr)
   REACTIVE_STORAGE[__module__] = @eval(__module__, Stipple.@var_storage($expr))
 
   update_storage(__module__)
+  REACTIVE_STORAGE[__module__]
 end
 
 macro add_vars(expr)
@@ -224,11 +226,11 @@ macro model()
 end
 
 macro model(expr)
-  init_handlers(__module__)
-  init_storage(__module__)
-
   delete_bindings!(__module__)
   delete_handlers!(__module__)
+
+  init_handlers(__module__)
+  init_storage(__module__)
 
   quote
     $expr
@@ -257,6 +259,18 @@ function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); sour
 
   # remove cached type and instance, update pages
   update_storage(m)
+end
+
+function binding(expr::Expr, storage::LittleDict{Symbol, Expr}, @nospecialize(mode::Any = nothing); source = nothing, reactive = true, m::Module)
+  intmode = @eval Stipple $mode
+
+  var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
+  storage[var] = field_expr
+
+  reactive || setmode!(storage[:modes__], intmode, var)
+  reactive && setmode!(storage[:modes__], PUBLIC, var)
+
+  storage
 end
 
 # this macro needs to run in a macro where `expr`is already defined
@@ -303,19 +317,28 @@ macro in(flag, expr)
   esc(:($expr))
 end
 
+macro in(storage, flag, expr)
+  reactive = flag != :non_reactive
+  ex = [expr isa Symbol ? expr : copy(expr)]
+
+  quote
+    Stipple.ReactiveTools.binding($ex[1], $storage, :PUBLIC; source = $__source__, reactive = $reactive, m = $__module__)
+  end |> esc
+end
+
 macro in!(expr)
-  binding(expr, __module__, :PUBLIC; source = __source__)
+  binding(expr isa Symbol ? expr : copy(expr), __module__, :PUBLIC; source = __source__)
   @report_val()
 end
 
 macro in!(flag, expr)
   flag != :non_reactive && return esc(:(ReactiveTools.@in($expr)))
-  binding(expr, __module__, :PUBLIC; source = __source__, reactive = false)
+  binding(expr isa Symbol ? expr : copy(expr), __module__, :PUBLIC; source = __source__, reactive = false)
   @report_val()
 end
 
 macro out(expr)
-  binding(copy(expr), __module__, :READONLY; source = __source__)
+  binding(expr isa Symbol ? expr : copy(expr), __module__, :READONLY; source = __source__)
   # @define_var()
   esc(:($expr))
 end
@@ -323,20 +346,29 @@ end
 macro out(flag, expr)
   flag != :non_reactive && return esc(:(@out($expr)))
 
-  binding(copy(expr), __module__, :READONLY; source = __source__, reactive = false)
+  binding(expr isa Symbol ? expr : copy(expr), __module__, :READONLY; source = __source__, reactive = false)
   # @define_var()
   esc(:($expr))
 end
 
+macro out(storage, flag, expr)
+  reactive = flag != :non_reactive
+  ex = [expr isa Symbol ? expr : copy(expr)]
+
+  quote
+    Stipple.ReactiveTools.binding($ex[1], $storage, :READONLY; source = $__source__, reactive = $reactive, m = $__module__)
+  end |> esc
+end
+
 macro out!(expr)
-  binding(expr, __module__, :READONLY; source = __source__)
+  binding(expr isa Symbol ? expr : copy(expr), __module__, :READONLY; source = __source__)
   @report_val()
 end
 
 macro out!(flag, expr)
   flag != :non_reactive && return esc(:(@out($expr)))
 
-  binding(expr, __module__, :READONLY; source = __source__, reactive = false)
+  binding(expr isa Symbol ? expr : copy(expr), __module__, :READONLY; source = __source__, reactive = false)
   @report_val()
 end
 
@@ -348,6 +380,10 @@ macro readonly(flag, expr)
   esc(:(ReactiveTools.@out($flag, $expr)))
 end
 
+macro readonly(storage, flag, expr)
+  esc(:(ReactiveTools.@out($storage, $flag, $expr)))
+end
+
 macro readonly!(expr)
   esc(:(ReactiveTools.@out!($expr)))
 end
@@ -357,66 +393,84 @@ macro readonly!(flag, expr)
 end
 
 macro private(expr)
-  binding(copy(expr), __module__, :PRIVATE; source = __source__)
-  # @define_var()
+  binding(expr isa Symbol ? expr : copy(expr), __module__, :PRIVATE; source = __source__)
   esc(:($expr))
 end
 
 macro private(flag, expr)
   flag != :non_reactive && return esc(:(ReactiveTools.@private($expr)))
 
-  binding(copy(expr), __module__, :PRIVATE; source = __source__, reactive = false)
-  # @define_var()
+  binding(expr isa Symbol ? expr : copy(expr), __module__, :PRIVATE; source = __source__, reactive = false)
   esc(:($expr))
 end
 
+macro private(storage, flag, expr)
+  reactive = flag != :non_reactive
+  ex = [expr isa Symbol ? expr : copy(expr)]
+
+  quote
+    Stipple.ReactiveTools.binding($ex[1], $storage, :PRIVATE; source = $__source__, reactive = $reactive, m = $__module__)
+  end |> esc
+end
+
 macro private!(expr)
-  binding(expr, __module__, :PRIVATE; source = __source__)
+  binding(expr isa Symbol ? expr : copy(expr), __module__, :PRIVATE; source = __source__)
   @report_val()
 end
 
 macro private!(flag, expr)
   flag != :non_reactive && return esc(:(ReactiveTools.@private($expr)))
 
-  binding(expr, __module__, :PRIVATE; source = __source__, reactive = false)
+  binding(expr isa Symbol ? expr : copy(expr), __module__, :PRIVATE; source = __source__, reactive = false)
   @report_val()
 end
 
 macro jsfn(expr)
-  binding(copy(expr), __module__, :JSFUNCTION; source = __source__)
-  # @define_var()
+  binding(expr isa Symbol ? expr : copy(expr), __module__, :JSFUNCTION; source = __source__)
   esc(:($expr))
 end
 
+macro jsfn(storage, flag, expr)
+  reactive = flag != :non_reactive
+  ex = [expr isa Symbol ? expr : copy(expr)]
+
+  quote
+    Stipple.ReactiveTools.binding($ex[1], $storage, :JSFUNCTION; source = $__source__, reactive = $reactive, m = $__module__)
+  end |> esc
+end
+
 macro jsfn!(expr)
-  binding(expr, __module__, :JSFUNCTION; source = __source__)
+  binding(expr isa Symbol ? expr : copy(expr), __module__, :JSFUNCTION; source = __source__)
   @report_val()
 end
 
 macro mix_in(expr, prefix = "", postfix = "")
-  init_storage(__module__)
+  storage = init_storage(__module__)
 
+  quote
+    Stipple.ReactiveTools.update_storage($__module__)
+    Stipple.ReactiveTools.@mix_in $storage $expr $prefix $postfix
+  end
+end
+
+macro mix_in(storage, expr, prefix, postfix)
   if hasproperty(expr, :head) && expr.head == :(::)
-      prefix = string(expr.args[1])
-      expr = expr.args[2]
+    prefix = string(expr.args[1])
+    expr = expr.args[2]
   end
 
   x = Core.eval(__module__, expr)
   pre = Core.eval(__module__, prefix)
   post = Core.eval(__module__, postfix)
 
-  T = x isa DataType ? x : typeof(x)
-  mix = x isa DataType ? x() : x
-  values = getfield.(Ref(mix), fieldnames(T))
-  ff = Symbol.(pre, fieldnames(T), post)
-  for (f, type, v) in zip(ff, fieldtypes(T), values)
-      v_copy = Stipple._deepcopy(v)
-      expr = :($f::$type = Stipple._deepcopy(v))
-      REACTIVE_STORAGE[__module__][f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy)
-  end
+  T = x isa DataType ? Stipple.get_concrete_type(x) : typeof(x)
+  
+  mixin_storage = @eval __module__ Stipple.model_to_storage($expr, $prefix, $postfix)
 
-  update_storage(__module__)
-  esc(Stipple.Observables.to_value.(values))
+  quote
+    merge!($storage, Stipple.merge_storage($storage, $mixin_storage))
+    $mixin_storage
+  end |> esc
 end
 
 #===#
@@ -463,7 +517,6 @@ macro handlers()
   handlers = init_handlers(__module__)
 
   quote
-    @handlers 
     function __GF_AUTO_HANDLERS__(__model__)
       $(handlers...)
 
@@ -473,43 +526,78 @@ macro handlers()
 end
 
 macro handlers(expr)
-  init_handlers(__module__)
   delete_handlers!(__module__)
+  init_handlers(__module__)
 
   quote
-    @handlers nothing $expr __GF_AUTO_HANDLERS__
+    $expr
+
+    @handlers
+  end |> esc
+end
+
+macro model(typename, expr, handlers_fn_name = :handlers)
+  storage = init_storage()
+  @eval __module__ @type $typename $storage
+  quote
+    Stipple.@type $typename $storage
+
+    Stipple.ReactiveTools.@handlers $typename $expr $handlers_fn_name
   end |> esc
 end
 
 macro handlers(typename, expr, handlers_fn_name = :handlers)
   expr = wrap(expr, :block)
+  i_start = 1
   handlercode = []
+  initcode = quote end
+  storage = isdefined(__module__, typename) ? @eval(__module__, Stipple.model_to_storage($__module__.$typename)) : Stipple.init_storage()
 
-  for ex in expr.args
-    if ex isa Expr && ex.head == :macrocall && ex.args[1] in Symbol.(["@onbutton", "@onchange"])
-      ex_index = isa.(ex.args, Union{Symbol, Expr})
-      if sum(ex_index) < 4
-        pos = findall(ex_index)[2]
-        typename != :nothing && insert!(ex.args, pos, typename)
-        push!(handlercode, @eval(__module__, $ex).args...)
+  for (i, ex) in enumerate(expr.args)
+    if ex isa Expr
+      if ex.head == :macrocall && ex.args[1] in Symbol.(["@onbutton", "@onchange"])
+        ex_index = isa.(ex.args, Union{Symbol, Expr})
+        if sum(ex_index) < 4
+          pos = findall(ex_index)[2]
+          insert!(ex.args, pos, typename)
+        end
+        push!(handlercode, expr.args[i_start:i]...)
       else
-        push!(handlercode, ex)
+        if ex.head == :macrocall && ex.args[1] in Symbol.(["@in", "@out", "@private", "@readonly", "@jsfn", "@mixin"])
+          ex_index = isa.(ex.args, Union{Symbol, Expr})
+          if ex.args[1] != Symbol("@mix_in")
+            pos = findall(ex_index)[2]
+            sum(ex_index) == 2 && insert!(ex.args, 2, :_)
+            insert!(ex.args, pos, storage)
+          end
+        end
+        push!(initcode.args, expr.args[i_start:i]...)
       end
-    else
-      push!(handlercode, ex)
+      i_start = i + 1
     end
   end
 
-  prefix = Expr[]
-  typename != :nothing && push!(prefix, :(Stipple.ReactiveTools.delete_events($typename)))
-  
+  @eval __module__ $(initcode)
+  @eval __module__ Stipple.@type $typename $storage
+
+  handlercode_final = []
+  for ex in handlercode
+    if ex isa Expr
+      push!(handlercode_final, @eval(__module__, $ex).args...)
+    else
+      push!(handlercode_final, ex)
+    end
+  end
+
   quote
-    $(prefix...)
+    Stipple.ReactiveTools.delete_events($typename)
+
     function $handlers_fn_name(__model__)
-      $(handlercode...)
+      $(handlercode_final...)
 
       __model__
     end
+    ($typename, $handlers_fn_name)
   end |> esc
 end
 
