@@ -318,14 +318,13 @@ end
 macro in(location, flag, expr)
   reactive = flag != :non_reactive
   ex = [expr isa Symbol ? expr : copy(expr)]
-  storage, ismodeltype = Core.eval(__module__, quote
-    ismodeltype = $location isa DataType && $location <: ReactiveModel
-    (ismodeltype ? Stipple.model_to_storage($location) : $location, ismodeltype)
+  storage, ismodeltype = ! isdefined(__module__, location) ? (init_storage(), true) : Core.eval(__module__, quote
+    $location isa DataType && $location <: ReactiveModel ? (Stipple.model_to_storage($location), true) : ($location, false)
   end)
-  
+
   quote
     Stipple.ReactiveTools.binding($ex[1], $storage, :PUBLIC; source = $__source__, reactive = $reactive, m = $__module__)
-    $ismodeltype && @eval(@type($location, $storage))
+    $ismodeltype ? @eval(@type($location, $storage)) : $__module__.$location
   end |> esc
 end
 
@@ -355,14 +354,13 @@ end
 macro out(location, flag, expr)
   reactive = flag != :non_reactive
   ex = [expr isa Symbol ? expr : copy(expr)]
-  storage, ismodeltype = Core.eval(__module__, quote
-    ismodeltype = $location isa DataType && $location <: ReactiveModel
-    (ismodeltype ? Stipple.model_to_storage($location) : $location, ismodeltype)
+  storage, ismodeltype = ! isdefined(__module__, location) ? (init_storage(), true) : Core.eval(__module__, quote
+    $location isa DataType && $location <: ReactiveModel ? (Stipple.model_to_storage($location), true) : ($location, false)
   end)
   
   quote
     Stipple.ReactiveTools.binding($ex[1], $storage, :READONLY; source = $__source__, reactive = $reactive, m = $__module__)
-    $ismodeltype && @eval(@type($location, $storage))
+    $ismodeltype ? @eval(@type($location, $storage)) : $__module__.$location
   end |> esc
 end
 
@@ -413,14 +411,13 @@ end
 macro private(location, flag, expr)
   reactive = flag != :non_reactive
   ex = [expr isa Symbol ? expr : copy(expr)]
-  storage, ismodeltype = Core.eval(__module__, quote
-    ismodeltype = $location isa DataType && $location <: ReactiveModel
-    (ismodeltype ? Stipple.model_to_storage($location) : $location, ismodeltype)
+  storage, ismodeltype = ! isdefined(__module__, location) ? (init_storage(), true) : Core.eval(__module__, quote
+    $location isa DataType && $location <: ReactiveModel ? (Stipple.model_to_storage($location), true) : ($location, false)
   end)
   
   quote
     Stipple.ReactiveTools.binding($ex[1], $storage, :PRIVATE; source = $__source__, reactive = $reactive, m = $__module__)
-    $ismodeltype && @eval(@type($location, $storage))
+    $ismodeltype ? @eval(@type($location, $storage)) : $__module__.$location
   end |> esc
 end
 
@@ -451,14 +448,13 @@ end
 macro jsfn(location, flag, expr)
   reactive = flag != :non_reactive
   ex = [expr isa Symbol ? expr : copy(expr)]
-  storage, ismodeltype = Core.eval(__module__, quote
-    ismodeltype = $location isa DataType && $location <: ReactiveModel
-    (ismodeltype ? Stipple.model_to_storage($location) : $location, ismodeltype)
+  storage, ismodeltype = ! isdefined(__module__, location) ? (init_storage(), true) : Core.eval(__module__, quote
+    $location isa DataType && $location <: ReactiveModel ? (Stipple.model_to_storage($location), true) : ($location, false)
   end)
   
   quote
     Stipple.ReactiveTools.binding($ex[1], $storage, :JSFUNCTION; source = $__source__, reactive = $reactive, m = $__module__)
-    $ismodeltype && @eval(@type($location, $storage))
+    $ismodeltype ? @eval(@type($location, $storage)) : $__module__.$location
   end |> esc
 end
 
@@ -494,9 +490,8 @@ macro mix_in(location, expr, prefix, postfix)
     expr = expr.args[2]
   end
 
-  storage, ismodeltype = Core.eval(__module__, quote
-    ismodeltype = $location isa DataType && $location <: ReactiveModel
-    (ismodeltype ? Stipple.model_to_storage($location) : $location, ismodeltype)
+  storage, ismodeltype = ! isdefined(__module__, location) ? (init_storage(), true) : Core.eval(__module__, quote
+    $location isa DataType && $location <: ReactiveModel ? (Stipple.model_to_storage($location), true) : ($location, false)
   end)
 
   x = Core.eval(__module__, expr)
