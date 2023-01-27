@@ -335,6 +335,7 @@ macro var_storage(expr, new_inputmode = :auto)
 end
 
 macro type(modelname, storage)
+  modelname isa DataType && (modelname = modelname.name.name)
   modelconst = Symbol(modelname, '!')
   output = @eval(__module__, values($storage))
 

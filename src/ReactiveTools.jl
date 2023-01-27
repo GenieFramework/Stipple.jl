@@ -9,7 +9,7 @@ import Stipple: deletemode!, parse_expression!, init_storage
 
 export @readonly, @private, @in, @out, @jsfn, @readonly!, @private!, @in!, @out!, @jsfn!
 export @mix_in, @clear, @vars, @add_vars, @clear_vars, @clear_handlers
-export @page, @rstruct, @type, @handlers, @init, @model, @onchange, @onchangeany, @onbutton
+export @page, @rstruct, @type, @handlers, @init, @app, @model, @onchange, @onchangeany, @onbutton
 export DEFAULT_LAYOUT, Page
 
 const REACTIVE_STORAGE = LittleDict{Module,LittleDict{Symbol,Expr}}()
@@ -70,7 +70,7 @@ function model_typename(m::Module)
   isdefined(m, :__typename__) ? m.__typename__[] : "$(m)_ReactiveModel"
 end
 
-macro modelname(expr)
+macro appname(expr)
   expr isa Symbol || (expr = Symbol(@eval(__module__, $expr)))
   clear_type(__module__)
   ex = quote end
@@ -225,7 +225,7 @@ macro model()
   end)
 end
 
-macro model(expr)
+macro app(expr)
   delete_bindings!(__module__)
   delete_handlers!(__module__)
 
@@ -304,171 +304,179 @@ end
 # @in a = 2
 # @in a::Vector = [1, 2, 3]
 # @in a::Vector{Int} = [1, 2, 3]
-macro in(expr)
-  binding(expr isa Symbol ? expr : copy(expr), __module__, :PUBLIC; source = __source__)
-  esc(:($expr))
-end
 
-macro in(flag, expr)
-  flag != :non_reactive && return esc(:(ReactiveTools.@in($flag, _, $expr)))
-  binding(copy(expr), __module__, :PUBLIC; source = __source__, reactive = false)
-  esc(:($expr))
-end
+for (fn, mode) in [(:in, :PUBLIC), (:out, :READONLY), (:jsnfn, :JSFUNCTION), (:private, :PRIVATE)]
+  fn! = Symbol(fn, "!")
+  Core.eval(@__MODULE__, quote
 
-macro in(location, flag, expr)
-  reactive = flag != :non_reactive
-  ex = [expr isa Symbol ? expr : copy(expr)]
-  storage, ismodeltype = ! isdefined(__module__, location) ? (init_storage(), true) : Core.eval(__module__, quote
-    $location isa DataType && $location <: ReactiveModel ? (Stipple.model_to_storage($location), true) : ($location, false)
+    macro $fn(expr)
+      binding(expr isa Symbol ? expr : copy(expr), __module__, $mode; source = __source__)
+      esc(:($expr))
+    end
+
+    macro $fn(flag, expr)
+      flag != :non_reactive && return esc(:(ReactiveTools.@in($flag, _, $expr)))
+      binding(expr isa Symbol ? expr : copy(expr), __module__, $mode; source = __source__, reactive = false)
+      esc(:($expr))
+    end
+
+    macro $fn(location, flag, expr)
+      reactive = flag != :non_reactive
+      ex = [expr isa Symbol ? expr : copy(expr)]
+      loc = location isa Symbol ? QuoteNode(location) : location
+
+      quote
+        local location = isdefined($__module__, $loc) ? eval($loc) : $loc
+        local storage = location isa DataType ? Stipple.model_to_storage(location) : location isa LittleDict ? location : Stipple.init_storage()
+
+        Stipple.ReactiveTools.binding($ex[1], storage, $$mode; source = $__source__, reactive = $reactive, m = $__module__)
+        location isa DataType || location isa Symbol ? eval(:(@type($$loc, $storage))) : location
+      end |> esc
+    end
+
+    macro $fn!(expr)
+      binding(expr isa Symbol ? expr : copy(expr), __module__, $mode; source = __source__)
+      @report_val()
+    end
+
+    macro $fn!(flag, expr)
+      flag != :non_reactive && return esc(:(ReactiveTools.@in($flag, _, $expr)))
+      binding(expr isa Symbol ? expr : copy(expr), __module__, $mode; source = __source__, reactive = false)
+      @report_val()
+    end
   end)
-
-  quote
-    Stipple.ReactiveTools.binding($ex[1], $storage, :PUBLIC; source = $__source__, reactive = $reactive, m = $__module__)
-    $ismodeltype ? @eval(@type($location, $storage)) : $__module__.$location
-  end |> esc
 end
 
-macro in!(expr)
-  binding(expr isa Symbol ? expr : copy(expr), __module__, :PUBLIC; source = __source__)
-  @report_val()
-end
+# macro out(expr)
+#   binding(expr isa Symbol ? expr : copy(expr), __module__, :READONLY; source = __source__)
+#   esc(:($expr))
+# end
 
-macro in!(flag, expr)
-  flag != :non_reactive && return esc(:(ReactiveTools.@in($flag, _, $expr)))
-  binding(expr isa Symbol ? expr : copy(expr), __module__, :PUBLIC; source = __source__, reactive = false)
-  @report_val()
-end
+# macro out(flag, expr)
+#   flag != :non_reactive && return esc(:(@out($flag, _, $expr)))
 
-macro out(expr)
-  binding(expr isa Symbol ? expr : copy(expr), __module__, :READONLY; source = __source__)
-  esc(:($expr))
-end
+#   binding(expr isa Symbol ? expr : copy(expr), __module__, :READONLY; source = __source__, reactive = false)
+#   esc(:($expr))
+# end
 
-macro out(flag, expr)
-  flag != :non_reactive && return esc(:(@out($flag, _, $expr)))
-
-  binding(expr isa Symbol ? expr : copy(expr), __module__, :READONLY; source = __source__, reactive = false)
-  esc(:($expr))
-end
-
-macro out(location, flag, expr)
-  reactive = flag != :non_reactive
-  ex = [expr isa Symbol ? expr : copy(expr)]
-  storage, ismodeltype = ! isdefined(__module__, location) ? (init_storage(), true) : Core.eval(__module__, quote
-    $location isa DataType && $location <: ReactiveModel ? (Stipple.model_to_storage($location), true) : ($location, false)
-  end)
+# macro out(location, flag, expr)
+#   reactive = flag != :non_reactive
+#   ex = [expr isa Symbol ? expr : copy(expr)]
+#   storage, ismodeltype = ! isdefined(__module__, location) ? (init_storage(), true) : Core.eval(__module__, quote
+#     $location isa DataType && $location <: ReactiveModel ? (Stipple.model_to_storage($location), true) : ($location, false)
+#   end)
   
-  quote
-    Stipple.ReactiveTools.binding($ex[1], $storage, :READONLY; source = $__source__, reactive = $reactive, m = $__module__)
-    $ismodeltype ? @eval(@type($location, $storage)) : $__module__.$location
-  end |> esc
-end
+#   quote
+#     Stipple.ReactiveTools.binding($ex[1], $storage, :READONLY; source = $__source__, reactive = $reactive, m = $__module__)
+#     $ismodeltype ? @eval(@type($location, $storage)) : $__module__.$location
+#   end |> esc
+# end
 
-macro out!(expr)
-  binding(expr isa Symbol ? expr : copy(expr), __module__, :READONLY; source = __source__)
-  @report_val()
-end
+# macro out!(expr)
+#   binding(expr isa Symbol ? expr : copy(expr), __module__, :READONLY; source = __source__)
+#   @report_val()
+# end
 
-macro out!(flag, expr)
-  flag != :non_reactive && return esc(:(@out($flag, _, $expr)))
+# macro out!(flag, expr)
+#   flag != :non_reactive && return esc(:(@out($flag, _, $expr)))
 
-  binding(expr isa Symbol ? expr : copy(expr), __module__, :READONLY; source = __source__, reactive = false)
-  @report_val()
-end
+#   binding(expr isa Symbol ? expr : copy(expr), __module__, :READONLY; source = __source__, reactive = false)
+#   @report_val()
+# end
 
-macro readonly(expr)
-  esc(:(ReactiveTools.@out($expr)))
-end
+# macro readonly(expr)
+#   esc(:(ReactiveTools.@out($expr)))
+# end
 
-macro readonly(flag, expr)
-  esc(:(ReactiveTools.@out($flag, $expr)))
-end
+# macro readonly(flag, expr)
+#   esc(:(ReactiveTools.@out($flag, $expr)))
+# end
 
-macro readonly(storage, flag, expr)
-  esc(:(ReactiveTools.@out($storage, $flag, $expr)))
-end
+# macro readonly(storage, flag, expr)
+#   esc(:(ReactiveTools.@out($storage, $flag, $expr)))
+# end
 
-macro readonly!(expr)
-  esc(:(ReactiveTools.@out!($expr)))
-end
+# macro readonly!(expr)
+#   esc(:(ReactiveTools.@out!($expr)))
+# end
 
-macro readonly!(flag, expr)
-  esc(:(ReactiveTools.@out!($flag, $expr)))
-end
+# macro readonly!(flag, expr)
+#   esc(:(ReactiveTools.@out!($flag, $expr)))
+# end
 
-macro private(expr)
-  binding(expr isa Symbol ? expr : copy(expr), __module__, :PRIVATE; source = __source__)
-  esc(:($expr))
-end
+# macro private(expr)
+#   binding(expr isa Symbol ? expr : copy(expr), __module__, :PRIVATE; source = __source__)
+#   esc(:($expr))
+# end
 
-macro private(flag, expr)
-  flag != :non_reactive && return esc(:(ReactiveTools.@private($flag, _, $expr)))
+# macro private(flag, expr)
+#   flag != :non_reactive && return esc(:(ReactiveTools.@private($flag, _, $expr)))
 
-  binding(expr isa Symbol ? expr : copy(expr), __module__, :PRIVATE; source = __source__, reactive = false)
-  esc(:($expr))
-end
+#   binding(expr isa Symbol ? expr : copy(expr), __module__, :PRIVATE; source = __source__, reactive = false)
+#   esc(:($expr))
+# end
 
-macro private(location, flag, expr)
-  reactive = flag != :non_reactive
-  ex = [expr isa Symbol ? expr : copy(expr)]
-  storage, ismodeltype = ! isdefined(__module__, location) ? (init_storage(), true) : Core.eval(__module__, quote
-    $location isa DataType && $location <: ReactiveModel ? (Stipple.model_to_storage($location), true) : ($location, false)
-  end)
+# macro private(location, flag, expr)
+#   reactive = flag != :non_reactive
+#   ex = [expr isa Symbol ? expr : copy(expr)]
+#   storage, ismodeltype = ! isdefined(__module__, location) ? (init_storage(), true) : Core.eval(__module__, quote
+#     $location isa DataType && $location <: ReactiveModel ? (Stipple.model_to_storage($location), true) : ($location, false)
+#   end)
   
-  quote
-    Stipple.ReactiveTools.binding($ex[1], $storage, :PRIVATE; source = $__source__, reactive = $reactive, m = $__module__)
-    $ismodeltype ? @eval(@type($location, $storage)) : $__module__.$location
-  end |> esc
-end
+#   quote
+#     Stipple.ReactiveTools.binding($ex[1], $storage, :PRIVATE; source = $__source__, reactive = $reactive, m = $__module__)
+#     $ismodeltype ? @eval(@type($location, $storage)) : $__module__.$location
+#   end |> esc
+# end
 
-macro private!(expr)
-  binding(expr isa Symbol ? expr : copy(expr), __module__, :PRIVATE; source = __source__)
-  @report_val()
-end
+# macro private!(expr)
+#   binding(expr isa Symbol ? expr : copy(expr), __module__, :PRIVATE; source = __source__)
+#   @report_val()
+# end
 
-macro private!(flag, expr)
-  flag != :non_reactive && return esc(:(ReactiveTools.@private($flag, _, $expr)))
+# macro private!(flag, expr)
+#   flag != :non_reactive && return esc(:(ReactiveTools.@private($flag, _, $expr)))
 
-  binding(expr isa Symbol ? expr : copy(expr), __module__, :PRIVATE; source = __source__, reactive = false)
-  @report_val()
-end
+#   binding(expr isa Symbol ? expr : copy(expr), __module__, :PRIVATE; source = __source__, reactive = false)
+#   @report_val()
+# end
 
-macro jsfn(expr)
-  binding(expr isa Symbol ? expr : copy(expr), __module__, :JSFUNCTION; source = __source__)
-  esc(:($expr))
-end
+# macro jsfn(expr)
+#   binding(expr isa Symbol ? expr : copy(expr), __module__, :JSFUNCTION; source = __source__)
+#   esc(:($expr))
+# end
 
-macro jsfn(flag, expr)
-  flag != :non_reactive && return esc(:(ReactiveTools.@jsfn($flag, _, $expr)))
+# macro jsfn(flag, expr)
+#   flag != :non_reactive && return esc(:(ReactiveTools.@jsfn($flag, _, $expr)))
 
-  binding(expr isa Symbol ? expr : copy(expr), __module__, :JSFUNCTION; source = __source__, reactive = false)
-  esc(:($expr))
-end
+#   binding(expr isa Symbol ? expr : copy(expr), __module__, :JSFUNCTION; source = __source__, reactive = false)
+#   esc(:($expr))
+# end
 
-macro jsfn(location, flag, expr)
-  reactive = flag != :non_reactive
-  ex = [expr isa Symbol ? expr : copy(expr)]
-  storage, ismodeltype = ! isdefined(__module__, location) ? (init_storage(), true) : Core.eval(__module__, quote
-    $location isa DataType && $location <: ReactiveModel ? (Stipple.model_to_storage($location), true) : ($location, false)
-  end)
+# macro jsfn(location, flag, expr)
+#   reactive = flag != :non_reactive
+#   ex = [expr isa Symbol ? expr : copy(expr)]
+#   storage, ismodeltype = ! isdefined(__module__, location) ? (init_storage(), true) : Core.eval(__module__, quote
+#     $location isa DataType && $location <: ReactiveModel ? (Stipple.model_to_storage($location), true) : ($location, false)
+#   end)
   
-  quote
-    Stipple.ReactiveTools.binding($ex[1], $storage, :JSFUNCTION; source = $__source__, reactive = $reactive, m = $__module__)
-    $ismodeltype ? @eval(@type($location, $storage)) : $__module__.$location
-  end |> esc
-end
+#   quote
+#     Stipple.ReactiveTools.binding($ex[1], $storage, :JSFUNCTION; source = $__source__, reactive = $reactive, m = $__module__)
+#     $ismodeltype ? @eval(@type($location, $storage)) : $__module__.$location
+#   end |> esc
+# end
 
-macro jsfn!(expr)
-  binding(expr isa Symbol ? expr : copy(expr), __module__, :JSFUNCTION; source = __source__)
-  @report_val()
-end
+# macro jsfn!(expr)
+#   binding(expr isa Symbol ? expr : copy(expr), __module__, :JSFUNCTION; source = __source__)
+#   @report_val()
+# end
 
-macro jsfn!(flag, expr)
-  flag != :non_reactive && return esc(:(ReactiveTools.@jsfn!($flag, _, $expr)))
+# macro jsfn!(flag, expr)
+#   flag != :non_reactive && return esc(:(ReactiveTools.@jsfn!($flag, _, $expr)))
 
-  binding(expr isa Symbol ? expr : copy(expr), __module__, :JSFUNCTION; source = __source__, reactive = false)
-  @report_val()
-end
+#   binding(expr isa Symbol ? expr : copy(expr), __module__, :JSFUNCTION; source = __source__, reactive = false)
+#   @report_val()
+# end
 
 macro mix_in(expr, prefix = "", postfix = "")
   # if prefix is not a String then call the @mix_in version for generic model types
@@ -489,23 +497,22 @@ macro mix_in(location, expr, prefix, postfix)
     prefix = string(expr.args[1])
     expr = expr.args[2]
   end
-
-  storage, ismodeltype = ! isdefined(__module__, location) ? (init_storage(), true) : Core.eval(__module__, quote
-    $location isa DataType && $location <: ReactiveModel ? (Stipple.model_to_storage($location), true) : ($location, false)
-  end)
-
-  x = Core.eval(__module__, expr)
-  pre = Core.eval(__module__, prefix)
-  post = Core.eval(__module__, postfix)
-
-  T = x isa DataType ? Stipple.get_concrete_type(x) : typeof(x)
+  loc = location isa Symbol ? QuoteNode(location) : location
   
-  mixin_storage = @eval __module__ Stipple.model_to_storage($expr, $prefix, $postfix)
-
+  # storage, ismodeltype = ! isdefined(__module__, location) ? (init_storage(), true) : Core.eval(__module__, quote
+  #   $location isa DataType && $location <: ReactiveModel ? (Stipple.model_to_storage($location), true) : ($location, false)
+  # end)
+  
+  x = Core.eval(__module__, expr)
   quote
-    merge!($storage, Stipple.merge_storage($storage, $mixin_storage))
-    $ismodeltype && @eval(@type($location, $storage))
-    $mixin_storage
+    local location = $loc isa Symbol && isdefined($__module__, $loc) ? $__module__.$(loc isa QuoteNode ? loc.value : loc) : $loc
+    local storage = location isa DataType ? Stipple.model_to_storage(location) : location isa LittleDict ? location : Stipple.init_storage()
+    M = $x isa DataType ? $x : typeof($x) # really needed?
+    local mixin_storage = Stipple.model_to_storage(M, $(QuoteNode(prefix)), $postfix)
+    
+    merge!(storage, Stipple.merge_storage(storage, mixin_storage))
+    location isa DataType || location isa Symbol ? eval(:(@type($$loc, $storage))) : location
+    mixin_storage
   end |> esc
 end
 
@@ -572,7 +579,7 @@ macro handlers(expr)
   end |> esc
 end
 
-macro model(typename, expr, handlers_fn_name = :handlers)
+macro app(typename, expr, handlers_fn_name = :handlers)
   storage = init_storage()
   @eval __module__ @type $typename $storage
   quote
@@ -587,7 +594,7 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
   i_start = 1
   handlercode = []
   initcode = quote end
-  storage = isdefined(__module__, typename) ? @eval(__module__, Stipple.model_to_storage($__module__.$typename)) : Stipple.init_storage()
+  storage = isdefined(__module__, typename) ? @eval(__module__, Stipple.model_to_storage($typename)) : Stipple.init_storage()
 
   for (i, ex) in enumerate(expr.args)
     if ex isa Expr
@@ -599,12 +606,12 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
         end
         push!(handlercode, expr.args[i_start:i]...)
       else
-        if ex.head == :macrocall && ex.args[1] in Symbol.(["@in", "@out", "@private", "@readonly", "@jsfn", "@mixin"])
-          ex_index = isa.(ex.args, Union{Symbol, Expr})
-          if ex.args[1] != Symbol("@mix_in")
+        if ex.head == :macrocall && ex.args[1] in Symbol.(["@in", "@out", "@private", "@readonly", "@jsfn", "@mix_in"])
+          if true #ex.args[1] != Symbol("@mix_in")
+            ex_index = isa.(ex.args, Union{Symbol, Expr})
             pos = findall(ex_index)[2]
-            sum(ex_index) == 2 && insert!(ex.args, 2, :_)
-            insert!(ex.args, pos, storage)
+            sum(ex_index) == 2 && ex.args[1] != Symbol("@mix_in") && insert!(ex.args, pos, :_)
+            insert!(ex.args, pos, :__storage__)
           end
         end
         push!(initcode.args, expr.args[i_start:i]...)
@@ -613,8 +620,11 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
     end
   end
 
-  @eval __module__ $(initcode)
-  @eval __module__ Stipple.@type $typename $storage
+  initcode = quote
+    __storage__ = $storage
+    $(initcode.args...)
+    __storage__
+  end
 
   handlercode_final = []
   for ex in handlercode
@@ -626,6 +636,9 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
   end
 
   quote
+    $initcode
+    @eval Stipple.@type($typename, __storage__)
+
     Stipple.ReactiveTools.delete_events($typename)
 
     function $handlers_fn_name(__model__)
