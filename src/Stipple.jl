@@ -127,7 +127,6 @@ export PRIVATE, PUBLIC, READONLY, JSFUNCTION, NON_REACTIVE
 export NO_WATCHER, NO_BACKEND_WATCHER, NO_FRONTEND_WATCHER
 export newapp
 export onbutton
-export @kwredef
 export init
 export isconnected
 
@@ -866,9 +865,12 @@ _deepcopy(x) = deepcopy(x)
 function register_mixin end
 
 """
-    macro mixin(expr, prefix, postfix)
+    macro mixin_old(expr, prefix, postfix)
 
-`@mixin` is used for inserting structs or struct types
+`@mixin_old` is the former `@mixin` which has been refactored to be merged with the new reactive API.
+It is deprecated and will be removed in the next major version of Stipple.
+
+`@mixin_old` is used for inserting structs or struct types
 in `ReactiveModel`s or other `Base.@kwdef` structs.
 
 There are two modes of usage:
@@ -914,7 +916,7 @@ This is typically used for cases when there is a main entry with options. In tha
 determines the name of the main field and the other fieldnames are typically prefixed with a hyphen.
 ```
 """
-macro mixin(expr, prefix = "", postfix = "")
+macro mixin_old(expr, prefix = "", postfix = "")
   if hasproperty(expr, :head) && expr.head == :(::)
       prefix = string(expr.args[1])
       expr = expr.args[2]
@@ -937,10 +939,6 @@ macro mixin(expr, prefix = "", postfix = "")
 
   esc(:($output))
 end
-
-export @mixin
-
-export off!, nlistener
 
 """
     nlistener(@nospecialize(o::Observables.AbstractObservable)) = length(Observables.listeners(o))

@@ -122,8 +122,10 @@ end
 """
 abstract type ReactiveModel end
 
+export @vars, @add_vars, @define_mixin
 
-export @reactors, @reactive, @reactive!, @vars, @add_vars, @define_mixin, @old_reactive, @old_reactive!
+# deprecated
+export @reactive, @reactive!, @old_reactive, @old_reactive!
 export ChannelName, getchannel
 
 const ChannelName = String
@@ -311,7 +313,7 @@ macro var_storage(expr, new_inputmode = :auto)
 
         storage[var] = ex
       else
-        # parse @mixin / @mix_in as @mixin or @mix_in wouldn't work here
+        # parse @mixin call, which is now only defined in ReactiveTools, but wouldn't work here
         if e.head == :macrocall && (e.args[1] == Symbol("@mixin") || e.args[1] == Symbol("@mix_in"))
           e.args = filter!(x -> ! isa(x, LineNumberNode), e.args)
           prefix = postfix = ""
@@ -341,10 +343,11 @@ macro type(modelname, storage)
 
   esc(quote
       abstract type $modelname <: Stipple.ReactiveModel end
-      $modelname() = Base.invokelatest(Stipple.get_concrete_type($modelname))
       Stipple.@kwredef mutable struct $modelconst <: $modelname
-          $(output...)
+        $(output...)
       end
+      $modelname() = $modelconst()
+      Stipple.get_concrete_type(::Type{$modelname}) = $modelconst
 
       delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
       Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
@@ -432,14 +435,11 @@ macro reactive!(expr)
   model = init(MyDashboard) |> accessmode_from_pattern! |> handlers |> ui |> html
   ```
   """
-
+  @warn warning
   output = @eval(__module__, values(Stipple.@var_storage($(expr.args[3]), false)))
   expr.args[3] = quote $(output...) end
 
-  esc(quote
-    @warn $warning
-    Stipple.@kwredef $expr
-  end)
+  esc(:(Stipple.@kwredef $expr))
 end
 
 macro reactive(expr)
@@ -454,7 +454,7 @@ macro reactive(expr)
   ```
 
   """
-
+  @warn warning
   output = @eval(__module__, values(Stipple.@var_storage($(expr.args[3]), false)))
   expr.args[3] = quote $(output...) end
 
