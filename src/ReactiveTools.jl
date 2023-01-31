@@ -11,7 +11,7 @@ import Stipple: deletemode!, parse_expression!, init_storage
 export @readonly, @private, @in, @out, @jsfn, @readonly!, @private!, @in!, @out!, @jsfn!, @mixin
 
 #definition of handlers/events
-export @onchange, @onbutton, @event
+export @onchange, @onbutton, @event, @notify
 
 # deletion
 export @clear, @clear_vars, @clear_handlers
@@ -834,6 +834,16 @@ macro add_client_data(expr)
       Stipple.client_data(::M) = merge(d1, d2)
     end
   end)
+end
+
+macro notify(args...)
+  for arg in args
+    arg isa Expr && arg.head == :(=) && (arg.head = :kw)
+  end
+
+  quote
+    Base.notify(__model__, $(args...))
+  end |> esc
 end
 
 end
