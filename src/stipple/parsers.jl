@@ -33,7 +33,7 @@ function stipple_parse(::Type{Symbol}, s::String)
   Symbol(s)
 end
 
-function stipple_parse(::Type{Dict{N, T}}, value::Dict{String, <:Any}) where {T, N}
+function stipple_parse(::Type{<:AbstractDict{N, T}}, value::AbstractDict{String, <:Any}) where {T, N}
   Dict( zip(Vector{N}(stipple_parse(Vector{N}, collect(keys(value)))), stipple_parse(Vector{T}, collect(values(value)))) )
 end
 
