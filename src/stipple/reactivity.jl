@@ -122,8 +122,10 @@ end
 """
 abstract type ReactiveModel end
 
+export @vars, @add_vars, @define_mixin
 
-export @reactors, @reactive, @reactive!, @vars, @add_vars, @old_reactive, @old_reactive!
+# deprecated
+export @reactive, @reactive!, @old_reactive, @old_reactive!
 export ChannelName, getchannel
 
 const ChannelName = String
@@ -166,16 +168,17 @@ function model_to_storage(::Type{T}, prefix = "", postfix = "") where T# <: Reac
   values = getfield.(Ref(M()), fields)
   storage = LittleDict{Symbol, Expr}()
   for (f, type, v) in zip(fields, fieldtypes(M), values)
-    f = f == :modes__ ? f : Symbol(prefix, f, postfix)
+    f = f in [:channel__, :modes__, AUTOFIELDS...] ? f : Symbol(prefix, f, postfix)
     storage[f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = Stipple._deepcopy($v))
   end
 
   storage
 end
 
-function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict)
+function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict; keep_channel = true)
   m1 = eval(haskey(storage_1, :modes__) ? storage_1[:modes__].args[end] : LittleDict{Symbol, Any}())
   m2 = eval(haskey(storage_2, :modes__) ? storage_2[:modes__].args[end] : LittleDict{Symbol, Any}())
+  keep_channel && delete!(m2, :channel__)
   modes = merge(m1, m2)
   for (field, expr) in storage_2
     field == :modes__ && continue
@@ -310,8 +313,8 @@ macro var_storage(expr, new_inputmode = :auto)
 
         storage[var] = ex
       else
-        # parse @mixin as @mixin wouldn't work here
-        if e.head == :macrocall && e.args[1] == Symbol("@mixin")
+        # parse @mixin call, which is now only defined in ReactiveTools, but wouldn't work here
+        if e.head == :macrocall && (e.args[1] == Symbol("@mixin") || e.args[1] == Symbol("@mix_in"))
           e.args = filter!(x -> ! isa(x, LineNumberNode), e.args)
           prefix = postfix = ""
           if e.args[2] isa Expr && e.args[2].head == :(::)
@@ -334,15 +337,17 @@ macro var_storage(expr, new_inputmode = :auto)
 end
 
 macro type(modelname, storage)
+  modelname isa DataType && (modelname = modelname.name.name)
   modelconst = Symbol(modelname, '!')
   output = @eval(__module__, values($storage))
 
   esc(quote
       abstract type $modelname <: Stipple.ReactiveModel end
-      $modelname() = Base.invokelatest(Stipple.get_concrete_type($modelname))
       Stipple.@kwredef mutable struct $modelconst <: $modelname
-          $(output...)
+        $(output...)
       end
+      $modelname() = $modelconst()
+      Stipple.get_concrete_type(::Type{$modelname}) = $modelconst
 
       delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
       Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
@@ -390,15 +395,12 @@ Old syntax is still supported by @vars and can be forced by the `new_inputmode` 
 
 """
 macro vars(modelname, expr, new_inputmode = :auto)
-  modelconst = Symbol(modelname, '!')
   storage = @eval(__module__, values(Stipple.@var_storage($expr, $new_inputmode)))
 
   esc(:(Stipple.@type $modelname $storage))
 end
 
 macro add_vars(modelname, expr, new_inputmode = :auto)
-  modelconst = Symbol(modelname, '!')
-
   storage = @eval(__module__, Stipple.@var_storage($expr, $new_inputmode))
   new_storage = if isdefined(__module__, modelname)
     old_storage = @eval(__module__, Stipple.model_to_storage($modelname))
@@ -408,6 +410,17 @@ macro add_vars(modelname, expr, new_inputmode = :auto)
   end
 
   esc(:(Stipple.@type $modelname $new_storage))
+end
+
+macro define_mixin(mixin_name, expr)
+  storage = @eval(__module__, Stipple.@var_storage($expr))
+  delete!.(Ref(storage),  [:channel__, Stipple.AUTOFIELDS...])
+
+  quote
+      Base.@kwdef struct $mixin_name
+          $(values(storage)...)
+      end
+  end |> esc
 end
 
 macro reactive!(expr)
@@ -422,14 +435,11 @@ macro reactive!(expr)
   model = init(MyDashboard) |> accessmode_from_pattern! |> handlers |> ui |> html
   ```
   """
-
+  @warn warning
   output = @eval(__module__, values(Stipple.@var_storage($(expr.args[3]), false)))
   expr.args[3] = quote $(output...) end
 
-  esc(quote
-    @warn $warning
-    Stipple.@kwredef $expr
-  end)
+  esc(:(Stipple.@kwredef $expr))
 end
 
 macro reactive(expr)
@@ -444,7 +454,7 @@ macro reactive(expr)
   ```
 
   """
-
+  @warn warning
   output = @eval(__module__, values(Stipple.@var_storage($(expr.args[3]), false)))
   expr.args[3] = quote $(output...) end
 

@@ -85,12 +85,17 @@ end
 """
     function Base.run(model::ReactiveModel, jscode::String; context = :model)
 
-Execute js code in the frontend. `context` can be `:model` or `:app`
+Execute js code in the frontend. `context` can be `:model`, `:app` or `:console`
 """
 function Base.run(model::ReactiveModel, jscode::String; context = :model)
-  context ∈ (:model, :app) && push!(model, Symbol("js_", context) => jsfunction(jscode); channel = getchannel(model))
+  context ∈ (:model, :app) && return push!(model, Symbol("js_", context) => jsfunction(jscode); channel = getchannel(model))
+  context == :console && push!(model, :js_model => jsfunction("console.log('$jscode')"); channel = getchannel(model))
 
   nothing
+end
+
+function isconnected(model, message::AbstractString = "")
+    push!(model, :js_model => jsfunction("console.log('$message')"); channel = getchannel(model))
 end
 
 """
