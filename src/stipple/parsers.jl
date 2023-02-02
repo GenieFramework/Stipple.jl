@@ -5,10 +5,6 @@ function stipple_parse(::Type{T}, value::Dict) where T <: AbstractDict
   convert(T, value)
 end
 
-function stipple_parse(::Type{T}, value::Dict) where {Tval, T <: AbstractDict{Symbol, Tval}}
-  T(zip(Symbol.(string.(keys(value))), values(value)))
-end
-
 function stipple_parse(::Type{T1}, value::T2) where {T1 <: Number, T2 <: Number}
   convert(T1, value)
 end
@@ -35,4 +31,16 @@ end
 
 function stipple_parse(::Type{Symbol}, s::String)
   Symbol(s)
+end
+
+function stipple_parse(::Type{Dict{N, T}}, value::Dict{String, <:Any}) where {T, N}
+  Dict( zip(Vector{N}(stipple_parse(Vector{N}, collect(keys(value)))), stipple_parse(Vector{T}, collect(values(value)))) )
+end
+
+function stipple_parse(::Type{Integer}, value::String)
+  stipple_parse(Int, value)
+end
+
+function stipple_parse(::Type{AbstractFloat}, value::String)
+  stipple_parse(Float64, value)
 end
