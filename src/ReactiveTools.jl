@@ -460,7 +460,6 @@ end
 
 macro app(typename, expr, handlers_fn_name = :handlers)
   storage = init_storage()
-  @eval __module__ @type $typename $storage
   quote
     Stipple.@type $typename $storage
 
