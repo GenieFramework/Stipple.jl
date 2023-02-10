@@ -136,6 +136,10 @@ end
 
 #===#
 
+function esc_expr(expr)
+    :(replace("$($(esc(expr)))", '"' => "\\\""))
+end
+
 """
     @iif(expr)
 
@@ -150,7 +154,7 @@ julia> span("Bad stuff's about to happen", class="warning", @iif(:warning))
 ```
 """
 macro iif(expr)
-  :( "v-if='$($(esc(expr)))'" )
+  Expr(:kw, Symbol("v-if"), esc_expr(expr))
 end
 
 """
@@ -167,7 +171,7 @@ julia> span("An error has occurred", class="error", @elsiif(:error))
 ```
 """
 macro elsiif(expr)
-  :( "v-else-if='$($(esc(expr)))'" )
+  Expr(:kw, Symbol("v-else-if"), esc_expr(expr))
 end
 
 """
@@ -184,7 +188,7 @@ julia> span("Might want to keep an eye on this", class="notice", @els(:notice))
 ```
 """
 macro els(expr)
-  :( "v-else='$($(esc(expr)))'" )
+  Expr(:kw, Symbol("v-else"), esc_expr(expr))
 end
 
 """
@@ -200,7 +204,7 @@ julia> p(" {{todo}} ", class="warning", @recur(:"todo in todos"))
 
 """
 macro recur(expr)
-  :( "v-for='$($(esc(expr)))'" )
+  Expr(:kw, Symbol("v-for"), esc_expr(expr))
 end
 
 """
@@ -220,10 +224,9 @@ julia> span("", @text("abc"))
 ```
 """
 macro text(expr)
-  quote
-    directive = occursin(" | ", string($(esc(expr)))) ? ":text-content.prop" : "v-text"
-    "$(directive)='$($(esc(expr)))'"
-  end
+  s = @eval __module__ string($(expr))
+  directive = occursin(" | ", s) ? Symbol(":text-content.prop") : R"v-text"
+  Expr(:kw, directive, s)
 end
 
 """
@@ -243,11 +246,12 @@ julia> input("", placeholder="Type your name", @bind(:name, :identity))
 ```
 """
 macro bind(expr)
-  :( "v-model='$($(esc(expr)))'" )
+  Expr(:kw, Symbol("v-model"), esc_expr(expr))
 end
 
 macro bind(expr, type)
-  :( "v-model.$($(esc(type)))='$($(esc(expr)))'" )
+  vmodel = Symbol("v-model.", @eval(__module__, $type))
+  Expr(:kw, vmodel, esc_expr(expr))
 end
 
 """
@@ -310,31 +314,22 @@ Sometimes preprocessing of the events is necessary, e.g. to add or skip informat
 @on(:uploaded, :uploaded, "for (f in event.files) { event.files[f].fname = event.files[f].name }")
 ```
 """
-macro on(args, expr)
-  quote
-    local e = string($(esc(args)))
-    local h = $(esc(expr))
-    if typeof(h) <: Symbol
-        "v-on:$e='function(event) { handle_event(event, \"$h\") }'"
-    else
-        "v-on:$(string($(esc(args))))='$(replace(h,"'" => raw"\'"))'"
-    end
+macro on(arg, expr, preprocess = nothing)
+  kw = Symbol("v-on:", arg isa String ? arg : arg.value)
+  isevent = expr isa QuoteNode && expr.value isa Symbol
+  v = if isevent
+      if preprocess === nothing
+          :("function(event) { handle_event(event, '$($expr)') }")
+      else
+          :(replace("""function(event) {
+              const preprocess = (event) => { """ * replace($preprocess, '"' => "\\\"") * """; return event }
+              handle_event(preprocess(event), '$($(expr))')
+          }'""", '\n' => ';'))
+      end
+  else
+      :(replace($expr,"\"" => "\\\""))
   end
-end
-
-macro on(event, handler, preprocess)
-  quote
-    local e = string($(esc(event)))
-    local h = $(esc(handler))
-    if h isa Symbol
-        replace("""v-on:$e='function(event) { 
-            const preprocess = (event) => { """ * replace($preprocess, ''' => raw"\'") * """; return event };
-            handle_event(preprocess(event), "$h")
-        }'""", '\n' => ';')
-    else
-        throw("Error in using `@on(event, handler, preprocess)`. `handler` needs to be a Symbol")
-    end
-  end
+  Expr(:kw, kw, v)
 end
 
 """
@@ -355,7 +350,7 @@ julia> h1("Hello!", @showif(:ok))
 ```
 """
 macro showif(expr)
-  :( "v-show='$($(esc(expr)))'" )
+  Expr(:kw, Symbol("v-show"), esc_expr(expr))
 end
 
 #===#
