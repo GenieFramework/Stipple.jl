@@ -339,13 +339,19 @@ end
 macro type(modelname, storage)
   modelname isa DataType && (modelname = modelname.name.name)
   modelconst = Symbol(modelname, '!')
-  output = @eval(__module__, values($storage))
+  modelconst_qn = QuoteNode(modelconst)
 
-  esc(quote
+  quote
       abstract type $modelname <: Stipple.ReactiveModel end
-      Stipple.@kwredef mutable struct $modelconst <: $modelname
-        $(output...)
-      end
+      local output = quote end
+      output.args = collect(values($storage))
+      local output_qn = QuoteNode(output)
+      eval(quote
+        # In case that this macro was triggered by Revise, it's triggered with an empty expression, so don't generate a model
+        length($output_qn.args) > 1 && Stipple.@kwredef mutable struct $$modelconst_qn <: $$modelname
+          $output
+        end
+      end)
       $modelname() = $modelconst()
       Stipple.get_concrete_type(::Type{$modelname}) = $modelconst
 
@@ -353,7 +359,7 @@ macro type(modelname, storage)
       Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
 
       $modelname
-  end)
+  end |> esc
 end
 
 """
@@ -395,9 +401,9 @@ Old syntax is still supported by @vars and can be forced by the `new_inputmode` 
 
 """
 macro vars(modelname, expr, new_inputmode = :auto)
-  storage = @eval(__module__, values(Stipple.@var_storage($expr, $new_inputmode)))
-
-  esc(:(Stipple.@type $modelname $storage))
+  quote
+    Stipple.@type($modelname, values(Stipple.@var_storage($expr, $new_inputmode)))
+  end |> esc
 end
 
 macro add_vars(modelname, expr, new_inputmode = :auto)
