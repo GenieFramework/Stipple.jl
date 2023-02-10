@@ -312,24 +312,24 @@ Sometimes preprocessing of the events is necessary, e.g. to add or skip informat
 """
 macro on(args, expr)
   quote
-    e = string($(esc(args)))
-    x = $(esc(expr))
-    if typeof(x) <: Symbol
-        "v-on:$e='function(event) { handle_event(event, \"$x\") }'"
+    local e = string($(esc(args)))
+    local h = $(esc(expr))
+    if typeof(h) <: Symbol
+        "v-on:$e='function(event) { handle_event(event, \"$h\") }'"
     else
-        "v-on:$(string($(esc(args))))='$(replace(x,"'" => raw"\'"))'"
+        "v-on:$(string($(esc(args))))='$(replace(h,"'" => raw"\'"))'"
     end
   end
 end
 
 macro on(event, handler, preprocess)
   quote
-    e = string($(esc(event)))
-    x = $(esc(handler))
-    if x isa Symbol
+    local e = string($(esc(event)))
+    local h = $(esc(handler))
+    if h isa Symbol
         replace("""v-on:$e='function(event) { 
             const preprocess = (event) => { """ * replace($preprocess, ''' => raw"\'") * """; return event };
-            handle_event(preprocess(event), "uploaded")
+            handle_event(preprocess(event), "$h")
         }'""", '\n' => ';')
     else
         throw("Error in using `@on(event, handler, preprocess)`. `handler` needs to be a Symbol")

@@ -342,13 +342,16 @@ macro type(modelname, storage)
   modelconst_qn = QuoteNode(modelconst)
 
   quote
-      abstract type $modelname <: Stipple.ReactiveModel end
-      local output = quote end
-      output.args = collect(values($storage))
-      local output_qn = QuoteNode(output)
+    abstract type $modelname <: Stipple.ReactiveModel end
+    local output = quote end
+    output.args = collect(values($storage))
+    # For some reason the subsequent line of code can be called without context,
+    # probably a call from Revise.
+    # When this happens an empty expression is passed as storage.
+    # In that case we don't generate a model type. 
+    local is_called_by_macro = length(output.args) > 1 
       eval(quote
-        # In case that this macro was triggered by Revise, it's triggered with an empty expression, so don't generate a model
-        length($output_qn.args) > 1 && Stipple.@kwredef mutable struct $$modelconst_qn <: $$modelname
+        $is_called_by_macro && Stipple.@kwredef mutable struct $$modelconst_qn <: $$modelname
           $output
         end
       end)
