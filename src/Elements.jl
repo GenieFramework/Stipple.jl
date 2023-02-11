@@ -10,8 +10,8 @@ using Stipple
 
 import Genie.Renderer.Html: HTMLString, normal_element
 
-export root, elem, vm, @iif, @elsiif, @els, @recur, @text, @bind, @data, @on, @showif
-export stylesheet
+export root, elem, vm, @iif, @elsiif, @els, @recur, @text, @bind, @data, @on, @click, @showif
+export stylesheet, kw_to_str
 
 #===#
 
@@ -138,6 +138,10 @@ end
 
 function esc_expr(expr)
     :(replace("$($(esc(expr)))", '"' => "\\\""))
+end
+
+function kw_to_str(; kwargs...)
+  join(["$k = \"$v\"" for (k,v) in kwargs], ' ')
 end
 
 """
@@ -319,17 +323,46 @@ macro on(arg, expr, preprocess = nothing)
   isevent = expr isa QuoteNode && expr.value isa Symbol
   v = if isevent
       if preprocess === nothing
-          :("function(event) { handle_event(event, '$($expr)') }")
+          :("function(event) { handle_event(event, '$($(esc(expr)))') }")
       else
           :(replace("""function(event) {
               const preprocess = (event) => { """ * replace($preprocess, '"' => "\\\"") * """; return event }
-              handle_event(preprocess(event), '$($(expr))')
+              handle_event(preprocess(event), '$($(esc(expr)))')
           }'""", '\n' => ';'))
       end
   else
-      :(replace($expr,"\"" => "\\\""))
+      esc_expr(expr)
   end
   Expr(:kw, kw, v)
+end
+
+
+"""
+    `@click(expr, modifiers = [])`
+
+Defines a js routine that is called by a click of the quasar component.
+If a symbol argument is supplied, `@click` sets this value to true.
+
+`@click("savefile = true")` or `@click("myjs_func();")` or `@click(:button)`
+
+Modifers can be appended as String, Symbol or array of String/Symbol:
+```
+@click(:foo, :stop)
+# "v-on:click.stop='foo = true'"
+
+@click("foo = bar", [:stop, "prevent"])
+# "v-on:click.stop.prevent='foo = bar'"
+```
+"""
+macro click(expr, modifiers = [])
+  mods = @eval __module__ $modifiers
+  m = mods isa Symbol || ! isempty(mods) ? mods isa Vector ? '.' * join(String.(mods), '.') : ".$mods" : ""
+  # mods = $(esc(modifiers))
+  if expr isa QuoteNode && expr.value isa Symbol
+    Expr(:kw, Symbol("v-on:click$m"), "$(expr.value) = true")
+  else
+    Expr(:kw, Symbol("v-on:click$m"), esc_expr(expr))
+  end
 end
 
 """
