@@ -96,8 +96,15 @@ macro appname(expr)
     push!(ex.args, :(__typename__[] = $(string(expr))))
   else
     push!(ex.args, :(const __typename__ = Ref{String}($(string(expr)))))
+    push!(ex.args, :(__typename__[]))
   end
   :($ex) |> esc
+end
+
+macro appname()
+  # reset appname to default
+  appname = "$(__module__)_ReactiveModel"
+  :(isdefined($__module__, :__typename__) ? @appname($appname) : $appname) |> esc
 end
 
 function Stipple.init_storage(m::Module)
