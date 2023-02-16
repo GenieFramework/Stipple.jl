@@ -583,6 +583,21 @@ function fieldnames_to_fields(expr, vars)
   end
 end
 
+function fieldnames_to_fields(expr, vars, replace_vars)
+  postwalk(expr) do x
+    if x isa Symbol
+      x ∈ replace_vars && return :(__model__.$x)
+    elseif x isa Expr
+      if x.head == Symbol("=")
+        x.args[1] = postwalk(x.args[1]) do y
+          y ∈ vars ? :(__model__.$y) : y
+        end
+      end
+    end
+    x
+  end
+end
+
 function fieldnames_to_fieldcontent(expr, vars)
   postwalk(expr) do x
     x isa Symbol && x ∈ vars ? :(__model__.$x[]) : x
@@ -606,11 +621,25 @@ end
 
 function get_known_vars(M::Module)
   init_storage(M)
-  push!(REACTIVE_STORAGE[M] |> keys |> collect, :isready, :isprocessing)
+  reactive_vars = Symbol[]
+  non_reactive_vars = Symbol[]
+  for (k, v) in REACTIVE_STORAGE[M]
+    k in [:channel__, :modes__] && continue
+    is_reactive = startswith(string(Stipple.split_expr(v)[2]), r"(Stipple\.)?R(eactive)?($|{)")
+    push!(is_reactive ? reactive_vars : non_reactive_vars, k)
+  end
+  reactive_vars, non_reactive_vars
 end
 
 function get_known_vars(::Type{M}) where M<:ReactiveModel
-  setdiff(fieldnames(Stipple.get_concrete_type(M)), [:channel__, :modes__])
+  CM = Stipple.get_concrete_type(M)
+  reactive_vars = Symbol[]
+  non_reactive_vars = Symbol[]
+  for (k, v) in zip(fieldnames(CM), fieldtypes(CM))
+    k in [:channel__, :modes__] && continue
+    push!(v <: Reactive ? reactive_vars : non_reactive_vars, k)
+  end
+  reactive_vars, non_reactive_vars
 end
 
 macro onchange(var, expr)
@@ -625,7 +654,8 @@ macro onchange(location, vars, expr)
   expr = wrap(expr, :block)
 
   loc isa Module && init_handlers(loc)
-  known_vars = get_known_vars(loc)
+  known_reactive_vars , known_non_reactive_vars= get_known_vars(loc)
+  known_vars = vcat(known_reactive_vars, known_non_reactive_vars)
   on_vars = fieldnames_to_fields(vars, known_vars)
 
   expr, used_vars = mask(expr, known_vars)
@@ -636,7 +666,9 @@ macro onchange(location, vars, expr)
   end
 
   replace_vars = setdiff(known_vars, do_vars)
-  expr = unmask(fieldnames_to_fieldcontent(expr, known_vars, replace_vars), replace_vars)
+  expr = fieldnames_to_fields(expr, known_non_reactive_vars, replace_vars)
+  expr = fieldnames_to_fieldcontent(expr, known_reactive_vars, replace_vars)
+  expr = unmask(expr, replace_vars)
 
   fn = length(vars.args) == 1 ? :on : :onany
   ex = quote
@@ -672,12 +704,14 @@ macro onbutton(location, var, expr)
   expr = wrap(expr, :block)
   loc isa Module && init_handlers(loc)
 
-  known_vars = get_known_vars(loc)
+  known_reactive_vars , known_non_reactive_vars= get_known_vars(loc)
+  known_vars = vcat(known_reactive_vars, known_non_reactive_vars)
   var = fieldnames_to_fields(var, known_vars)
 
-  expr, used_vars = mask(expr, known_vars)
-  expr = unmask(fieldnames_to_fieldcontent(expr, known_vars), known_vars)
-
+  expr = fieldnames_to_fields(expr, known_non_reactive_vars)
+  expr = fieldnames_to_fieldcontent(expr, known_reactive_vars)
+  expr = unmask(expr, known_vars)
+  
   ex = :(onbutton($var) do
     $(expr.args...)
   end)
