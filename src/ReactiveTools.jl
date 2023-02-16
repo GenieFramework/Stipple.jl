@@ -671,11 +671,13 @@ macro onchange(location, vars, expr)
   for a in vars.args
     push!(do_vars, a isa Symbol && ! in(a, used_vars) ? a : :_)
   end
+  
+  replace_reactive_vars = setdiff(known_reactive_vars, do_vars)
+  replace_non_reactive_vars = setdiff(known_non_reactive_vars, do_vars)
 
-  replace_vars = setdiff(known_vars, do_vars)
-  expr = fieldnames_to_fields(expr, known_non_reactive_vars, replace_vars)
-  expr = fieldnames_to_fieldcontent(expr, known_reactive_vars, replace_vars)
-  expr = unmask(expr, replace_vars)
+  expr = fieldnames_to_fields(expr, known_non_reactive_vars, replace_non_reactive_vars)
+  expr = fieldnames_to_fieldcontent(expr, known_reactive_vars, replace_reactive_vars)
+  expr = unmask(expr, vcat(replace_reactive_vars, replace_non_reactive_vars))
 
   fn = length(vars.args) == 1 ? :on : :onany
   ex = quote
