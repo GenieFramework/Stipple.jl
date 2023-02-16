@@ -345,23 +345,22 @@ macro type(modelname, storage)
     abstract type $modelname <: Stipple.ReactiveModel end
     local output = quote end
     output.args = collect(values($storage))
-    # For some reason the subsequent line of code can be called without context,
-    # probably a call from Revise.
-    # When this happens an empty expression is passed as storage.
-    # In that case we don't generate a model type. 
-    local is_called_by_macro = length(output.args) > 1 
-      eval(quote
-        $is_called_by_macro && Stipple.@kwredef mutable struct $$modelconst_qn <: $$modelname
-          $output
-        end
-      end)
-      $modelname() = $modelconst()
-      Stipple.get_concrete_type(::Type{$modelname}) = $modelconst
+    # Revise seems to call the macro line by line internally for code tracking purposes.
+    # Interstingly, Revise will not populate output.args in that case and will generate an empty model.
+    # We use this to our advantage and prevent additional model generation when length(output.args) <= 1.
+    local is_called_by_revise = length(output.args) <= 1 
+    eval(quote
+      $is_called_by_revise || Stipple.@kwredef mutable struct $$modelconst_qn <: $$modelname
+        $output
+      end
+    end)
+    $modelname() = $modelconst()
+    Stipple.get_concrete_type(::Type{$modelname}) = $modelconst
 
-      delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
-      Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
+    delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
+    Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
 
-      $modelname
+    $modelname
   end |> esc
 end
 
