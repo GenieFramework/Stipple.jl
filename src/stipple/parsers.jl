@@ -1,9 +1,9 @@
 # wrapper around Base.parse to prevent type piracy
 stipple_parse(::Type{T}, value) where T = Base.parse(T, value)
 
-function stipple_parse(::Type{T}, value::Dict) where T <: AbstractDict
-  convert(T, value)
-end
+# function stipple_parse(::Type{T}, value::Dict) where T <: AbstractDict
+#   convert(T, value)
+# end
 
 function stipple_parse(::Type{T1}, value::T2) where {T1 <: Number, T2 <: Number}
   convert(T1, value)

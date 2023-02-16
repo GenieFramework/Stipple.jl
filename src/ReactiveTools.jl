@@ -96,8 +96,15 @@ macro appname(expr)
     push!(ex.args, :(__typename__[] = $(string(expr))))
   else
     push!(ex.args, :(const __typename__ = Ref{String}($(string(expr)))))
+    push!(ex.args, :(__typename__[]))
   end
   :($ex) |> esc
+end
+
+macro appname()
+  # reset appname to default
+  appname = "$(__module__)_ReactiveModel"
+  :(isdefined($__module__, :__typename__) ? @appname($appname) : $appname) |> esc
 end
 
 function Stipple.init_storage(m::Module)
@@ -323,13 +330,13 @@ for (fn, mode) in [(:in, :PUBLIC), (:out, :READONLY), (:jsnfn, :JSFUNCTION), (:p
   fn! = Symbol(fn, "!")
   Core.eval(@__MODULE__, quote
 
-    macro $fn(expr)
+    macro $fn!(expr)
       binding(expr isa Symbol ? expr : copy(expr), __module__, $mode; source = __source__)
       esc(:($expr))
     end
 
-    macro $fn(flag, expr)
-      flag != :non_reactive && return esc(:(ReactiveTools.@in($flag, _, $expr)))
+    macro $fn!(flag, expr)
+      flag != :non_reactive && return esc(:(ReactiveTools.$fn!($flag, _, $expr)))
       binding(expr isa Symbol ? expr : copy(expr), __module__, $mode; source = __source__, reactive = false)
       esc(:($expr))
     end
@@ -348,13 +355,13 @@ for (fn, mode) in [(:in, :PUBLIC), (:out, :READONLY), (:jsnfn, :JSFUNCTION), (:p
       end |> esc
     end
 
-    macro $fn!(expr)
+    macro $fn(expr)
       binding(expr isa Symbol ? expr : copy(expr), __module__, $mode; source = __source__)
       @report_val()
     end
 
-    macro $fn!(flag, expr)
-      flag != :non_reactive && return esc(:(ReactiveTools.@in($flag, _, $expr)))
+    macro $fn(flag, expr)
+      flag != :non_reactive && return esc(:(ReactiveTools.@fn($flag, _, $expr)))
       binding(expr isa Symbol ? expr : copy(expr), __module__, $mode; source = __source__, reactive = false)
       @report_val()
     end
