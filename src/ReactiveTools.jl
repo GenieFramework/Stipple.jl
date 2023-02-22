@@ -242,7 +242,7 @@ end
 
 macro model()
   esc(quote
-    ReactiveTools.@type() |> Base.invokelatest
+    Stipple.@type() |> Base.invokelatest
   end)
 end
 
@@ -351,7 +351,7 @@ for (fn, mode) in [(:in, :PUBLIC), (:out, :READONLY), (:jsnfn, :JSFUNCTION), (:p
         local storage = location isa DataType ? Stipple.model_to_storage(location) : location isa LittleDict ? location : Stipple.init_storage()
 
         Stipple.ReactiveTools.binding($ex[1], storage, $$mode; source = $__source__, reactive = $reactive, m = $__module__)
-        location isa DataType || location isa Symbol ? eval(:(@type($$loc, $storage))) : location
+        location isa DataType || location isa Symbol ? eval(:(Stipple.@type($$loc, $storage))) : location
       end |> esc
     end
 
@@ -397,7 +397,7 @@ macro mixin(location, expr, prefix, postfix)
     local mixin_storage = Stipple.model_to_storage(M, $(QuoteNode(prefix)), $postfix)
     
     merge!(storage, Stipple.merge_storage(storage, mixin_storage))
-    location isa DataType || location isa Symbol ? eval(:(@type($$loc, $storage))) : location
+    location isa DataType || location isa Symbol ? eval(:(Stipple.@type($$loc, $storage))) : location
     mixin_storage
   end |> esc
 end
@@ -661,7 +661,7 @@ macro onchange(location, vars, expr)
   expr = wrap(expr, :block)
 
   loc isa Module && init_handlers(loc)
-  known_reactive_vars , known_non_reactive_vars= get_known_vars(loc)
+  known_reactive_vars, known_non_reactive_vars = get_known_vars(loc)
   known_vars = vcat(known_reactive_vars, known_non_reactive_vars)
   on_vars = fieldnames_to_fields(vars, known_vars)
 
@@ -713,7 +713,7 @@ macro onbutton(location, var, expr)
   expr = wrap(expr, :block)
   loc isa Module && init_handlers(loc)
 
-  known_reactive_vars , known_non_reactive_vars= get_known_vars(loc)
+  known_reactive_vars, known_non_reactive_vars = get_known_vars(loc)
   known_vars = vcat(known_reactive_vars, known_non_reactive_vars)
   var = fieldnames_to_fields(var, known_vars)
 
@@ -819,9 +819,15 @@ macro mounted(T, expr)
 end
 
 macro event(M, eventname, expr)
-  known_vars = get_known_vars(@eval(__module__, $M))
 
+  known_reactive_vars, known_non_reactive_vars = get_known_vars(@eval(__module__, $M))
+  known_vars = vcat(known_reactive_vars, known_non_reactive_vars)
   expr, used_vars = mask(expr, known_vars)
+
+  expr = fieldnames_to_fields(expr, known_non_reactive_vars)
+  expr = fieldnames_to_fieldcontent(expr, known_reactive_vars)
+  expr = unmask(expr, known_vars)
+
   expr = unmask(fieldnames_to_fieldcontent(expr, known_vars), known_vars)
   T = eventname isa QuoteNode ? eventname : QuoteNode(eventname)
   
@@ -834,7 +840,7 @@ end
 
 macro event(event, expr)
   quote
-    @event @type() $event $expr
+    @event Stipple.@type() $event $expr
   end |> esc
 end
 
@@ -851,7 +857,7 @@ macro client_data(expr)
   end
 
   esc(quote
-    let M = @type
+    let M = Stipple.@type
       Stipple.client_data(::M) = $output
     end
   end)
@@ -870,7 +876,7 @@ macro add_client_data(expr)
   end
 
   esc(quote
-    let M = @type
+    let M = Stipple.@type
       cd_old = Stipple.client_data(M())
       cd_new = $output
       Stipple.client_data(::M) = merge(d1, d2)
