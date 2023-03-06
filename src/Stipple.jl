@@ -233,9 +233,15 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
   isempty(jsfunction) &&
     (jsfunction = "Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal, 'sesstoken': document.querySelector(\"meta[name='sesstoken']\")?.getAttribute('content')}});")
 
-  output = """
+  if fieldname == :isready
+    output = """
+    $vue_app_name.\$watch(function(){return this.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true});
+  """
+  else
+    output = """
     $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true});
   """
+  end
   # in production mode vue does not fill `this.expression` in the watcher, so we do it manually
   Genie.Configuration.isprod() &&
     (output *= "$vue_app_name._watchers[$vue_app_name._watchers.length - 1].expression = 'function(){return this.$fieldname}'")
