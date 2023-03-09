@@ -5,7 +5,7 @@ using Stipple.Pages
 isempty(Genie.SECRET_TOKEN[]) && Genie.Generator.write_secrets_file(@__DIR__)
 Sessions.init()
 
-@reactive mutable struct Person <: ReactiveModel
+@vars Person begin
   name::String = "Bob"
 end
 

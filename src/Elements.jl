@@ -137,7 +137,7 @@ end
 #===#
 
 function esc_expr(expr)
-    :(replace("$($(esc(expr)))", '"' => "\\\""))
+    :(replace("$($(esc(expr)))", '"' => '''))
 end
 
 function kw_to_str(; kwargs...)

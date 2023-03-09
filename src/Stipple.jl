@@ -875,13 +875,13 @@ in `ReactiveModel`s or other `Base.@kwdef` structs.
 
 There are two modes of usage:
 ```
-@reactive! mutable struct PlotlyDemo <: ReactiveModel
+@vars PlotlyDemo begin
   @mixin PlotWithEvents "prefix_" "_postfix"
 end
 
 and
 
-@reactive! mutable struct PlotlyDemo <: ReactiveModel
+@vars PlotlyDemo begin
   @mixin prefix::PlotWithEvents
 end
 ```
@@ -902,7 +902,7 @@ Base.@kwdef struct PlotWithEvents
     @mixin plot::PlotlyEvents
 end
 
-@reactive! mutable struct PlotlyDemo <: ReactiveModel
+@vars PlotlyDemo begin
     @mixin prefix::PlotWithEvents
 end
 
