@@ -114,6 +114,7 @@ using Stipple, StippleUI
 @vars Inverter begin
   process = false
   input = ""
+  # you can explicitly define the type of the variable
   output::String = "", READONLY
 end
 
@@ -224,8 +225,6 @@ using StippleUI
   @onbutton process begin
     output = output |> reverse
   end
-
-  model
 end
 
 function ui()
@@ -243,7 +242,7 @@ function ui()
 end
 
 route("/") do
-  model = Inverter |> init |> handlers
+  model = @init
   page(model, class = "container", ui()) |> html
 end
 
