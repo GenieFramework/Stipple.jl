@@ -467,9 +467,10 @@ end
 
 macro app(typename, expr, handlers_fn_name = :handlers)
   storage = init_storage()
+  # next line needs to be executed before @handlers can be called
+  # calling in quote is not sufficient
+  @eval __module__ Stipple.@type $typename $storage
   quote
-    Stipple.@type $typename $storage
-
     Stipple.ReactiveTools.@handlers $typename $expr $handlers_fn_name
   end |> esc
 end
@@ -484,7 +485,7 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
   for (i, ex) in enumerate(expr.args)
     if ex isa Expr
       if ex.head == :macrocall && ex.args[1] in Symbol.(["@onbutton", "@onchange"])
-        ex_index = isa.(ex.args, Union{Symbol, Expr})
+        ex_index = .! isa.(ex.args, LineNumberNode)
         if sum(ex_index) < 4
           pos = findall(ex_index)[2]
           insert!(ex.args, pos, typename)
@@ -512,7 +513,7 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
   handlercode_final = []
   for ex in handlercode
     if ex isa Expr
-      push!(handlercode_final, @eval(__module__, $ex).args...)
+      push!(handlercode_final, @eval(__module__, $ex))
     else
       push!(handlercode_final, ex)
     end
@@ -709,7 +710,7 @@ macro onbutton(var, expr)
 end
 
 macro onbutton(location, var, expr)
-  loc::Union{Module, Type{<:M}} where M<:ReactiveModel = @eval __module__ $location
+  loc::Union{Module, Type{<:ReactiveModel}} = @eval __module__ $location
   expr = wrap(expr, :block)
   loc isa Module && init_handlers(loc)
 
@@ -724,14 +725,17 @@ macro onbutton(location, var, expr)
   ex = :(onbutton($var) do
     $(expr.args...)
   end)
-  loc isa Module && push!(HANDLERS[__module__], ex)
-  output = [ex]
   
-  quote
-    function __GF_AUTO_HANDLERS__ end
-    Base.delete_method.(methods(__GF_AUTO_HANDLERS__))
-    $output[end]
-  end |> esc
+  output = quote end
+
+  if loc isa Module
+    push!(HANDLERS[__module__], ex)
+    push!(output.args, :(function __GF_AUTO_HANDLERS__ end))
+    push!(output.args, :(Base.delete_method.(methods(__GF_AUTO_HANDLERS__))))
+  end
+  push!(output.args, QuoteNode(ex))
+  
+  output |> esc
 end
 
 #===#
