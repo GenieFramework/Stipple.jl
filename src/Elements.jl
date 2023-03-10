@@ -136,8 +136,17 @@ end
 
 #===#
 
+function quote_replace(s::String)
+  if occursin('"', s)
+    # escape unescaped quotes
+    replace(occursin(''', s) ? replace(s, r"(?<!\\)'" => "\\'") : s, '"' => ''')
+  else
+    s
+  end
+end
+
 function esc_expr(expr)
-    :(replace("$($(esc(expr)))", '"' => '''))
+    :(Stipple.Elements.quote_replace("$($(esc(expr)))"))
 end
 
 function kw_to_str(; kwargs...)
