@@ -33,7 +33,6 @@ It uses <a href="https://github.com/GenieFramework/Genie.jl">Genie.jl</a> (on th
 The Stipple ecosystem also includes:
 
 * [StippleUI.jl](https://github.com/GenieFramework/StippleUI.jl) - the UI library for `Stipple.jl`, providing access to 30+ reactive UI elements (including forms, lists, tables, as well as layout).
-* [StippleCharts.jl](https://github.com/GenieFramework/StippleCharts.jl) - the  charts library for `Stipple.jl`, providing access to a growing collection of reactive charts.
 * [StipplePlotly.jl](https://github.com/GenieFramework/StipplePlotly.jl) - alternative plotting library for `Stipple.jl` which uses Plotly. 
 * [StipplePlotlyExport.jl](https://github.com/GenieFramework/StipplePlotlyExport.jl) - add-on for `StipplePlotly.jl` to allow server side generation and exporting of plots. 
 * [StippleLatex.jl](https://github.com/GenieFramework/StippleLatex.jl) - support for (reactive) Latex content. 
@@ -47,46 +46,33 @@ pkg> add Stipple
 
 ## Examples
 
-### Downloadable demos repo available at: https://github.com/GenieFramework/StippleDemos
-
 ### Example 1
-
----
-
-Add `Genie` and `Stipple` first:
-
-```julia
-pkg> add Stipple
-pkg> add Genie
-```
-
-Now we can run the following code at the Julia REPL:
 
 ```julia
 using Stipple
 
-@reactive mutable struct Name <: ReactiveModel
+@vars Name begin
   name::R{String} = "World!"
 end
 
-function ui(model)
-  page( model, class="container", [
-      h1([
-        "Hello "
-        span("", @text(:name))
-      ])
+function ui()
+  [
+    h1([
+      "Hello "
+      span("", @text(:name))
+    ])
 
-      p([
-        "What is your name? "
-        input("", placeholder="Type your name", @bind(:name))
-      ])
-    ]
-  )
+    p([
+      "What is your name? "
+      input("", placeholder="Type your name", @bind(:name))
+    ])
+  ]
 end
 
 route("/") do
+  global model
   model = Name |> init
-  html(ui(model), context = @__MODULE__)
+  page(model, class = "container", ui()) |> html
 end
 
 up() # or `up(open_browser = true)` to automatically open a browser window/tab when launching the app
@@ -114,53 +100,52 @@ You can see a quick video demo here:
 The Stipple presentation from JuliaCon 2020 is available here (8 minutes):
 <https://www.dropbox.com/s/6atyctgomsqwjki/stipple_exported.mp4?dl=0>
 
+While the above example is perfect for scipting, full web apps like the following example rely on handler functions to modify valuesin order to allow for multiple users to connect to the server and not to mix the values.
 ### Example 2
 
-This snippet illustrates how to build a UI where the button triggers a computation (function call) on the
-server side, using the input provided by the user, and outputting the result of the computation back to the user.
-
+This snippet illustrates how to build a reactive UI based on StippleUI, which is sets up a [Quasar Framework](https://quasar.dev/) on the client side. Below you find three different ways of triggering handlers.
+- Every input in the input field triggers a function that sets the inverted input string in the output field.
+- Hitting the `Enter` key in the input field inverts the output string.
+- Pressing of the action button inverts the output string.
+StippleUI 
 ```julia
-using Genie.Renderer.Html, Stipple, StippleUI
+using Stipple, StippleUI
 
-@reactive mutable struct Model <: ReactiveModel
-  process::R{Bool} = false
-  output::R{String} = ""
-  input::R{String} = ""
+@vars Inverter begin
+  process = false
+  input = ""
+  output::String = "", READONLY
 end
 
 function handlers(model)
-  on(model.process) do _
-    if (model.process[])
-      model.output[] = model.input[] |> reverse
-      model.process[] = false
-    end
+  on(model.input) do input
+      model.output[] = input |> reverse
+  end
+
+  onbutton(model.process) do
+      model.output[] = model.output[] |> reverse
   end
 
   model
 end
 
-function ui(model)
-  page(model, class="container", [
-      p([
-        "Input "
-        input("", @bind(:input), @on("keyup.enter", "process = true"))
-      ])
+function ui()
+  row(cell(class = "st-module", [
+    textfield(class = "q-my-md", "Input", :input, hint = "Please enter some words", @on("keyup.enter", "process = true"))
 
-      p([
-        button("Action!", @click("process = true"))
-      ])
-
-      p([
-        "Output: "
-        span("", @text(:output))
-      ])
-    ]
-  )
+    btn(class = "q-my-md", "Action!", @click(:process), color = "primary")
+    
+    card(class = "q-my-md", [
+      card_section(h2("Output"))
+      card_section("Variant 1: {{ output }}")
+      card_section(["Variant 2: ", span(class = "text-red", @text(:output))])
+    ])
+  ]))
 end
 
 route("/") do
-  model = Model |> init |> handlers
-  html(ui(model), context = @__MODULE__)
+  model = Inverter |> init |> handlers
+  page(model, class = "container", ui()) |> html
 end
 
 Genie.isrunning(:webserver) || up()
@@ -188,16 +173,15 @@ Support for `WebThreads` and request logging disabling has been introduced in Ge
 ### First example changed to use `WebThreads`
 
 ```julia
-using Genie.Renderer.Html, Stipple
+using Stipple
 
 Genie.config.log_requests = false
 
-@reactive mutable struct Name <: ReactiveModel
+@vars Name begin
   name::R{String} = "World!"
 end
 
 function ui(model)
-  page(model, class="container",
     [
       h1([
         "Hello "
@@ -209,18 +193,70 @@ function ui(model)
         input("", placeholder="Type your name", @bind(:name))
       ])
     ]
-  )
 end
 
 route("/") do
-  model = Stipple.init(Name(), transport = Genie.WebThreads)
-  html(ui(model), context = @__MODULE__)
+  model = init(Name, transport = Genie.WebThreads)
+  page(model, class = "container", ui()) |> html
+end
+
+Genie.isrunning(:webserver) || up()
+```
+## ReactiveTools API
+
+In the previous releases we silently introduced the new ReactiveTools API.
+It offers a simple macro language to define variables and handlers.
+```julia
+using Stipple, Stipple.ReactiveTools
+using StippleUI
+
+@appname Inverter
+
+@app begin
+  @in process = false
+  @out output = ""
+  @in input = ""
+
+  @onchange input begin
+    output = input |> reverse
+  end
+
+  @onbutton process begin
+    output = output |> reverse
+  end
+
+  model
+end
+
+function ui()
+  row(cell(class = "st-module", [
+    textfield(class = "q-my-md", "Input", :input, hint = "Please enter some words", @on("keyup.enter", "process = true"))
+
+    btn(class = "q-my-md", "Action!", @click(:process), color = "primary")
+    
+    card(class = "q-my-md", [
+      card_section(h2("Output"))
+      card_section("Variant 1: {{ output }}")
+      card_section(["Variant 2: ", span(class = "text-red", @text(:output))])
+    ])
+  ]))
+end
+
+route("/") do
+  model = Inverter |> init |> handlers
+  page(model, class = "container", ui()) |> html
 end
 
 Genie.isrunning(:webserver) || up()
 ```
 
+The ReactiveTools API has a different way of defining app variables. `@in` defines variables that can be modified by the client, `@out` defines variables that are only shown, but not modified by the client.
+
+Note:
+In previous versions, `@in` and `@out` defined variables in the current name space. That led to name collisions if names were already used for constants, functions or that were keywords. We therefore decided to remove that feature. Whoever wants to still use it should use `@in!` and `@out!` instead.
 ## Demos
+### Downloads
+Downloadable demos repo available at: https://github.com/GenieFramework/StippleDemos
 
 ### German Credits visualisation dashboard
 
