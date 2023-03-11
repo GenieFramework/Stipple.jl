@@ -401,3 +401,6 @@ search: btn Btn btngroup btndropdown q__btn q__btn__group q__btn__dropdown butto
        • dense::Bool - Dense mode; occupies less space
        • round::Bool - Makes a circle shaped button
 ```
+## Acknowledgements
+
+Stipple builds upon the excellent [Vue.js Framework](https://quasar.dev/vue-components)
