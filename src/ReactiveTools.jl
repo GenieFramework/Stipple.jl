@@ -867,6 +867,21 @@ macro client_data(expr)
   end)
 end
 
+macro client_data(M, expr)
+  if expr.head != :block
+    expr = quote $expr end
+  end
+
+  output = :(Stipple.client_data())
+  for e in expr.args
+    e isa LineNumberNode && continue
+    e.head = :kw
+    push!(output.args, e)
+  end
+
+  :(Stipple.client_data(::$(esc(M))) = $(esc(output)))
+end
+
 macro add_client_data(expr)
   if expr.head != :block
     expr = quote $expr end
