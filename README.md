@@ -72,7 +72,7 @@ end
 route("/") do
   global model
   model = Name |> init
-  page(model, class = "container", ui()) |> html
+  page(model, ui()) |> html
 end
 
 up() # or `up(open_browser = true)` to automatically open a browser window/tab when launching the app
@@ -146,7 +146,7 @@ end
 
 route("/") do
   model = Inverter |> init |> handlers
-  page(model, class = "container", ui()) |> html
+  page(model, ui()) |> html
 end
 
 Genie.isrunning(:webserver) || up()
@@ -198,7 +198,7 @@ end
 
 route("/") do
   model = init(Name, transport = Genie.WebThreads)
-  page(model, class = "container", ui()) |> html
+  page(model, ui()) |> html
 end
 
 Genie.isrunning(:webserver) || up()
@@ -243,7 +243,7 @@ end
 
 route("/") do
   model = @init
-  page(model, class = "container", ui()) |> html
+  page(model, ui()) |> html
 end
 
 Genie.isrunning(:webserver) || up()
@@ -274,7 +274,7 @@ end
 
 route("/") do
   model = Inverter |> init |> handlers
-  page(model, class = "container", ui()) |> html
+  page(model, ui()) |> html
 end
 ```
 But also the `@app` macro is available for explicit models
