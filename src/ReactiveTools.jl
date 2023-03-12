@@ -471,8 +471,6 @@ macro app(typename, expr, handlers_fn_name = :handlers)
   # calling in quote is not sufficient
   @eval __module__ Stipple.@type $typename $storage
   quote
-    # eval(:(Stipple.@type $$typename $$storage))
-    println(fieldnames(Stipple.get_concrete_type($typename)))
     Stipple.ReactiveTools.@handlers $typename $expr $handlers_fn_name
   end |> esc
 end
