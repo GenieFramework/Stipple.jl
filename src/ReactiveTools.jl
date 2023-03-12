@@ -471,6 +471,8 @@ macro app(typename, expr, handlers_fn_name = :handlers)
   # calling in quote is not sufficient
   @eval __module__ Stipple.@type $typename $storage
   quote
+    # eval(:(Stipple.@type $$typename $$storage))
+    println(fieldnames(Stipple.get_concrete_type($typename)))
     Stipple.ReactiveTools.@handlers $typename $expr $handlers_fn_name
   end |> esc
 end
@@ -510,6 +512,13 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
     __storage__
   end
 
+  # needs to be executed before evaluation of handler code
+  # because the handler code depends on the model fields.
+  @eval __module__ begin
+    $initcode
+    Stipple.@type($typename, __storage__)
+  end
+
   handlercode_final = []
   for ex in handlercode
     if ex isa Expr
@@ -520,9 +529,6 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
   end
 
   quote
-    $initcode
-    @eval Stipple.@type($typename, __storage__)
-
     Stipple.ReactiveTools.delete_events($typename)
 
     function $handlers_fn_name(__model__)
