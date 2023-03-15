@@ -235,12 +235,12 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
 
   if fieldname == :isready
     output = """
-    $vue_app_name.\$watch(function(){return this.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true});
-  """
+      $vue_app_name.\$watch(function(){return this.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true});
+    """
   else
     output = """
-    $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true});
-  """
+      $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true});
+    """
   end
   # in production mode vue does not fill `this.expression` in the watcher, so we do it manually
   Genie.Configuration.isprod() &&
