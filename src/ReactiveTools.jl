@@ -767,35 +767,39 @@ macro page(url, view)
 end
 
 macro computed(args...)
-  lifecycle_hooks(args...)
+  lifecycle_hooks("computed", args...)
 end
 
 macro created(args...)
-  lifecycle_hooks(args...)
+  lifecycle_hooks("created", args...)
 end
 
 macro mounted(args...)
-  lifecycle_hooks(args...)
+  lifecycle_hooks("mounted", args...)
 end
 
 macro methods(args...)
-  lifecycle_hooks(args...)
+  lifecycle_hooks("methods", args...)
 end
 
 macro watch(args...)
-  lifecycle_hooks(args...)
+  lifecycle_hooks("watch", args...)
 end
 
-function lifecycle_hooks(expr)
-  esc(quote
-    let M = Stipple.@type
-      Stipple.js_computed(::M) = $expr
-    end
-  end)
-end
-
-function lifecycle_hooks(T, expr)
-  esc(:(Stipple.js_computed(::$T) = $expr))
+function lifecycle_hooks(hook_type, args...)
+  if length(args) == 1
+    expr = args[1]
+    esc(quote
+      let M = Stipple.@type
+        $(Meta.parse("Stipple.js_$hook_type"))(::M) = $expr
+      end
+    end)
+  elseif length(args) == 2
+    T, expr = args[1], args[2]
+    esc(:($(Meta.parse("Stipple.js_$hook_type"))(::$T) = $expr))
+  else
+    error("Invalid number of arguments for lifecycle hook")
+  end
 end
 
 macro event(M, eventname, expr)
