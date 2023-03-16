@@ -766,31 +766,27 @@ macro page(url, view)
   :(@page($url, $view, Stipple.ReactiveTools.DEFAULT_LAYOUT())) |> esc
 end
 
-macro methods(expr)
-  esc(quote
-    let M = Stipple.@type
-      Stipple.js_methods(::M) = $expr
-    end
-  end)
+macro computed(args...)
+  lifecycle_hooks(args...)
 end
 
-macro methods(T, expr)
-  esc(:(Stipple.js_methods(::$T) = $expr))
+macro created(args...)
+  lifecycle_hooks(args...)
 end
 
-macro watch(expr)
-  esc(quote
-    let M = Stipple.@type
-      Stipple.js_watch(::M) = $expr
-    end
-  end)
+macro mounted(args...)
+  lifecycle_hooks(args...)
 end
 
-macro watch(T, expr)
-  esc(:(Stipple.js_watch(::$T) = $expr))
+macro methods(args...)
+  lifecycle_hooks(args...)
 end
 
-macro computed(expr)
+macro watch(args...)
+  lifecycle_hooks(args...)
+end
+
+function lifecycle_hooks(expr)
   esc(quote
     let M = Stipple.@type
       Stipple.js_computed(::M) = $expr
@@ -798,32 +794,8 @@ macro computed(expr)
   end)
 end
 
-macro computed(T, expr)
+function lifecycle_hooks(T, expr)
   esc(:(Stipple.js_computed(::$T) = $expr))
-end
-
-macro created(expr)
-  esc(quote
-    let M = Stipple.@type
-      Stipple.js_created(::M) = $expr
-    end
-  end)
-end
-
-macro created(T, expr)
-  esc(:(Stipple.js_created(::$T) = $expr))
-end
-
-macro mounted(expr)
-  esc(quote
-    let M = Stipple.@type
-      Stipple.js_mounted(::M) = $expr
-    end
-  end)
-end
-
-macro mounted(T, expr)
-  esc(:(Stipple.js_mounted(::$T) = $expr))
 end
 
 macro event(M, eventname, expr)
