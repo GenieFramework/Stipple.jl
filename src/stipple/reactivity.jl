@@ -178,8 +178,9 @@ end
 function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict; keep_channel = true)
   m1 = eval(haskey(storage_1, :modes__) ? storage_1[:modes__].args[end] : LittleDict{Symbol, Any}())
   m2 = eval(haskey(storage_2, :modes__) ? storage_2[:modes__].args[end] : LittleDict{Symbol, Any}())
-  keep_channel && delete!(m2, :channel__)
   modes = merge(m1, m2)
+  
+  keep_channel && haskey(storage_2, :channel__) && (storage_2 = delete!(copy(storage_2), :channel__))
   for (field, expr) in storage_2
     field == :modes__ && continue
 
