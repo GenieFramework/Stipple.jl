@@ -783,7 +783,7 @@ macro before_create(args...)
 end
 
 macro created(args...)
-  vue_options("created", args...)
+  ex = vue_options("created", args...)
 end
 
 macro before_mount(args...)
@@ -825,14 +825,14 @@ end
 function vue_options(hook_type, args...)
   if length(args) == 1
     expr = args[1]
-    esc(quote
+    quote
       let M = Stipple.@type
-        $(Meta.parse("Stipple.js_$hook_type"))(::M) = $expr
+        Stipple.$(Symbol("js_$hook_type"))(::M) = $expr
       end
-    end)
+    end |> esc
   elseif length(args) == 2
     T, expr = args[1], args[2]
-    esc(:($(Meta.parse("Stipple.js_$hook_type"))(::$T) = $expr))
+    esc(:(Stipple.$(Symbol("js_$hook_type"))(::$T) = $expr))
   else
     error("Invalid number of arguments for vue options")
   end
