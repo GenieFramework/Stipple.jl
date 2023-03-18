@@ -767,26 +767,62 @@ macro page(url, view)
 end
 
 macro computed(args...)
-  lifecycle_hooks("computed", args...)
-end
-
-macro created(args...)
-  lifecycle_hooks("created", args...)
-end
-
-macro mounted(args...)
-  lifecycle_hooks("mounted", args...)
+  vue_options("computed", args...)
 end
 
 macro methods(args...)
-  lifecycle_hooks("methods", args...)
+  vue_options("methods", args...)
 end
 
 macro watch(args...)
-  lifecycle_hooks("watch", args...)
+  vue_options("watch", args...)
 end
 
-function lifecycle_hooks(hook_type, args...)
+macro before_create(args...)
+  vue_options("beforeCreate", args...)
+end
+
+macro created(args...)
+  vue_options("created", args...)
+end
+
+macro before_mount(args...)
+  vue_options("beforeMount", args...)
+end
+
+macro mounted(args...)
+  vue_options("mounted", args...)
+end
+
+macro before_update(args...)
+  vue_options("beforeUpdate", args...)
+end
+
+macro updated(args...)
+  vue_options("updated", args...)
+end
+
+macro activated(args...)
+  vue_options("activated", args...)
+end
+
+macro deactivated(args...)
+  vue_options("deactivated", args...)
+end
+
+macro before_destroy(args...)
+  vue_options("beforeDestroy", args...)
+end
+
+macro destroyed(args...)
+  vue_options("destroyed", args...)
+end
+
+macro error_captured(args...)
+  vue_options("errorCaptured", args...)
+end
+
+function vue_options(hook_type, args...)
   if length(args) == 1
     expr = args[1]
     esc(quote
@@ -798,7 +834,7 @@ function lifecycle_hooks(hook_type, args...)
     T, expr = args[1], args[2]
     esc(:($(Meta.parse("Stipple.js_$hook_type"))(::$T) = $expr))
   else
-    error("Invalid number of arguments for lifecycle hook")
+    error("Invalid number of arguments for vue options")
   end
 end
 
