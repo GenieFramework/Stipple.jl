@@ -783,7 +783,7 @@ macro before_create(args...)
 end
 
 macro created(args...)
-  ex = vue_options("created", args...)
+  vue_options("created", args...)
 end
 
 macro before_mount(args...)
