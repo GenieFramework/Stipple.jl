@@ -778,6 +778,7 @@ macro watch(args...)
   vue_options("watch", args...)
 end
 
+#=== Lifecycle hooks ===#
 macro before_create(args...)
   vue_options("beforeCreate", args...)
 end
@@ -821,6 +822,7 @@ end
 macro error_captured(args...)
   vue_options("errorCaptured", args...)
 end
+#=== Lifecycle hooks ===#
 
 function vue_options(hook_type, args...)
   if length(args) == 1
