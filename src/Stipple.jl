@@ -637,11 +637,6 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
         Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="watchers")), :javascript) |> Genie.Renderer.respond
     end
 
-    Genie.Router.route(Genie.Assets.asset_route(assets_config, :img, file="genie-logo"), named = :get_genielogosvg) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="svg", file="genie-logo")), :svg) |> Genie.Renderer.respond
-    end
-
     if Genie.config.webchannels_keepalive_frequency > 0 && is_channels_webtransport()
       Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="keepalive"), named = :get_keepalivejs) do
         Genie.Renderer.WebRenderable(
