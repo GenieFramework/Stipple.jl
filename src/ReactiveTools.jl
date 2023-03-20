@@ -766,64 +766,78 @@ macro page(url, view)
   :(@page($url, $view, Stipple.ReactiveTools.DEFAULT_LAYOUT())) |> esc
 end
 
-macro methods(expr)
-  esc(quote
-    let M = Stipple.@type
-      Stipple.js_methods(::M) = $expr
-    end
-  end)
+macro computed(args...)
+  vue_options("computed", args...)
 end
 
-macro methods(T, expr)
-  esc(:(Stipple.js_methods(::$T) = $expr))
+macro methods(args...)
+  vue_options("methods", args...)
 end
 
-macro watch(expr)
-  esc(quote
-    let M = Stipple.@type
-      Stipple.js_watch(::M) = $expr
-    end
-  end)
+macro watch(args...)
+  vue_options("watch", args...)
 end
 
-macro watch(T, expr)
-  esc(:(Stipple.js_watch(::$T) = $expr))
+#=== Lifecycle hooks ===#
+macro before_create(args...)
+  vue_options("beforeCreate", args...)
 end
 
-macro computed(expr)
-  esc(quote
-    let M = Stipple.@type
-      Stipple.js_computed(::M) = $expr
-    end
-  end)
+macro created(args...)
+  vue_options("created", args...)
 end
 
-macro computed(T, expr)
-  esc(:(Stipple.js_computed(::$T) = $expr))
+macro before_mount(args...)
+  vue_options("beforeMount", args...)
 end
 
-macro created(expr)
-  esc(quote
-    let M = Stipple.@type
-      Stipple.js_created(::M) = $expr
-    end
-  end)
+macro mounted(args...)
+  vue_options("mounted", args...)
 end
 
-macro created(T, expr)
-  esc(:(Stipple.js_created(::$T) = $expr))
+macro before_update(args...)
+  vue_options("beforeUpdate", args...)
 end
 
-macro mounted(expr)
-  esc(quote
-    let M = Stipple.@type
-      Stipple.js_mounted(::M) = $expr
-    end
-  end)
+macro updated(args...)
+  vue_options("updated", args...)
 end
 
-macro mounted(T, expr)
-  esc(:(Stipple.js_mounted(::$T) = $expr))
+macro activated(args...)
+  vue_options("activated", args...)
+end
+
+macro deactivated(args...)
+  vue_options("deactivated", args...)
+end
+
+macro before_destroy(args...)
+  vue_options("beforeDestroy", args...)
+end
+
+macro destroyed(args...)
+  vue_options("destroyed", args...)
+end
+
+macro error_captured(args...)
+  vue_options("errorCaptured", args...)
+end
+#=== Lifecycle hooks ===#
+
+function vue_options(hook_type, args...)
+  if length(args) == 1
+    expr = args[1]
+    quote
+      let M = Stipple.@type
+        Stipple.$(Symbol("js_$hook_type"))(::M) = $expr
+      end
+    end |> esc
+  elseif length(args) == 2
+    T, expr = args[1], args[2]
+    esc(:(Stipple.$(Symbol("js_$hook_type"))(::$T) = $expr))
+  else
+    error("Invalid number of arguments for vue options")
+  end
 end
 
 macro event(M, eventname, expr)
