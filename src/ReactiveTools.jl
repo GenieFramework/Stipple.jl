@@ -48,7 +48,7 @@ function DEFAULT_LAYOUT(; title::String = "Genie App")
     <% end %>
     <style>
       ._genie_logo {
-        background:url('https://s3.eu-west-1.amazonaws.com/genieframework.com/logos/genie/logo-simple-with-padding.svg') no-repeat;background-size:40px;
+        background:url('https://genieframework.com/logos/genie/logo-simple-with-padding.svg') no-repeat;background-size:40px;
         padding-top:22px;padding-right:10px;color:transparent;font-size:9pt;
       }
       ._genie .row .col-12 { width:50%;margin:auto; }
