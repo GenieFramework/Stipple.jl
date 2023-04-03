@@ -28,14 +28,14 @@ const _pages = Page[]
 pages() = _pages
 
 function Page(  route::Union{Route,String};
-                view::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Vector{T},Function},
+                view::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Vector{<:AbstractString},Function},
                 model::Union{M,Function,Nothing,Expr} = Stipple.init(EmptyModel),
                 layout::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Nothing,Function} = nothing,
                 context::Module = @__MODULE__,
                 kwargs...
-              ) where {M<:ReactiveModel,T<:AbstractString}
+              ) where {M<:ReactiveModel}
 
-  view =  if isa(view, ParsedHTMLString) || isa(view, Vector{T})
+  view =  if isa(view, ParsedHTMLString) || isa(view, Vector{<:AbstractString})
             string(view)
           elseif isa(view, AbstractString)
             isfile(view) ? filepath(view) : view
@@ -43,15 +43,13 @@ function Page(  route::Union{Route,String};
             view
           end
 
-  renderfunction = isa(view, Function) ? html! : html
-
   isa(model, Expr) && (model = Core.eval(context, model))
   route = isa(route, String) ? Route(; method = GET, path = route) : route
   layout = isa(layout, String) && length(layout) < Stipple.IF_ITS_THAT_LONG_IT_CANT_BE_A_FILENAME && isfile(layout) ? filepath(layout) :
             isa(layout, ParsedHTMLString) || isa(layout, String) ? string(layout) :
               layout
 
-  route.action = () -> renderfunction(view; layout, context, model = (isa(model,Function) ? Base.invokelatest(model) : model), kwargs...)
+  route.action = () -> (isa(view, Function) ? html! : html)(view; layout, context, model = (isa(model,Function) ? Base.invokelatest(model) : model), kwargs...)
 
   page = Page(route, view, typeof((isa(model,Function) || isa(model,DataType) ? Base.invokelatest(model) : model)), layout, context)
 

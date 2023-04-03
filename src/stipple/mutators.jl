@@ -34,7 +34,7 @@ function callwatchers(field, val, keys...; notify)
         Base.invokelatest(f, val)
       catch ex
         @error "Error attempting to invoke handler $count for field $field with value $val"
-        @error ex
+        @error "" exception=(ex, catch_backtrace())
         Genie.Configuration.isdev() && rethrow(ex)
       end
     end

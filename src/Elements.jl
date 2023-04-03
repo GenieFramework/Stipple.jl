@@ -10,8 +10,8 @@ using Stipple
 
 import Genie.Renderer.Html: HTMLString, normal_element
 
-export root, elem, vm, @iif, @elsiif, @els, @recur, @text, @bind, @data, @on, @showif
-export stylesheet
+export root, elem, vm, @iif, @elsiif, @els, @recur, @text, @bind, @data, @on, @click, @showif
+export stylesheet, kw_to_str
 
 #===#
 
@@ -136,6 +136,23 @@ end
 
 #===#
 
+function quote_replace(s::String)
+  if occursin('"', s)
+    # escape unescaped quotes
+    replace(occursin(''', s) ? replace(s, r"(?<!\\)'" => "\\'") : s, '"' => ''')
+  else
+    s
+  end
+end
+
+function esc_expr(expr)
+    :(Stipple.Elements.quote_replace("$($(esc(expr)))"))
+end
+
+function kw_to_str(; kwargs...)
+  join(["$k = \"$v\"" for (k,v) in kwargs], ' ')
+end
+
 """
     @iif(expr)
 
@@ -150,7 +167,7 @@ julia> span("Bad stuff's about to happen", class="warning", @iif(:warning))
 ```
 """
 macro iif(expr)
-  :( "v-if='$($(esc(expr)))'" )
+  Expr(:kw, Symbol("v-if"), esc_expr(expr))
 end
 
 """
@@ -167,7 +184,7 @@ julia> span("An error has occurred", class="error", @elsiif(:error))
 ```
 """
 macro elsiif(expr)
-  :( "v-else-if='$($(esc(expr)))'" )
+  Expr(:kw, Symbol("v-else-if"), esc_expr(expr))
 end
 
 """
@@ -184,7 +201,7 @@ julia> span("Might want to keep an eye on this", class="notice", @els(:notice))
 ```
 """
 macro els(expr)
-  :( "v-else='$($(esc(expr)))'" )
+  Expr(:kw, Symbol("v-else"), esc_expr(expr))
 end
 
 """
@@ -200,7 +217,7 @@ julia> p(" {{todo}} ", class="warning", @recur(:"todo in todos"))
 
 """
 macro recur(expr)
-  :( "v-for='$($(esc(expr)))'" )
+  Expr(:kw, Symbol("v-for"), esc_expr(expr))
 end
 
 """
@@ -220,10 +237,9 @@ julia> span("", @text("abc"))
 ```
 """
 macro text(expr)
-  quote
-    directive = occursin(" | ", string($(esc(expr)))) ? ":text-content.prop" : "v-text"
-    "$(directive)='$($(esc(expr)))'"
-  end
+  s = @eval __module__ string($(expr))
+  directive = occursin(" | ", s) ? Symbol(":text-content.prop") : R"v-text"
+  Expr(:kw, directive, s)
 end
 
 """
@@ -243,11 +259,12 @@ julia> input("", placeholder="Type your name", @bind(:name, :identity))
 ```
 """
 macro bind(expr)
-  :( "v-model='$($(esc(expr)))'" )
+  Expr(:kw, Symbol("v-model"), esc_expr(expr))
 end
 
 macro bind(expr, type)
-  :( "v-model.$($(esc(type)))='$($(esc(expr)))'" )
+  vmodel = Symbol("v-model.", @eval(__module__, $type))
+  Expr(:kw, vmodel, esc_expr(expr))
 end
 
 """
@@ -310,30 +327,52 @@ Sometimes preprocessing of the events is necessary, e.g. to add or skip informat
 @on(:uploaded, :uploaded, "for (f in event.files) { event.files[f].fname = event.files[f].name }")
 ```
 """
-macro on(args, expr)
-  quote
-    e = string($(esc(args)))
-    x = $(esc(expr))
-    if typeof(x) <: Symbol
-        "v-on:$e='function(event) { handle_event(event, \"$x\") }'"
-    else
-        "v-on:$(string($(esc(args))))='$(replace(x,"'" => raw"\'"))'"
-    end
+macro on(arg, expr, preprocess = nothing)
+  kw = Symbol("v-on:", arg isa String ? arg : arg isa QuoteNode ? arg.value : arg.head == :vect ? join(lstrip.(string.(arg.args), ':'), '.') : 
+    throw("Value '$arg' for `arg` not supported. `arg` should be of type Symbol, String, or Vector{Union{String, Symbol}}"))
+
+  isevent = expr isa QuoteNode && expr.value isa Symbol
+  v = if isevent
+      if preprocess === nothing
+          :("function(event) { handle_event(event, '$($(esc(expr)))') }")
+      else
+          :(replace("""function(event) {
+              const preprocess = (event) => { """ * replace($preprocess, '"' => "\\\"") * """; return event }
+              handle_event(preprocess(event), '$($(esc(expr)))')
+          }'""", '\n' => ';'))
+      end
+  else
+      esc_expr(expr)
   end
+  Expr(:kw, kw, v)
 end
 
-macro on(event, handler, preprocess)
-  quote
-    e = string($(esc(event)))
-    x = $(esc(handler))
-    if x isa Symbol
-        replace("""v-on:$e='function(event) { 
-            const preprocess = (event) => { """ * replace($preprocess, ''' => raw"\'") * """; return event };
-            handle_event(preprocess(event), "uploaded")
-        }'""", '\n' => ';')
-    else
-        throw("Error in using `@on(event, handler, preprocess)`. `handler` needs to be a Symbol")
-    end
+
+"""
+    `@click(expr, modifiers = [])`
+
+Defines a js routine that is called by a click of the quasar component.
+If a symbol argument is supplied, `@click` sets this value to true.
+
+`@click("savefile = true")` or `@click("myjs_func();")` or `@click(:button)`
+
+Modifers can be appended as String, Symbol or array of String/Symbol:
+```
+@click(:foo, :stop)
+# "v-on:click.stop='foo = true'"
+
+@click("foo = bar", [:stop, "prevent"])
+# "v-on:click.stop.prevent='foo = bar'"
+```
+"""
+macro click(expr, modifiers = [])
+  mods = @eval __module__ $modifiers
+  m = mods isa Symbol || ! isempty(mods) ? mods isa Vector ? '.' * join(String.(mods), '.') : ".$mods" : ""
+  # mods = $(esc(modifiers))
+  if expr isa QuoteNode && expr.value isa Symbol
+    Expr(:kw, Symbol("v-on:click$m"), "$(expr.value) = true")
+  else
+    Expr(:kw, Symbol("v-on:click$m"), esc_expr(expr))
   end
 end
 
@@ -355,7 +394,7 @@ julia> h1("Hello!", @showif(:ok))
 ```
 """
 macro showif(expr)
-  :( "v-show='$($(esc(expr)))'" )
+  Expr(:kw, Symbol("v-show"), esc_expr(expr))
 end
 
 #===#

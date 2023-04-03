@@ -127,8 +127,8 @@ export PRIVATE, PUBLIC, READONLY, JSFUNCTION, NON_REACTIVE
 export NO_WATCHER, NO_BACKEND_WATCHER, NO_FRONTEND_WATCHER
 export newapp
 export onbutton
-export @kwredef
 export init
+export isconnected
 
 #===#
 
@@ -233,9 +233,15 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
   isempty(jsfunction) &&
     (jsfunction = "Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal, 'sesstoken': document.querySelector(\"meta[name='sesstoken']\")?.getAttribute('content')}});")
 
-  output = """
-    $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true});
-  """
+  if fieldname == :isready
+    output = """
+      $vue_app_name.\$watch(function(){return this.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true});
+    """
+  else
+    output = """
+      $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true});
+    """
+  end
   # in production mode vue does not fill `this.expression` in the watcher, so we do it manually
   Genie.Configuration.isprod() &&
     (output *= "$vue_app_name._watchers[$vue_app_name._watchers.length - 1].expression = 'function(){return this.$fieldname}'")
@@ -280,9 +286,9 @@ function accessmode_from_pattern!(model::ReactiveModel)
   for field in fieldnames(typeof(model))
     if !(field isa Reactive)
       if occursin(Stipple.SETTINGS.private_pattern, string(field))
-        model._modes[field] = PRIVATE
+        model.modes__[field] = PRIVATE
       elseif occursin(Stipple.SETTINGS.readonly_pattern, string(field))
-        model._modes[field] = READONLY
+        model.modes__[field] = READONLY
       end
     end
   end
@@ -292,16 +298,16 @@ end
 function setmode!(model::ReactiveModel, mode::Int, fieldnames::Symbol...)
   for fieldname in fieldnames
     if getfield(model, fieldname) isa Reactive
-      delete!(model._modes, fieldname)
+      delete!(model.modes__, fieldname)
     else
-      setmode!(model._modes, mode, fieldnames...)
+      setmode!(model.modes__, mode, fieldnames...)
     end
   end
 end
 
 function setmode!(dict::AbstractDict, mode, fieldnames::Symbol...)
   for fieldname in fieldnames
-    fieldname in [Stipple.CHANNELFIELDNAME, :_modes] && continue
+    fieldname in [Stipple.CHANNELFIELDNAME, :modes__] && continue
     mode == PUBLIC || mode == :PUBLIC ? delete!(dict, fieldname) : dict[fieldname] = Core.eval(Stipple, mode)
   end
   dict
@@ -313,9 +319,9 @@ end
 
 function init_storage()
   LittleDict{Symbol, Expr}(
-    CHANNELFIELDNAME => 
+    CHANNELFIELDNAME =>
       :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = Stipple.channelfactory()),
-    :_modes => :(_modes::Stipple.LittleDict{Symbol, Any} = Stipple.LittleDict{Symbol, Any}()),
+    :modes__ => :(modes__::Stipple.LittleDict{Symbol, Any} = Stipple.LittleDict{Symbol, Any}()),
     :isready => :(isready::Stipple.R{Bool} = false),
     :isprocessing => :(isprocessing::Stipple.R{Bool} = false)
   )
@@ -327,7 +333,7 @@ end
 
 function get_abstract_type(::Type{M})::Type{<:ReactiveModel} where M <: Stipple.ReactiveModel
   SM = supertype(M)
-  SM <: ReactiveModel && SM != ReactiveModel ? supertype(M) : M
+  SM <: ReactiveModel && SM != ReactiveModel ? SM : M
 end
 
 """
@@ -374,7 +380,7 @@ function init(::Type{M};
 
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
   LAST_ACTIVITY[Symbol(getchannel(model))] = now()
-    
+
   Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
 
   if is_channels_webtransport()
@@ -631,11 +637,6 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
         Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="watchers")), :javascript) |> Genie.Renderer.respond
     end
 
-    Genie.Router.route(Genie.Assets.asset_route(assets_config, :img, file="genie-logo"), named = :get_genielogosvg) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="svg", file="genie-logo")), :svg) |> Genie.Renderer.respond
-    end
-
     if Genie.config.webchannels_keepalive_frequency > 0 && is_channels_webtransport()
       Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="keepalive"), named = :get_keepalivejs) do
         Genie.Renderer.WebRenderable(
@@ -865,20 +866,23 @@ _deepcopy(x) = deepcopy(x)
 function register_mixin end
 
 """
-    macro mixin(expr, prefix, postfix)
+    macro mixin_old(expr, prefix, postfix)
 
-`@mixin` is used for inserting structs or struct types
+`@mixin_old` is the former `@mixin` which has been refactored to be merged with the new reactive API.
+It is deprecated and will be removed in the next major version of Stipple.
+
+`@mixin_old` is used for inserting structs or struct types
 in `ReactiveModel`s or other `Base.@kwdef` structs.
 
 There are two modes of usage:
 ```
-@reactive! mutable struct PlotlyDemo <: ReactiveModel
+@vars PlotlyDemo begin
   @mixin PlotWithEvents "prefix_" "_postfix"
 end
 
 and
 
-@reactive! mutable struct PlotlyDemo <: ReactiveModel
+@vars PlotlyDemo begin
   @mixin prefix::PlotWithEvents
 end
 ```
@@ -899,7 +903,7 @@ Base.@kwdef struct PlotWithEvents
     @mixin plot::PlotlyEvents
 end
 
-@reactive! mutable struct PlotlyDemo <: ReactiveModel
+@vars PlotlyDemo begin
     @mixin prefix::PlotWithEvents
 end
 
@@ -913,7 +917,7 @@ This is typically used for cases when there is a main entry with options. In tha
 determines the name of the main field and the other fieldnames are typically prefixed with a hyphen.
 ```
 """
-macro mixin(expr, prefix = "", postfix = "")
+macro mixin_old(expr, prefix = "", postfix = "")
   if hasproperty(expr, :head) && expr.head == :(::)
       prefix = string(expr.args[1])
       expr = expr.args[2]
@@ -925,19 +929,17 @@ macro mixin(expr, prefix = "", postfix = "")
 
   T = x isa DataType ? x : typeof(x)
   mix = x isa DataType ? x() : x
-  values = getfield.(Ref(mix), fieldnames(T))
+  fnames = fieldnames(get_concrete_type(T))
+  values = getfield.(Ref(mix), fnames)
   output = quote end
-  for (f, type, v) in zip(Symbol.(pre, fieldnames(T), post), fieldtypes(T), values)
+  for (f, type, v) in zip(Symbol.(pre, fnames, post), fieldtypes(get_concrete_type(T)), values)
+    f in Symbol.(prefix, [:channel__, :modes__, AUTOFIELDS...], postfix) && continue
     v_copy = Stipple._deepcopy(v)
     push!(output.args, v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy))
-end
+  end
 
   esc(:($output))
 end
-
-export @mixin
-
-export off!, nlistener
 
 """
     nlistener(@nospecialize(o::Observables.AbstractObservable)) = length(Observables.listeners(o))
