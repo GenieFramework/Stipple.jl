@@ -1,3 +1,5 @@
+using JSON3
+
 const RENDERING_MAPPINGS = Dict{String,String}()
 mapping_keys() = collect(keys(RENDERING_MAPPINGS))
 
@@ -47,9 +49,12 @@ function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dic
     result[julia_to_vue(field)] = Stipple.render(f, field)
   end
 
-  vue = Dict( :el => JSONText("rootSelector"),
+  # convert :data to () => ({   })
+  data = JSON3.write(merge(result, client_data(app)))
+
+  vue = Dict( #:el => JSONText("rootSelector"),
               :mixins => JSONText("[watcherMixin, reviveMixin]"),
-              :data => merge(result, client_data(app)))
+              :data => JSONText("() => ($data)") )
 
   isempty(components(app)   |> strip)   || push!(vue, :components => components(app))
   isempty(js_computed(app)  |> strip)   || push!(vue, :computed   => JSONText("{ $(js_computed(app)) }"))

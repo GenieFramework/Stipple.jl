@@ -62,8 +62,8 @@ function vue_integration(::Type{M};
     "
 
   function initStipple(rootSelector){
-    Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));
-    window.$vue_app_name = new Vue($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ));
+    //Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));
+    window.$vue_app_name = Vue.createApp($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) )).mount(rootSelector);
   } // end of initStipple
 
     "

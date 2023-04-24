@@ -131,15 +131,15 @@
     var a = s.exports,
       u = i({ name: "Dashboard", components: { StBigNumber: a } }, r, [], !1, null, "4d047983", null);
     var c = u.exports;
-    window.Stipple = {
-      init: function (e) {
-        var t;
-        if (!Vue) throw "Stipple requires Vue";
-        e = Object.assign({}, e);
-        Vue.component("StDashboard", c);
-        Vue.component("StBigNumber", a);
-        (t = document.querySelector("html").classList).add.apply(t, ["stipple-core", e.theme ? e.theme : "stipple-blue"]);
-      },
-    };
+    // window.Stipple = {
+    //   init: function (e) {
+    //     var t;
+    //     if (!Vue) throw "Stipple requires Vue";
+    //     e = Object.assign({}, e);
+    //     Vue.component("StDashboard", c);
+    //     Vue.component("StBigNumber", a);
+    //     (t = document.querySelector("html").classList).add.apply(t, ["stipple-core", e.theme ? e.theme : "stipple-blue"]);
+    //   },
+    // };
   },
 ]);
