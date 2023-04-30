@@ -271,7 +271,7 @@ end
 function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); source = nothing, reactive = true)
   (m == @__MODULE__) && return nothing
 
-  intmode = @eval Stipple $mode
+  intmode = mode isa Integer ? Int(mode) : @eval Stipple.$mode
   init_storage(m)
 
   var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
@@ -285,7 +285,7 @@ function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); sour
 end
 
 function binding(expr::Expr, storage::LittleDict{Symbol, Expr}, @nospecialize(mode::Any = nothing); source = nothing, reactive = true, m::Module)
-  intmode = @eval Stipple $mode
+  intmode = mode isa Integer ? Int(mode) : @eval Stipple.$mode
 
   var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
   storage[var] = field_expr
