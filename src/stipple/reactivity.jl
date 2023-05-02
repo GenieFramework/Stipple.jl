@@ -176,8 +176,8 @@ function model_to_storage(::Type{T}, prefix = "", postfix = "") where T# <: Reac
 end
 
 function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict; keep_channel = true)
-  m1 = eval(haskey(storage_1, :modes__) ? storage_1[:modes__].args[end] : LittleDict{Symbol, Any}())
-  m2 = eval(haskey(storage_2, :modes__) ? storage_2[:modes__].args[end] : LittleDict{Symbol, Any}())
+  m1 = eval(haskey(storage_1, :modes__) ? storage_1[:modes__].args[end] : LittleDict{Symbol, Int}())
+  m2 = eval(haskey(storage_2, :modes__) ? storage_2[:modes__].args[end] : LittleDict{Symbol, Int}())
   modes = merge(m1, m2)
   
   keep_channel && haskey(storage_2, :channel__) && (storage_2 = delete!(copy(storage_2), :channel__))
@@ -192,7 +192,7 @@ function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict; keep_ch
     end
   end
   storage = merge(storage_1, storage_2)
-  storage[:modes__] = :(modes__::Stipple.LittleDict{Symbol, Any} = $modes)
+  storage[:modes__] = :(modes__::Stipple.LittleDict{Symbol, Int} = $modes)
 
   storage
 end

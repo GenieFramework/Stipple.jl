@@ -321,7 +321,7 @@ function init_storage()
   LittleDict{Symbol, Expr}(
     CHANNELFIELDNAME =>
       :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = Stipple.channelfactory()),
-    :modes__ => :(modes__::Stipple.LittleDict{Symbol, Any} = Stipple.LittleDict{Symbol, Any}()),
+    :modes__ => :(modes__::Stipple.LittleDict{Symbol, Int} = Stipple.LittleDict{Symbol, Int}()),
     :isready => :(isready::Stipple.R{Bool} = false),
     :isprocessing => :(isprocessing::Stipple.R{Bool} = false)
   )
