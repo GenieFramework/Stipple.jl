@@ -15,11 +15,60 @@ existing Vue.js libraries.
 """
 module Stipple
 
+"""
+@using_except(expr)
+
+using statement while excluding certain names
+
+### Example
+```
+using Parent.MyModule: x, y
+```
+will import all names from Parent.MyModule except `x` and `y`. Currently suports only a single module.
+"""
+macro using_except(expr)
+  # check validity
+  expr isa Expr && (expr.args[1] == :(:) || (expr.args[1].head == :call && expr.args[1].args[1] == :(:))) || return
+  
+  # determine module name and list of excluded symbols
+  m, excluded = expr.args[1] == :(:) ? (expr.args[2], Symbol[expr.args[3]]) : (expr.args[1].args[2], Symbol[s for s in vcat([expr.args[1].args[3]], expr.args[2:end])])
+  
+  # convert m.args to list of Symbols
+  if m isa Expr
+      m.args[2] = m.args[2].value
+      while m.args[1] isa Expr
+          pushfirst!(m.args, m.args[1].args[1]);
+          m.args[2] = m.args[2].args[2].value
+      end
+  end
+  
+  m_name = m isa Expr ? m.args[end] : m
+  
+  # as a first step use only the module name
+  # by constructing `using Parent.MyModuleName: MyModule`
+  expr = :(using dummy1: dummy2)
+  expr.args[1].args[1].args = m isa Expr ? m.args : Any[m]
+  expr.args[1].args[2].args[1] = m_name
+  # execute the using statement
+  M = Core.eval(__module__, :($expr; $m_name))
+  # determine list of all exported names
+  nn = filter!(x -> Base.isexported(M, x) && ! (x ∈ excluded) , names(M; all = true, imported = true))
+  # convert the list of symbols to list of imported names
+  args = [:($(Expr(:., n))) for n in nn]
+  # re-use previous expression and insert the names to be imported
+  expr.args[1].args = pushfirst!(args, expr.args[1].args[1])
+  
+  @debug(expr)
+  expr
+end
+
+
 using Logging, Mixers, Random, Reexport, Requires, Dates
 
 @reexport using Observables
-@reexport using Genie
-@reexport using Genie.Renderer.Html
+@reexport @using_except Genie: download
+import Genie.Router.download
+@reexport @using_except Genie.Renderer.Html: mark, div, time, view, render, Headers
 @reexport using JSON3
 @reexport using StructTypes
 @reexport using Parameters
