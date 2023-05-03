@@ -67,7 +67,11 @@ end
 
 Default rendering of value types. Specialize `Stipple.render` to define custom rendering for your types.
 """
-function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) where {T}
+function Stipple.render(val::T, fieldname::Union{Symbol,Nothing}) where {T}
+  Stipple.render(val)
+end
+
+function Stipple.render(val::T) where {T}
   val
 end
 

@@ -118,8 +118,21 @@ end
 
 function Stipple.setmode!(expr::Expr, mode::Int, fieldnames::Symbol...)
   fieldname in [Stipple.CHANNELFIELDNAME, :modes__] && return
+  expr.args[2] isa Expr && expr.args[2].args[1] == :(Stipple._deepcopy) && (expr.args[2] = expr.args[2].args[2])
 
-  d = eval(expr.args[2])
+  d = if expr.args[2] isa LittleDict
+    copy(expr.args[2])
+  elseif expr.args[2] isa QuoteNode
+    expr.args[2].value
+  else # isa Expr generating a LittleDict (hopefully ...)
+    expr.args[2].args[1].args[1] == :(Stipple.LittleDict) || expr.args[2].args[1].args[1] == :(LittleDict) || error("Unexpected error while setting access properties of app variables")
+
+    d = LittleDict{Symbol, Int}()
+    for p in expr.args[2].args[2:end]
+      push!(d, p.args[2].value => p.args[3])
+    end
+    d
+  end
   for fieldname in fieldnames
     mode == PUBLIC ? delete!(d, fieldname) : d[fieldname] = mode
   end
@@ -271,7 +284,7 @@ end
 function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); source = nothing, reactive = true)
   (m == @__MODULE__) && return nothing
 
-  intmode = @eval Stipple $mode
+  intmode = mode isa Integer ? Int(mode) : @eval Stipple.$mode
   init_storage(m)
 
   var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
@@ -285,7 +298,7 @@ function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); sour
 end
 
 function binding(expr::Expr, storage::LittleDict{Symbol, Expr}, @nospecialize(mode::Any = nothing); source = nothing, reactive = true, m::Module)
-  intmode = @eval Stipple $mode
+  intmode = mode isa Integer ? Int(mode) : @eval Stipple.$mode
 
   var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
   storage[var] = field_expr
@@ -416,7 +429,7 @@ macro init(modeltype)
     local initfn =  if isdefined($__module__, :init_from_storage)
                       $__module__.init_from_storage
                     else
-                      $__module__.init
+                      Stipple.init
                     end
     local handlersfn =  if isdefined($__module__, :__GF_AUTO_HANDLERS__)
                           if length(methods($__module__.__GF_AUTO_HANDLERS__)) == 0
@@ -439,7 +452,7 @@ end
 macro init()
   quote
     let type = Stipple.@type
-      @init(type)
+      Stipple.ReactiveTools.@init(type)
     end
   end |> esc
 end
