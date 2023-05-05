@@ -69,6 +69,7 @@ using Logging, Mixers, Random, Reexport, Requires, Dates
 @reexport @using_except Genie: download
 import Genie.Router.download
 @reexport @using_except Genie.Renderer.Html: mark, div, time, view, render, Headers
+export render
 @reexport using JSON3
 @reexport using StructTypes
 @reexport using Parameters
