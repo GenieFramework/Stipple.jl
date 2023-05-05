@@ -49,12 +49,16 @@ macro using_except(expr)
   expr = :(using dummy1: dummy2)
   expr.args[1].args[1].args = m isa Expr ? m.args : Any[m]
   expr.args[1].args[2].args[1] = m_name
+
   # execute the using statement
   M = Core.eval(__module__, :($expr; $m_name))
+
   # determine list of all exported names
-  nn = filter!(x -> Base.isexported(M, x) && ! (x ∈ excluded) , names(M; all = true, imported = true))
+  nn = filter!(x -> Base.isexported(M, x) && ! (x ∈ excluded) && isdefined(M, x), names(M; all = true, imported = true))
+
   # convert the list of symbols to list of imported names
   args = [:($(Expr(:., n))) for n in nn]
+
   # re-use previous expression and insert the names to be imported
   expr.args[1].args = pushfirst!(args, expr.args[1].args[1])
   
@@ -843,7 +847,7 @@ macro kwredef(expr)
   esc(quote
     Base.@kwdef $expr
     $T_old = $T_new
-    if VERSION < v"1.8-"
+    if Base.VERSION < v"1.8-"
       $curly ? $T_new.body.name.name = $(QuoteNode(T_old)) : $T_new.name.name = $(QuoteNode(T_old)) # fix the name
     end
 
