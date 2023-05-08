@@ -30,12 +30,14 @@ const REACTIVE_STORAGE = LittleDict{Module,LittleDict{Symbol,Expr}}()
 const HANDLERS = LittleDict{Module,Vector{Expr}}()
 const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
 
-function DEFAULT_LAYOUT(; title::String = "Genie App")
+function DEFAULT_LAYOUT(; title::String = "Genie App", meta::Dict{<:AbstractString,<:AbstractString} = Dict("og:title" => "Genie App"))
+  tags = Genie.Renderers.Html.for_each(x -> """<meta name="$(x.first)" content="$(x.second)">\n    """, meta)
   """
 <!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8">
+    $tags
     <% Stipple.sesstoken() %>
     <title>$title</title>
     <% if isfile(joinpath(Genie.config.server_document_root, "css", "genieapp.css")) %>
@@ -116,8 +118,21 @@ end
 
 function Stipple.setmode!(expr::Expr, mode::Int, fieldnames::Symbol...)
   fieldname in [Stipple.CHANNELFIELDNAME, :modes__] && return
+  expr.args[2] isa Expr && expr.args[2].args[1] == :(Stipple._deepcopy) && (expr.args[2] = expr.args[2].args[2])
 
-  d = eval(expr.args[2])
+  d = if expr.args[2] isa LittleDict
+    copy(expr.args[2])
+  elseif expr.args[2] isa QuoteNode
+    expr.args[2].value
+  else # isa Expr generating a LittleDict (hopefully ...)
+    expr.args[2].args[1].args[1] == :(Stipple.LittleDict) || expr.args[2].args[1].args[1] == :(LittleDict) || error("Unexpected error while setting access properties of app variables")
+
+    d = LittleDict{Symbol, Int}()
+    for p in expr.args[2].args[2:end]
+      push!(d, p.args[2].value => p.args[3])
+    end
+    d
+  end
   for fieldname in fieldnames
     mode == PUBLIC ? delete!(d, fieldname) : d[fieldname] = mode
   end
@@ -173,6 +188,13 @@ end
 
 #===#
 
+"""
+```julia
+@clear
+```
+
+Deletes all reactive variables and code in a model.
+"""
 macro clear()
   delete_bindings!(__module__)
   delete_handlers!(__module__)
@@ -191,10 +213,24 @@ macro clear(args...)
   REACTIVE_STORAGE[__module__]
 end
 
+"""
+```julia
+@clear_vars
+```
+
+Deletes all reactive variables in a model.
+"""
 macro clear_vars()
   delete_bindings!(__module__)
 end
 
+"""
+```julia
+@clear_handlers
+```
+
+Deletes all reactive code handlers in a model.
+"""
 macro clear_handlers()
   delete_handlers!(__module__)
 end
@@ -246,6 +282,29 @@ macro model()
   end)
 end
 
+"""
+```julia
+@app(expr)
+```
+
+Sets up and enables the reactive variables and code provided in the expression `expr`.
+
+**Usage**
+
+The code block passed to @app implements the app's logic, handling the states of the UI components and the code that is executed when these states are altered.
+
+```julia
+@app begin
+   # reactive variables
+   @in N = 0
+   @out result = 0
+   # reactive code to be executed when N changes
+   @onchange N begin
+     result = 10*N
+   end
+end
+```
+"""
 macro app(expr)
   delete_bindings!(__module__)
   delete_handlers!(__module__)
@@ -269,7 +328,7 @@ end
 function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); source = nothing, reactive = true)
   (m == @__MODULE__) && return nothing
 
-  intmode = @eval Stipple $mode
+  intmode = mode isa Integer ? Int(mode) : @eval Stipple.$mode
   init_storage(m)
 
   var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
@@ -283,7 +342,7 @@ function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); sour
 end
 
 function binding(expr::Expr, storage::LittleDict{Symbol, Expr}, @nospecialize(mode::Any = nothing); source = nothing, reactive = true, m::Module)
-  intmode = @eval Stipple $mode
+  intmode = mode isa Integer ? Int(mode) : @eval Stipple.$mode
 
   var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
   storage[var] = field_expr
@@ -325,6 +384,56 @@ end
 # @in a = 2
 # @in a::Vector = [1, 2, 3]
 # @in a::Vector{Int} = [1, 2, 3]
+
+# the @in, @out and @private macros below are defined so a docstring can be attached
+# the actual macro definition is done in the for loop further down
+"""
+```julia
+@in(expr)
+```
+
+Declares a reactive variable that is public and can be written to from the UI.
+
+**Usage**
+```julia
+@app begin
+    @in N = 0
+end
+```
+"""
+macro in end
+
+"""
+```julia
+@out(expr)
+```
+
+Declares a reactive variable that is public and readonly.
+
+**Usage**
+```julia
+@app begin
+    @out N = 0
+end
+```
+"""
+macro out end
+
+"""
+```julia
+@private(expr)
+```
+
+Declares a non-reactive variable that cannot be accessed by UI code.
+
+**Usage**
+```julia
+@app begin
+    @private N = 0
+end
+```
+"""
+macro private end
 
 for (fn, mode) in [(:in, :PUBLIC), (:out, :READONLY), (:jsnfn, :JSFUNCTION), (:private, :PRIVATE)]
   fn! = Symbol(fn, "!")
@@ -414,7 +523,7 @@ macro init(modeltype)
     local initfn =  if isdefined($__module__, :init_from_storage)
                       $__module__.init_from_storage
                     else
-                      $__module__.init
+                      Stipple.init
                     end
     local handlersfn =  if isdefined($__module__, :__GF_AUTO_HANDLERS__)
                           if length(methods($__module__.__GF_AUTO_HANDLERS__)) == 0
@@ -437,7 +546,7 @@ end
 macro init()
   quote
     let type = Stipple.@type
-      @init(type)
+      Stipple.ReactiveTools.@init(type)
     end
   end |> esc
 end
@@ -654,6 +763,30 @@ function get_known_vars(::Type{M}) where M<:ReactiveModel
   reactive_vars, non_reactive_vars
 end
 
+"""
+```julia
+@onchange(var, expr)
+```
+Declares a reactive update such that when a reactive variable changes `expr` is executed.
+
+**Usage**
+
+This macro watches a list of variables and defines a code block that is executed when the variables change.
+
+```julia
+@app begin
+    # reactive variables taking their value from the UI
+    @in N = 0
+    @in M = 0
+    @out result = 0
+    # reactive code to be executed when N changes
+    @onchange N M begin
+        result = 10*N*M
+    end
+end
+```
+
+"""
 macro onchange(var, expr)
   quote
     @onchange $__module__ $var $expr
@@ -707,6 +840,30 @@ macro onchangeany(var, expr)
   end |> esc
 end
 
+"""
+```julia
+@onbutton
+```
+Declares a reactive update that executes `expr` when a button is pressed in the UI.
+
+**Usage**
+Define a click event listener with `@click`, and the handler with `@onbutton`.
+
+```julia
+@app begin
+    @in press = false
+    @onbutton press begin
+        println("Button presed!")
+    end
+end
+
+ui() = btn("Press me", @click(:press))
+
+@page("/", ui)
+```
+
+
+"""
 macro onbutton(var, expr)
   quote
     @onbutton $__module__ $var $expr
@@ -762,6 +919,18 @@ macro page(url, view, layout)
   :(@page($url, $view, $layout, () -> @eval($__module__, @init()))) |> esc
 end
 
+"""
+```julia
+@page(url, view)
+```
+Registers a new page with source in `view` to be rendered at the route `url`.
+
+**Usage**
+
+```julia
+@page("/", "view.html")
+```
+"""
 macro page(url, view)
   :(@page($url, $view, Stipple.ReactiveTools.DEFAULT_LAYOUT())) |> esc
 end
@@ -860,6 +1029,61 @@ macro event(M, eventname, expr)
   end |> esc
 end
 
+"""
+```julia
+@event(event, expr)
+```
+Executes the code in `expr` when a specific `event` is triggered by a UI component.
+
+**Usage**
+
+Define an event trigger such as a click, keypress or file upload for a component using the @on macro. Then, define the handler for the event with @event.
+
+
+**Examples**
+
+Keypress:
+
+
+```julia
+@app begin
+    @event :keypress begin
+        println("The Enter key has been pressed")
+    end
+end
+
+ui() =  textfield(class = "q-my-md", "Input", :input, hint = "Please enter some words", @on("keyup.enter", :keypress))
+
+@page("/", ui)
+```
+
+=======
+```julia
+<q-input hint="Please enter some words" v-on:keyup.enter="function(event) { handle_event(event, 'keypress') }" label="Input" v-model="input" class="q-my-md"></q-input>
+```
+File upload:
+
+```julia
+@app begin
+    @event :uploaded begin
+        println("Files have been uploaded!")
+    end
+end
+
+ui() = uploader("Upload files", url = "/upload" , method="POST", @on(:uploaded, :uploaded), autoupload=true)
+
+route("/upload", method=POST) do
+    # process uploaded files
+end
+
+@page("/", ui)
+```
+
+```julia
+julia> print(ui())
+<q-uploader url="/upload" method="POST" auto-upload v-on:uploaded="function(event) { handle_event(event, 'uploaded') }">Upload files</q-uploader>
+```
+"""
 macro event(event, expr)
   quote
     @event Stipple.@type() $event $expr
