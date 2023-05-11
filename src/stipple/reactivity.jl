@@ -171,6 +171,8 @@ function model_to_storage(::Type{T}, prefix = "", postfix = "") where T# <: Reac
     f = f in [:channel__, :modes__, AUTOFIELDS...] ? f : Symbol(prefix, f, postfix)
     storage[f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = Stipple._deepcopy($v))
   end
+  # fix channel field, which is not reconstructed properly by the code above
+  storage[:channel__] = :(channel__::String = Stipple.channelfactory())
 
   storage
 end

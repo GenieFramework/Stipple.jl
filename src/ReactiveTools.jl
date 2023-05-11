@@ -575,21 +575,22 @@ macro handlers(expr)
 end
 
 macro app(typename, expr, handlers_fn_name = :handlers)
-  storage = init_storage()
-  # next line needs to be executed before @handlers can be called
-  # calling in quote is not sufficient
-  @eval __module__ Stipple.@type $typename $storage
+  # indicate to the @handlers macro that old typefields have to be cleared
+  # (avoids model_to_storage)
+  newtypename = Symbol(typename, "_!_")
   quote
-    Stipple.ReactiveTools.@handlers $typename $expr $handlers_fn_name
+    Stipple.ReactiveTools.@handlers $newtypename $expr $handlers_fn_name
   end |> esc
 end
 
 macro handlers(typename, expr, handlers_fn_name = :handlers)
+  newtype = endswith(String(typename), "_!_")
+  newtype && (typename = Symbol(String(typename)[1:end-3]))
+
   expr = wrap(expr, :block)
   i_start = 1
   handlercode = []
   initcode = quote end
-  storage = isdefined(__module__, typename) ? @eval(__module__, Stipple.model_to_storage($typename)) : Stipple.init_storage()
 
   for (i, ex) in enumerate(expr.args)
     if ex isa Expr
@@ -613,17 +614,26 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
     end
   end
 
-  initcode = quote
-    __storage__ = $storage
-    $(initcode.args...)
-    __storage__
-  end
+  # model_to_storage is only needed when we convert an existing model, and only if new model fields are added 
+  # This is a rare case and it brings some disadvantages, as model_to_storage cannot recreate the original expressions
+  # for defining the initial values.
+  # Therefore we stay with the old model definition if we can. 
+  if ! newtype && isdefined(__module__, typename) && findfirst(x -> x isa Expr, initcode.args) !== nothing
+    storage = @eval(__module__, Stipple.model_to_storage($typename))
+    initcode = quote
+      __storage__ = $storage
+      $(initcode.args...)
+      __storage__
+    end
 
-  # needs to be executed before evaluation of handler code
-  # because the handler code depends on the model fields.
-  @eval __module__ begin
-    $initcode
-    Stipple.@type($typename, __storage__)
+    # needs to be executed before evaluation of handler code
+    # because the handler code depends on the model fields.
+    @eval __module__ begin
+      $initcode
+      Stipple.@type($typename, values(__storage__))
+    end
+  else
+    newtype && @eval __module__ Stipple.@type($typename, Stipple.init_storage())
   end
 
   handlercode_final = []
