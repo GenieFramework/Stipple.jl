@@ -614,26 +614,33 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
     end
   end
 
-  # model_to_storage is only needed when we convert an existing model, and only if new model fields are added 
-  # This is a rare case and it brings some disadvantages, as model_to_storage cannot recreate the original expressions
-  # for defining the initial values.
-  # Therefore we stay with the old model definition if we can. 
-  if ! newtype && isdefined(__module__, typename) && findfirst(x -> x isa Expr, initcode.args) !== nothing
-    storage = @eval(__module__, Stipple.model_to_storage($typename))
+  # model_to_storage is only needed when we add variables to an existing type.
+  no_new_vars = findfirst(x -> x isa Expr, initcode.args) === nothing
+  # if we redefine a type newtype is true
+  if isdefined(__module__, typename) && no_new_vars && ! newtype
+    # model is already defined and no variables are added and we are not redefining a model type
+  else
+    # we need to define a type ...
+    storage = if ! newtype && isdefined(__module__, typename) && ! no_new_vars
+      @eval(__module__, Stipple.model_to_storage($typename))
+    else
+      Stipple.init_storage()
+    end
     initcode = quote
+      # define a local variable __storage__ with the value of storage
+      # that will be used by the macro afterwards
       __storage__ = $storage
+      # add more definitions to __storage___
       $(initcode.args...)
-      __storage__
     end
 
     # needs to be executed before evaluation of handler code
     # because the handler code depends on the model fields.
     @eval __module__ begin
+      # execution of initcode will fill up the __storage__
       $initcode
       Stipple.@type($typename, values(__storage__))
     end
-  else
-    newtype && @eval __module__ Stipple.@type($typename, Stipple.init_storage())
   end
 
   handlercode_final = []
