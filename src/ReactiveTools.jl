@@ -613,7 +613,7 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
       i_start = i + 1
     end
   end
-
+  
   # model_to_storage is only needed when we add variables to an existing type.
   no_new_vars = findfirst(x -> x isa Expr, initcode.args) === nothing
   # if we redefine a type newtype is true
