@@ -73,7 +73,8 @@ using Logging, Mixers, Random, Reexport, Requires, Dates
 @reexport @using_except Genie: download
 import Genie.Router.download
 @reexport @using_except Genie.Renderer.Html: mark, div, time, view, render, Headers
-export render
+const htmldiv = Html.div
+export render, htmldiv
 @reexport using JSON3
 @reexport using StructTypes
 @reexport using Parameters

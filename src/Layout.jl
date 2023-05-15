@@ -146,13 +146,16 @@ function column(args...; kwargs...)
   Genie.Renderer.Html.div(args...; kwargs...)
 end
 
-raw"""
+"""
     function cell(args...; size::Int=0, xs::Int=0, sm::Int=0, md::Int=0, lg::Int=0, xl::Int=0, kwargs...)
 
 Creates a `div` HTML element with Quasar flex grid CSS class named `col`.
-If size is specified, the class `col-$size`is added insead.
-If tag classes (`sm`... `xl`) are specified the respective classes `col-$tag-$md`, e.g. `col-sm-6`, are added.
-The `cell`s should be included within `row`s or `columns`
+If size is specified, the class `col-\$size` is added instead.
+Quasar's flexgrid supports the following values for size arguments:
+- Integer values between `0` and `12`; `0` means no specification
+- AbStractString values `"1"` - `"12"`, `""` or `"auto"`; `""` means no specification, `"auto"` means height/width from content
+If tag classes (`xs`, `sm`, `md`, `lg`, `xl`) are specified, the respective classes `col-\$tag-\$md` are added, e.g. `col-sm-6`.
+The `cell`s should be included within `row`s or `column`s.
 
 ### Example
 
