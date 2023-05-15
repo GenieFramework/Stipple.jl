@@ -111,8 +111,8 @@ end
 """
     function row(args...; kwargs...)
 
-Creates a `div` HTML element with a CSS class named `row`. This works with Stipple's Twitter Bootstrap to create the
-responsive CSS grid of the web page. The `row` function creates rows which should include `cell`s.
+Creates a `div` HTML element with a CSS class named `row`. This works with Stipple's core layout and with [Quasar's Flex Grid](https://quasar.dev/layout/grid/introduction-to-flexbox) to create the
+responsive CSS grid of the web page. The `row()` function creates rows which should include [`cell`](@ref)s.
 
 ### Example
 
@@ -130,8 +130,8 @@ end
 """
     function column(args...; kwargs...)
 
-Creates a `div` HTML element with a CSS class named `column`. This works with Stipple's Twitter Bootstrap to create the
-responsive CSS grid of the web page. The `row` function creates rows which should include `cell`s.
+Creates a `div` HTML element with a CSS class named `column`. This works with [Quasar's Flex Grid](https://quasar.dev/layout/grid/introduction-to-flexbox) to create the
+responsive CSS grid of the web page. The `row()` function creates rows which should include [`cell`](@ref)s.
 
 ### Example
 
@@ -151,7 +151,7 @@ end
 
 Creates a `div` HTML element with Quasar flex grid CSS class named `col`.
 If size is specified, the class `col-\$size` is added instead.
-Quasar's flexgrid supports the following values for size arguments:
+[Quasar's Flex Grid](https://quasar.dev/layout/grid/introduction-to-flexbox) supports the following values for size arguments:
 - Integer values between `0` and `12`; `0` means no specification
 - AbStractString values `"1"` - `"12"`, `""` or `"auto"`; `""` means no specification, `"auto"` means height/width from content
 If tag classes (`xs`, `sm`, `md`, `lg`, `xl`) are specified, the respective classes `col-\$tag-\$md` are added, e.g. `col-sm-6`.
