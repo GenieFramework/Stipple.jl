@@ -8,7 +8,7 @@ module Layout
 using Genie, Stipple
 
 export layout
-export page, app, row, cell, container
+export page, app, row, column, cell, container
 
 export theme
 const THEMES = Function[]
@@ -128,27 +128,60 @@ function row(args...; kwargs...)
 end
 
 """
-    function cell(args...; size::Int=0, kwargs...)
+    function column(args...; kwargs...)
 
-Creates a `div` HTML element with CSS classes named `col col-12` and `col-sm-$size`.
-This works with Stipple's Twitter Bootstrap to create the responsive CSS grid of the web page. The `cell`s should be
-included within `row`s.
+Creates a `div` HTML element with a CSS class named `column`. This works with Stipple's Twitter Bootstrap to create the
+responsive CSS grid of the web page. The `row` function creates rows which should include `cell`s.
 
 ### Example
 
 ```julia
-julia> row(cell(size=2, span("Hello")))
-"<div class=\"row\"><div class=\"col col-12 col-sm-2\"><span>Hello</span></div></div>"
+julia> column(span("Hello"))
+"<div class=\"column\"><span>Hello</span></div>"
 ```
 """
-function cell(args...; size::Union{Int,AbstractString} = 0, kwargs...)
-  isa(size, AbstractString) && (size = parse(Int, size))
-
-  kwargs = NamedTuple(Dict{Symbol,Any}(kwargs...), :class, "col col-12 col-sm$(size > 0 ? "-$size" : "")")
+function column(args...; kwargs...)
+  kwargs = NamedTuple(Dict{Symbol,Any}(kwargs...), :class, "column")
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
 
+raw"""
+    function cell(args...; size::Int=0, xs::Int=0, sm::Int=0, md::Int=0, lg::Int=0, xl::Int=0, kwargs...)
+
+Creates a `div` HTML element with Quasar flex grid CSS class named `col`.
+If size is specified, the class `col-$size`is added insead.
+If tag classes (`sm`... `xl`) are specified the respective classes `col-$tag-$md`, e.g. `col-sm-6`, are added.
+The `cell`s should be included within `row`s or `columns`
+
+### Example
+
+```julia
+julia> row(cell(size = 2, md = 6, sm = 12, span("Hello")))
+"<div class=\"row\"><div class=\"col-2 col-sm-12 col-md-6\"><span>Hello</span></div></div>"
+```
+"""
+function cell(args...; size::Union{Int,AbstractString} = 0,
+  xs::Union{Int,AbstractString} = 0, sm::Union{Int,AbstractString} = 0, md::Union{Int,AbstractString} = 0,
+  lg::Union{Int,AbstractString} = 0, xl::Union{Int,AbstractString} = 0, kwargs...)
+
+  colclass = join([sizetocol(size, tag) for (size, tag) in [(size, ""), (xs, "xs"), (sm, "sm"), (md, "md"), (lg, "lg"), (xl, "xl")] if length(tag) == 0 || size != 0], ' ')
+
+  kwargs = NamedTuple(Dict{Symbol,Any}(kwargs...), :class, colclass)
+
+  Genie.Renderer.Html.div(args...; kwargs...)
+end
+
+function sizetocol(size::Union{String, Int} = 0, tag::String = "")
+  out = ["col"]
+  length(tag) > 0 && push!(out, tag)
+  if size isa Int
+    size > 0 && push!(out, "$size")
+  else
+    length(size) > 0 && push!(out, size)
+  end
+  length(tag) > 0 && length(out) == 2 ? "" : join(out, '-')
+end
 
 """
     function theme() :: String
