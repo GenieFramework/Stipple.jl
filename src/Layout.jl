@@ -155,13 +155,15 @@ If size is specified, the class `col-\$size` is added instead.
 - Integer values between `0` and `12`; `0` means no specification
 - AbStractString values `"1"` - `"12"`, `""` or `"auto"`; `""` means no specification, `"auto"` means height/width from content
 If tag classes (`xs`, `sm`, `md`, `lg`, `xl`) are specified, the respective classes `col-\$tag-\$md` are added, e.g. `col-sm-6`.
-The `cell`s should be included within `row`s or `column`s.
+The cells should be included within [`row`](@ref)s or [`column`](@ref)s.
+
+Moreover, cells are of the class `st-col`, which is controlled by the Stipple theme.
 
 ### Example
 
 ```julia
 julia> row(cell(size = 2, md = 6, sm = 12, span("Hello")))
-"<div class=\"row\"><div class=\"col-2 col-sm-12 col-md-6\"><span>Hello</span></div></div>"
+"<div class=\"row\"><div class=\"st-col col-2 col-sm-12 col-md-6\"><span>Hello</span></div></div>"
 ```
 """
 function cell(args...; size::Union{Int,AbstractString} = 0,
@@ -170,7 +172,7 @@ function cell(args...; size::Union{Int,AbstractString} = 0,
 
   colclass = join([sizetocol(size, tag) for (size, tag) in [(size, ""), (xs, "xs"), (sm, "sm"), (md, "md"), (lg, "lg"), (xl, "xl")] if length(tag) == 0 || size != 0], ' ')
 
-  kwargs = NamedTuple(Dict{Symbol,Any}(kwargs...), :class, colclass)
+  kwargs = NamedTuple(Dict{Symbol,Any}(kwargs...), :class, "st-col $colclass")
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
