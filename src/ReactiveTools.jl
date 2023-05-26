@@ -983,9 +983,9 @@ for (f, field) in (
     Defines js statements for the `$($field_str)` section of the vue element.
 
     expr can be
-      - String containing javascript code
-      - Function returning String of javascript code
-      - Vector of the above
+      - `String` containing javascript code
+      - `Function` returning String of javascript code
+      - `Vector` of the above
 
     ### Example 1
 

@@ -114,9 +114,9 @@ for (f, field) in (
     Defines js statements for the `$($field_str)` section of the vue element.
 
     Result types of the function can be
-      - Strings containing javascript code
-      - Functions returning Strings of javascript code
-      - Vectors of the above
+      - `String` containing javascript code
+      - `Function` returning Strings of javascript code
+      - `Vector` of the above
 
     ### Example 1
 
