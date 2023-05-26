@@ -83,46 +83,6 @@ end
 const jswatch = js_watch
 
 """
-    function js_created(app::T)::String where {T<:ReactiveModel}
-
-Defines js statements for the `created` section of the vue element.
-They are executed directly after the creation of the vue element.
-
-### Example
-
-```julia
-js_created(app::MyDashboard) = \"\"\"
-    if (this.cameraon) { startcamera() }
-\"\"\"
-```
-"""
-function js_created(app::T)::String where {T<:ReactiveModel}
-  ""
-end
-
-const jscreated = js_created
-
-"""
-    function js_mounted(app::T)::String where {T<:ReactiveModel}
-
-Defines js statements for the `mounted` section of the vue element.
-They are executed directly after the mounting of the vue element.
-
-### Example
-
-```julia
-js_created(app::MyDashboard) = \"\"\"
-    if (this.cameraon) { startcamera() }
-\"\"\"
-```
-"""
-function js_mounted(app::T)::String where {T<:ReactiveModel}
-  ""
-end
-
-const jsmounted = js_mounted
-
-"""
     function client_data(app::T)::String where {T<:ReactiveModel}
 
 Defines additional data that will only be visible by the browser.
@@ -140,3 +100,51 @@ will define the additional fields `client_name`, `client_age` and `accept` for t
 client_data(app::T) where T <: ReactiveModel = Dict{String, Any}()
 
 client_data(;kwargs...) = Dict{String, Any}([String(k) => v for (k, v) in kwargs]...)
+
+for (f, field) in (
+  (:js_before_create, :beforeCreate), (:js_created, :created), (:js_before_mount, :beforeMount), (:js_mounted, :mounted),
+  (:js_before_update, :beforeUpdate), (:js_updated, :updated), (:js_activated, :activated), (:js_deactivated, :deactivated),
+  (:js_before_destroy, :beforeDestroy), (:js_destroyed, :destroyed), (:js_error_captured, :errorCaptured),)
+
+  field_str = string(field)
+  Core.eval(@__MODULE__, quote
+    """
+        function $($f)(app::T)::Union{Function, String, Vector} where {T<:ReactiveModel}
+
+    Defines js statements for the `$($field_str)` section of the vue element.
+
+    Result types of the function can be
+      - Strings containing javascript code
+      - Functions returning Strings of javascript code
+      - Vectors of the above
+
+    ### Example 1
+
+    ```julia
+    $($f)(app::MyDashboard) = \"\"\"
+        if (this.cameraon) { startcamera() }
+    \"\"\"
+    ```
+
+    ### Example 2
+
+    ```julia
+    startcamera() = "if (this.cameraon) { startcamera() }"
+    stopcamera() = "if (this.cameraon) { stopcamera() }"
+
+    $($f)(app::MyDashboard) = [startcamera, stopcamera]
+    ```
+    Checking the result can be done in the following way
+    ```
+    julia> render(MyApp())[:$($field_str)]
+    JSONText("function(){\n    if (this.cameraon) { startcamera() }\n\n    if (this.cameraon) { stopcamera() }\n}")
+    ```
+    """
+    function $f(app::T)::String where {T<:ReactiveModel}
+      ""
+    end
+  end)
+end
+
+const jscreated = js_created
+const jsmounted = js_mounted
