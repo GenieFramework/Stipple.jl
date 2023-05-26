@@ -955,16 +955,48 @@ macro page(url, view)
   :(@page($url, $view, Stipple.ReactiveTools.DEFAULT_LAYOUT())) |> esc
 end
 
-macro computed(args...)
-  vue_options("computed", args...)
-end
+for f in (:methods, :watch, :computed)
+  f_str = string(f)
+  Core.eval(@__MODULE__, quote
+    """
+        @$($f_str)(expr)
+        @$($f_str)(App, expr)
 
-macro methods(args...)
-  vue_options("methods", args...)
-end
+    Defines js functions for the `$($f_str)` section of the vue element.
+          
+    `expr` can be
+    - `String` containing javascript code
+    - `Pair` of function name and function code
+    - `Function` returning String of javascript code
+    - `Dict` of function names and function code
+    - `Vector` of the above
+  
+    ### Example 1
 
-macro watch(args...)
-  vue_options("watch", args...)
+    ```julia
+    @$($f_str) "greet: function(name) {console.log('Hello ' + name)}"
+    ```
+
+    ### Example 2
+
+    ```julia
+    js_greet() = :greet => "function(name) {console.log('Hello ' + name)}"
+    js_bye() = :bye => "function() {console.log('Bye!')}"
+    @$($f_str) MyApp [js_greet, js_bye]
+    ```
+    Checking the result can be done in the following way
+    ```
+    julia> render(MyApp())[:$($f_str)].s |> println
+    {
+        "greet":function(name) {console.log('Hello ' + name)},
+        "bye":function() {console.log('Bye!')}
+    }
+    ```
+    """
+    macro $f(args...)
+      vue_options($f_str, args...)
+    end
+  end)
 end
 
 #=== Lifecycle hooks ===#

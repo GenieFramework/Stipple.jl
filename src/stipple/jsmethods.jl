@@ -2,11 +2,17 @@
     function js_methods(app::T) where {T<:ReactiveModel}
 
 Defines js functions for the `methods` section of the vue element.
+Expected result types of the function are
+  - `String` containing javascript code
+  - `Pair` of function name and function code
+  - `Function` returning String of javascript code
+  - `Dict` of function names and function code
+  - `Vector` of the above
 
-### Example
+### Example 1
 
 ```julia
-js_methods(app::MyDashboard) = \"\"\"
+js_methods(::MyDashboard) = \"\"\"
   mysquare: function (x) {
     return x^2
   }
@@ -14,6 +20,16 @@ js_methods(app::MyDashboard) = \"\"\"
     return x + y
   }
 \"\"\"
+```
+### Example 2
+```
+js_methods(::MyDashboard) = Dict(:f => "function(x) { console.log('x: ' + x) })
+```
+### Example 3
+```
+js_greet() = :greet => "function(name) {console.log('Hello ' + name)}"
+js_bye() = :bye => "function() {console.log('Bye!')}"
+js_methods(::MyDashboard) = [js_greet, js_bye]
 ```
 """
 function js_methods(app::T)::String where {T<:ReactiveModel}
@@ -38,6 +54,12 @@ end
 
 Defines js functions for the `computed` section of the vue element.
 These properties are updated every time on of the inner parameters changes its value.
+Expected result types of the function are
+  - `String` containing javascript code
+  - `Pair` of function name and function code
+  - `Function` returning String of javascript code
+  - `Dict` of function names and function code
+  - `Vector` of the above
 
 ### Example
 
@@ -60,6 +82,12 @@ const jscomputed = js_computed
 
 Defines js functions for the `watch` section of the vue element.
 These functions are called every time the respective property changes.
+Expected result types of the function are
+  - `String` containing javascript code
+  - `Pair` of function name and function code
+  - `Function` returning String of javascript code
+  - `Dict` of function names and function code
+  - `Vector` of the above
 
 ### Example
 
@@ -114,9 +142,9 @@ for (f, field) in (
     Defines js statements for the `$($field_str)` section of the vue element.
 
     Result types of the function can be
-      - `String` containing javascript code
-      - `Function` returning Strings of javascript code
-      - `Vector` of the above
+    - `String` containing javascript code
+    - `Function` returning String of javascript code
+    - `Vector` of the above
 
     ### Example 1
 
