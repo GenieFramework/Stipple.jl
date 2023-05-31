@@ -70,3 +70,17 @@ const reviveMixin = {
     }
   }
 }
+
+const eventMixin = {
+  methods: {
+    handle_event: function (event_data, event_handler) {
+      console.log('event: ' + event_data + ":" + event_handler)
+      Genie.WebChannels.sendMessageTo(window.CHANNEL, 'events', {
+          'event': {
+              'name': event_handler,
+              'event': event_data
+          }
+      })
+    }
+  }
+}

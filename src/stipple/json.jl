@@ -5,6 +5,9 @@ struct JSONText
   s::String
 end
 
+JSONText(sym::Symbol) = JSONText(String(sym))
+JSONText(js::JSONText) = js
+
 @inline StructTypes.StructType(::Type{JSONText}) = JSON3.RawType()
 @inline StructTypes.construct(::Type{JSONText}, x::JSON3.RawValue) = JSONText(string(x))
 @inline JSON3.rawbytes(x::JSONText) = codeunits(x.s)

@@ -20,7 +20,10 @@ export @clear, @clear_vars, @clear_handlers
 export @page, @init, @handlers, @app, @appname
 
 # js functions on the front-end (see Vue.js docs)
-export @methods, @watch, @computed, @created, @mounted, @client_data, @add_client_data
+export @methods, @watch, @computed, @client_data, @add_client_data
+
+export @before_create, @created, @before_mount, @mounted, @before_update, @updated, @activated, @deactivated, @before_destroy, @destroyed, @error_captured
+
 
 export DEFAULT_LAYOUT, Page
 
@@ -952,62 +955,98 @@ macro page(url, view)
   :(@page($url, $view, Stipple.ReactiveTools.DEFAULT_LAYOUT())) |> esc
 end
 
-macro computed(args...)
-  vue_options("computed", args...)
-end
+for f in (:methods, :watch, :computed)
+  f_str = string(f)
+  Core.eval(@__MODULE__, quote
+    """
+        @$($f_str)(expr)
+        @$($f_str)(App, expr)
 
-macro methods(args...)
-  vue_options("methods", args...)
-end
+    Defines js functions for the `$($f_str)` section of the vue element.
+          
+    `expr` can be
+    - `String` containing javascript code
+    - `Pair` of function name and function code
+    - `Function` returning String of javascript code
+    - `Dict` of function names and function code
+    - `Vector` of the above
+  
+    ### Example 1
 
-macro watch(args...)
-  vue_options("watch", args...)
+    ```julia
+    @$($f_str) "greet: function(name) {console.log('Hello ' + name)}"
+    ```
+
+    ### Example 2
+
+    ```julia
+    js_greet() = :greet => "function(name) {console.log('Hello ' + name)}"
+    js_bye() = :bye => "function() {console.log('Bye!')}"
+    @$($f_str) MyApp [js_greet, js_bye]
+    ```
+    Checking the result can be done in the following way
+    ```
+    julia> render(MyApp())[:$($f_str)].s |> println
+    {
+        "greet":function(name) {console.log('Hello ' + name)},
+        "bye":function() {console.log('Bye!')}
+    }
+    ```
+    """
+    macro $f(args...)
+      vue_options($f_str, args...)
+    end
+  end)
 end
 
 #=== Lifecycle hooks ===#
-macro before_create(args...)
-  vue_options("beforeCreate", args...)
+
+for (f, field) in (
+  (:before_create, :beforeCreate), (:created, :created), (:before_mount, :beforeMount), (:mounted, :mounted),
+  (:before_update, :beforeUpdate), (:updated, :updated), (:activated, :activated), (:deactivated, :deactivated),
+  (:before_destroy, :beforeDestroy), (:destroyed, :destroyed), (:error_captured, :errorCaptured),)
+
+  f_str = string(f)
+  field_str = string(field)
+  Core.eval(@__MODULE__, quote
+    """
+        @$($f_str)(expr)
+
+    Defines js statements for the `$($field_str)` section of the vue element.
+
+    expr can be
+      - `String` containing javascript code
+      - `Function` returning String of javascript code
+      - `Vector` of the above
+
+    ### Example 1
+
+    ```julia
+    @$($f_str) \"\"\"
+        if (this.cameraon) { startcamera() }
+    \"\"\"
+    ```
+
+    ### Example 2
+
+    ```julia
+    startcamera() = "if (this.cameraon) { startcamera() }"
+    stopcamera() = "if (this.cameraon) { stopcamera() }"
+
+    @$($f_str) MyApp [startcamera, stopcamera]
+    ```
+    Checking the result can be done in the following way
+    ```
+    julia> render(MyApp())[:$($field_str)]
+    JSONText("function(){\n    if (this.cameraon) { startcamera() }\n\n    if (this.cameraon) { stopcamera() }\n}")
+    ```
+    """
+    macro $f(args...)
+      vue_options($f_str, args...)
+    end
+  end)
 end
 
-macro created(args...)
-  vue_options("created", args...)
-end
-
-macro before_mount(args...)
-  vue_options("beforeMount", args...)
-end
-
-macro mounted(args...)
-  vue_options("mounted", args...)
-end
-
-macro before_update(args...)
-  vue_options("beforeUpdate", args...)
-end
-
-macro updated(args...)
-  vue_options("updated", args...)
-end
-
-macro activated(args...)
-  vue_options("activated", args...)
-end
-
-macro deactivated(args...)
-  vue_options("deactivated", args...)
-end
-
-macro before_destroy(args...)
-  vue_options("beforeDestroy", args...)
-end
-
-macro destroyed(args...)
-  vue_options("destroyed", args...)
-end
-
-macro error_captured(args...)
-  vue_options("errorCaptured", args...)
-end
 #=== Lifecycle hooks ===#
 
 function vue_options(hook_type, args...)
