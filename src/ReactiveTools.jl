@@ -931,12 +931,12 @@ macro page(url, view, layout, model, context)
   end |> esc
 end
 
-macro page(url, view, layout, model)
-  :(@page($url, $view, $layout, $model, $__module__)) |> esc
+macro page(url, view, layout, mod)
+  :(@page($url, $view, $layout, () -> @eval($mod, @init()), $mod)) |> esc
 end
 
-macro page(url, view, layout)
-  :(@page($url, $view, $layout, () -> @eval($__module__, @init()))) |> esc
+macro page(url, view, mod)
+  :(@page($url, $view, Stipple.ReactiveTools.DEFAULT_LAYOUT(), $mod)) |> esc
 end
 
 """
@@ -952,8 +952,12 @@ Registers a new page with source in `view` to be rendered at the route `url`.
 ```
 """
 macro page(url, view)
-  :(@page($url, $view, Stipple.ReactiveTools.DEFAULT_LAYOUT())) |> esc
+  quote
+    __module__ = $(__module__)
+    @page($(esc(url)), $(esc(view)), __module__)
+  end
 end
+
 
 for f in (:methods, :watch, :computed)
   f_str = string(f)
