@@ -958,7 +958,6 @@ macro page(url, view)
   end
 end
 
-
 for f in (:methods, :watch, :computed)
   f_str = string(f)
   Core.eval(@__MODULE__, quote
