@@ -953,8 +953,7 @@ Registers a new page with source in `view` to be rendered at the route `url`.
 """
 macro page(url, view)
   quote
-    __module__ = $(__module__)
-    @page($(esc(url)), $(esc(view)), __module__)
+    @page($(esc(url)), $(esc(view)), $(__module__))
   end
 end
 
