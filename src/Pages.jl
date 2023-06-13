@@ -29,11 +29,18 @@ pages() = _pages
 
 function Page(  route::Union{Route,String};
                 view::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Vector{<:AbstractString},Function},
-                model::Union{M,Function,Nothing,Expr} = Stipple.init(EmptyModel),
+                model::Union{M,Function,Nothing,Expr,Module} = Stipple.init(EmptyModel),
                 layout::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Nothing,Function} = nothing,
                 context::Module = @__MODULE__,
                 kwargs...
               ) where {M<:ReactiveModel}
+
+  model = if isa(model, Expr)
+    Core.eval(context, model)
+  elseif isa(model, Module)
+    context = model
+    @eval(context, @init())
+  end
 
   view =  if isa(view, ParsedHTMLString) || isa(view, Vector{<:AbstractString})
             string(view)
@@ -43,7 +50,6 @@ function Page(  route::Union{Route,String};
             view
           end
 
-  isa(model, Expr) && (model = Core.eval(context, model))
   route = isa(route, String) ? Route(; method = GET, path = route) : route
   layout = isa(layout, String) && length(layout) < Stipple.IF_ITS_THAT_LONG_IT_CANT_BE_A_FILENAME && isfile(layout) ? filepath(layout) :
             isa(layout, ParsedHTMLString) || isa(layout, String) ? string(layout) :
