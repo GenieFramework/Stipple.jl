@@ -36,11 +36,11 @@ function Page(  route::Union{Route,String};
               ) where {M<:ReactiveModel}
 
   model = if isa(model, Expr)
-    Core.eval(context, model)
-  elseif isa(model, Module)
-    context = model
-    @eval(context, @init())
-  end
+            Core.eval(context, model)
+          elseif isa(model, Module)
+            context = model
+            @eval(context, @init())
+          end
 
   view =  if isa(view, ParsedHTMLString) || isa(view, Vector{<:AbstractString})
             string(view)
