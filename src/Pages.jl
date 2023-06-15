@@ -59,7 +59,6 @@ function Page(  route::Union{Route,String};
 
   route.action = () -> (isa(view, Function) ? html! : html)(view; layout, context, model = (isa(model,Function) ? Base.invokelatest(model) : model), kwargs...)
 
-  
   page = Page(route, view, typeof((isa(model,Function) || isa(model,DataType) ? Base.invokelatest(model) : model)), layout, context)
 
   if isempty(_pages)
