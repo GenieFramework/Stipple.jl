@@ -40,6 +40,8 @@ function Page(  route::Union{Route,String};
           elseif isa(model, Module)
             context = model
             @eval(context, @init())
+          else
+            model
           end
 
   view =  if isa(view, ParsedHTMLString) || isa(view, Vector{<:AbstractString})
@@ -49,7 +51,7 @@ function Page(  route::Union{Route,String};
           else
             view
           end
-
+  
   route = isa(route, String) ? Route(; method = GET, path = route) : route
   layout = isa(layout, String) && length(layout) < Stipple.IF_ITS_THAT_LONG_IT_CANT_BE_A_FILENAME && isfile(layout) ? filepath(layout) :
             isa(layout, ParsedHTMLString) || isa(layout, String) ? string(layout) :
@@ -57,6 +59,7 @@ function Page(  route::Union{Route,String};
 
   route.action = () -> (isa(view, Function) ? html! : html)(view; layout, context, model = (isa(model,Function) ? Base.invokelatest(model) : model), kwargs...)
 
+  
   page = Page(route, view, typeof((isa(model,Function) || isa(model,DataType) ? Base.invokelatest(model) : model)), layout, context)
 
   if isempty(_pages)
