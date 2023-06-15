@@ -922,7 +922,6 @@ end
 #===#
 
 macro page(url, view, layout, model, context)
-  @show url, view, layout, model, context
   quote
     Stipple.Pages.Page( $url;
                         view = $view,
