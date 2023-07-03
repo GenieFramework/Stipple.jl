@@ -132,3 +132,15 @@ end
     @eval model = @init
     @eval @test propertynames(model) == (:channel__, :modes__, :isready, :isprocessing, :i3, :s3, :j, :t, :mixin_j, :mixin_t, :pre_j_post, :pre_t_post)
 end
+
+using DataFrames
+@testset "Extensions" begin
+    d = Dict(:a => [1, 2, 3], :b => ["a", "b", "c"])
+    df = DataFrame(:a => [1, 2, 3], :b => ["a", "b", "c"])
+    
+    @test Stipple.stipple_parse(DataFrame, [d]) == df
+    @test render(df) == OrderedDict("a" => [1, 2, 3], "b" => ["a", "b", "c"])
+
+    using OffsetArrays
+    @test Stipple.convertvalue(R(OffsetArray([1, 2, 3], -2)), [2, 3, 4]) == OffsetArray([2, 3, 4], -2)
+end

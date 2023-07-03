@@ -67,7 +67,7 @@ macro using_except(expr)
 end
 
 
-using Logging, Mixers, Random, Reexport, Requires, Dates
+using Logging, Mixers, Random, Reexport, Dates, Tables
 
 @reexport using Observables
 @reexport @using_except Genie: download
@@ -195,24 +195,30 @@ include("ReactiveTools.jl")
 
 #===#
 
+if !isdefined(Base, :get_extension)
+  using Requires
+end
+
 function __init__()
   Genie.config.websockets_server = true
+  deps_routes(core_theme = true)
 
-  @require OffsetArrays  = "6fe1bfb0-de20-5000-8ca7-80f57d26f881" function convertvalue(targetfield::Union{Ref{T}, Reactive{T}}, value) where T <: OffsetArrays.OffsetArray
-    a = stipple_parse(eltype(targetfield), value)
+  @static if !isdefined(Base, :get_extension)
+    @require OffsetArrays  = "6fe1bfb0-de20-5000-8ca7-80f57d26f881" begin
+      # evaluate the code of the extension without the surrounding module
+      include(joinpath(@__DIR__, "..", "ext", "StippleOffsetArrays.jl"))
+      # Core.eval(@__MODULE__, Meta.parse(join(jl, ';')).args[3])
+    end
 
-    # if value is not an OffsetArray use the offset of the current array
-    if ! isa(value, OffsetArrays.OffsetArray)
-      o = targetfield[].offsets
-      OffsetArrays.OffsetArray(a, OffsetArrays.Origin(1 .+ o))
-    # otherwise use the existing value
-    else
-      a
+    @require DataFrames  = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0" begin
+      # evaluate the code of the extension without the surrounding module
+      include(joinpath(@__DIR__, "..", "ext", "StippleDataFrames.jl"))
+      # Core.eval(@__MODULE__, Meta.parse(join(jl, ';')).args[3])
     end
   end
-
-  deps_routes(core_theme = true)
 end
+
+function rendertable end
 
 #===#
 
