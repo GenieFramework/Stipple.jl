@@ -140,7 +140,7 @@ function Stipple.render(val::T, fieldname::Union{Symbol,Nothing}) where {T}
 end
 
 function Stipple.render(val::T) where {T}
-  Tables.istable(val) ? rendertable(val) : val
+  (! (val isa AbstractDict || val isa AbstractVector) && Tables.istable(val)) ? rendertable(val) : val
 end
 
 function Stipple.rendertable(@nospecialize table)
