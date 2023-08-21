@@ -109,11 +109,12 @@ end
 
 
 """
-    function row(args...; kwargs...)
+    function row(args...; size=-1, xs=-1, sm=-1, md=-1, lg=-1, xl=-1, kwargs...)
 
-Creates a `div` HTML element with a CSS class named `row`. This works with Stipple's core layout and with [Quasar's Flex Grid](https://quasar.dev/layout/grid/introduction-to-flexbox) to create the
-responsive CSS grid of the web page. The `row()` function creates rows which should include [`cell`](@ref)s.
+Creates a `div` HTML element with Quasar's Flexgrid CSS class `row`. Such rows typically contain elements created with
+[`cell`](@ref), `row`, [`column`](@ref) or other elements that manually receive grid classes, e.g. `"col"`, `"col-sm-5"`. 
 
+The grid size kwargs `size`, `xs`, etc. are explained in more detail in the docs of [`cell`](@ref).
 ### Example
 
 ```julia
@@ -121,17 +122,26 @@ julia> row(span("Hello"))
 "<div class=\"row\"><span>Hello</span></div>"
 ```
 """
-function row(args...; kwargs...)
-  kwargs = NamedTuple(Dict{Symbol,Any}(kwargs...), :class, "row")
+function row(args...; 
+  size::Union{Int,AbstractString,Symbol,Nothing} = -1,
+  xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
+  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, kwargs...)
+
+  classes = [sizetocol(size, tag) for (size, tag) in ((size, ""), (xs, "xs"), (sm, "sm"), (md, "md"), (lg, "lg"), (xl, "xl"))]
+  pushfirst!(classes, "row")
+  class = join(classes[classes .!= ""], ' ')
+  kwargs = NamedTuple(Dict{Symbol,Any}(kwargs...), :class, class)
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
 
 """
-    function column(args...; kwargs...)
+    function column(args...; size=-1, xs=-1, sm=-1, md=-1, lg=-1, xl=-1, kwargs...)
 
-Creates a `div` HTML element with a CSS class named `column`. This works with [Quasar's Flex Grid](https://quasar.dev/layout/grid/introduction-to-flexbox) to create the
-responsive CSS grid of the web page. The `row()` function creates rows which should include [`cell`](@ref)s.
+Creates a `div` HTML element with Quasar's Flexgrid CSS class `column`. Such columns typically contain elements created with
+[`cell`](@ref), [`row`](@ref), `column`, or other elements that manually receive grid classes, e.g. `"col"`, `"col-sm-5"`. 
+
+The grid size kwargs `size`, `xs`, etc. are explained in more detail in the docs of [`cell`](@ref).
 
 ### Example
 
@@ -140,8 +150,16 @@ julia> column(span("Hello"))
 "<div class=\"column\"><span>Hello</span></div>"
 ```
 """
-function column(args...; kwargs...)
-  kwargs = NamedTuple(Dict{Symbol,Any}(kwargs...), :class, "column")
+function column(args...;
+  size::Union{Int,AbstractString,Symbol,Nothing} = -1,
+  xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
+  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1,
+  kwargs...)
+
+  classes = [sizetocol(size, tag) for (size, tag) in ((size, ""), (xs, "xs"), (sm, "sm"), (md, "md"), (lg, "lg"), (xl, "xl"))]
+  pushfirst!(classes, "column")
+  class = join(classes[classes .!= ""], ' ')
+  kwargs = NamedTuple(Dict{Symbol,Any}(kwargs...), :class, class)
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
@@ -149,15 +167,23 @@ end
 """
     function cell(args...; size::Int=0, xs::Int=0, sm::Int=0, md::Int=0, lg::Int=0, xl::Int=0, kwargs...)
 
-Creates a `div` HTML element with Quasar flex grid CSS class named `col`.
-If size is specified, the class `col-\$size` is added instead.
-[Quasar's Flex Grid](https://quasar.dev/layout/grid/introduction-to-flexbox) supports the following values for size arguments:
-- Integer values between `0` and `12`; `0` means no specification
-- AbStractString values `"1"` - `"12"`, `""` or `"auto"`; `""` means no specification, `"auto"` means height/width from content
-If tag classes (`xs`, `sm`, `md`, `lg`, `xl`) are specified, the respective classes `col-\$tag-\$md` are added, e.g. `col-sm-6`.
-The cells should be included within [`row`](@ref)s or [`column`](@ref)s.
-
+Creates a `div` HTML element with Quasar's flex grid CSS class `col`.
 Moreover, cells are of the class `st-col`, which is controlled by the Stipple theme.
+
+If size is specified, the class `col-\$size` is added instead.
+
+If tag classes (`xs`, `sm`, `md`, `lg`, `xl`) are specified, the respective classes `col-\$tag-\$md` are added, e.g. `col-sm-6`.
+
+Parameters:
+
+- `""` / `0`: shared remaining space (e.g. `"col"`, `"col-sm"`)
+- `1` - `12` / `"1"` - `"12"`: column width (e.g. `"col-5"`, `"col-sm-5"`)
+- `"auto"`/`:auto`: height/width from content (`"col-auto"`, `"col-sm-auto"`)
+- `-1` / `nothing`: no specification
+
+The cells are typically included within [`row`](@ref)s or [`column`](@ref)s.
+See [Quasar's Flex Grid](https://quasar.dev/layout/grid/introduction-to-flexbox) for more information.
+
 
 ### Example
 
@@ -166,26 +192,31 @@ julia> row(cell(size = 2, md = 6, sm = 12, span("Hello")))
 "<div class=\"row\"><div class=\"st-col col-2 col-sm-12 col-md-6\"><span>Hello</span></div></div>"
 ```
 """
-function cell(args...; size::Union{Int,AbstractString} = 0,
-  xs::Union{Int,AbstractString} = 0, sm::Union{Int,AbstractString} = 0, md::Union{Int,AbstractString} = 0,
-  lg::Union{Int,AbstractString} = 0, xl::Union{Int,AbstractString} = 0, kwargs...)
+function cell(args...;
+  size::Union{Int,AbstractString,Symbol,Nothing} = 0,
+  xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
+  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, kwargs...
+)
 
-  colclass = join([sizetocol(size, tag) for (size, tag) in [(size, ""), (xs, "xs"), (sm, "sm"), (md, "md"), (lg, "lg"), (xl, "xl")] if length(tag) == 0 || size != 0], ' ')
-
-  kwargs = NamedTuple(Dict{Symbol,Any}(kwargs...), :class, "st-col $colclass")
+  classes = [sizetocol(size, tag) for (size, tag) in ((size, ""), (xs, "xs"), (sm, "sm"), (md, "md"), (lg, "lg"), (xl, "xl"))]
+  pushfirst!(classes, "st-col")
+  class = join(classes[classes .!= ""], ' ')
+  kwargs = NamedTuple(Dict{Symbol,Any}(kwargs...), :class, class)
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
 
-function sizetocol(size::Union{String, Int} = 0, tag::String = "")
+function sizetocol(size::Union{String,Int,Nothing,Symbol}=-1, tag::String="")
+  (size == -1 || size === nothing) && return ""
   out = ["col"]
   length(tag) > 0 && push!(out, tag)
   if size isa Int
     size > 0 && push!(out, "$size")
   else
-    length(size) > 0 && push!(out, size)
+    size isa Symbol && (size = String(size))
+    length(size) > 0 && size != "col" && push!(out, size)
   end
-  length(tag) > 0 && length(out) == 2 ? "" : join(out, '-')
+  return join(out, '-')
 end
 
 """
