@@ -8,7 +8,7 @@ module Layout
 using Genie, Stipple
 
 export layout
-export page, app, row, column, cell, container
+export page, app, row, column, cell, container, flexgrid_kwargs
 
 export theme
 const THEMES = Function[]
@@ -107,6 +107,23 @@ function container(args...; fluid = false, kwargs...)
   Genie.Renderer.Html.div(args...; kwargs...)
 end
 
+function flexgrid_kwargs(; class = "", flexgrid_mappings::Dict{Symbol,Symbol} = Dict{Symbol,Symbol}(), kwargs...)
+  kwargs = Dict{Symbol,Any}(kwargs...)
+  classes = [class]
+
+  for key in (:size, :xs, :sm, :md, :lg, :xl)
+    newkey = get(flexgrid_mappings, key, key)
+    if haskey(kwargs, newkey)
+      class = sizetocol(kwargs[newkey], key)
+      length(class) > 0 && push!(classes, class)
+      delete!(kwargs, newkey)
+    end
+  end
+  class = join(classes[classes .!= ""], ' ')
+  length(class) > 0 && (kwargs[:class] = class)
+
+  return kwargs
+end
 
 """
     function row(args...; size=-1, xs=-1, sm=-1, md=-1, lg=-1, xl=-1, kwargs...)
@@ -127,10 +144,7 @@ function row(args...;
   xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
   lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, kwargs...)
 
-  classes = [sizetocol(size, tag) for (size, tag) in ((size, ""), (xs, "xs"), (sm, "sm"), (md, "md"), (lg, "lg"), (xl, "xl"))]
-  pushfirst!(classes, "row")
-  class = join(classes[classes .!= ""], ' ')
-  kwargs = NamedTuple(Dict{Symbol,Any}(kwargs...), :class, class)
+  kwargs = flexgrid_kwargs(; class = "row", size, xs, sm, md, lg, xl)
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
@@ -156,10 +170,7 @@ function column(args...;
   lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1,
   kwargs...)
 
-  classes = [sizetocol(size, tag) for (size, tag) in ((size, ""), (xs, "xs"), (sm, "sm"), (md, "md"), (lg, "lg"), (xl, "xl"))]
-  pushfirst!(classes, "column")
-  class = join(classes[classes .!= ""], ' ')
-  kwargs = NamedTuple(Dict{Symbol,Any}(kwargs...), :class, class)
+  kwargs = flexgrid_kwargs(; class = "column", size, xs, sm, md, lg, xl)
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
@@ -198,18 +209,15 @@ function cell(args...;
   lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, kwargs...
 )
 
-  classes = [sizetocol(size, tag) for (size, tag) in ((size, ""), (xs, "xs"), (sm, "sm"), (md, "md"), (lg, "lg"), (xl, "xl"))]
-  pushfirst!(classes, "st-col")
-  class = join(classes[classes .!= ""], ' ')
-  kwargs = NamedTuple(Dict{Symbol,Any}(kwargs...), :class, class)
+  kwargs = flexgrid_kwargs(; class = "st-col", size, xs, sm, md, lg, xl)
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
 
-function sizetocol(size::Union{String,Int,Nothing,Symbol}=-1, tag::String="")
+function sizetocol(size::Union{String,Int,Nothing,Symbol} = -1, tag::Symbol = :size)
   (size == -1 || size === nothing) && return ""
   out = ["col"]
-  length(tag) > 0 && push!(out, tag)
+  tag != :size && push!(out, String(tag))
   if size isa Int
     size > 0 && push!(out, "$size")
   else
