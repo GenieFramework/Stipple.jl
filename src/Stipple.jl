@@ -29,10 +29,10 @@ will import all names from Parent.MyModule except `x` and `y`. Currently suports
 macro using_except(expr)
   # check validity
   expr isa Expr && (expr.args[1] == :(:) || (expr.args[1].head == :call && expr.args[1].args[1] == :(:))) || return
-  
+
   # determine module name and list of excluded symbols
   m, excluded = expr.args[1] == :(:) ? (expr.args[2], Symbol[expr.args[3]]) : (expr.args[1].args[2], Symbol[s for s in vcat([expr.args[1].args[3]], expr.args[2:end])])
-  
+
   # convert m.args to list of Symbols
   if m isa Expr
       m.args[2] = m.args[2].value
@@ -41,9 +41,9 @@ macro using_except(expr)
           m.args[2] = m.args[2].args[2].value
       end
   end
-  
+
   m_name = m isa Expr ? m.args[end] : m
-  
+
   # as a first step use only the module name
   # by constructing `using Parent.MyModuleName: MyModule`
   expr = :(using dummy1: dummy2)
@@ -61,7 +61,7 @@ macro using_except(expr)
 
   # re-use previous expression and insert the names to be imported
   expr.args[1].args = pushfirst!(args, expr.args[1].args[1])
-  
+
   @debug(expr)
   expr
 end
@@ -459,7 +459,7 @@ function init(::Type{M};
 
       try
         haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) &&
-          Genie.Router.params!(Stipple.ModelStorage.Sessions.GenieSession.PARAMS_SESSION_KEY,
+          Genie.Router.params!(:session,
                                 Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
       catch ex
         @error ex

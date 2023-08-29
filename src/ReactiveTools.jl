@@ -34,7 +34,7 @@ const HANDLERS = LittleDict{Module,Vector{Expr}}()
 const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
 
 function DEFAULT_LAYOUT(; title::String = "Genie App", meta::Dict{<:AbstractString,<:AbstractString} = Dict("og:title" => "Genie App"))
-  tags = Genie.Renderers.Html.for_each(x -> """<meta name="$(x.first)" content="$(x.second)">\n    """, meta)
+  tags = Genie.Renderers.Html.for_each(x -> """<meta name="$(x.first)" content="$(x.second)">\n""", meta)
   """
 <!DOCTYPE html>
 <html>
@@ -616,7 +616,7 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
       i_start = i + 1
     end
   end
-  
+
   # model_to_storage is only needed when we add variables to an existing type.
   no_new_vars = findfirst(x -> x isa Expr, initcode.args) === nothing
   # if we redefine a type newtype is true
@@ -963,14 +963,14 @@ for f in (:methods, :watch, :computed)
         @$($f_str)(App, expr)
 
     Defines js functions for the `$($f_str)` section of the vue element.
-          
+
     `expr` can be
     - `String` containing javascript code
     - `Pair` of function name and function code
     - `Function` returning String of javascript code
     - `Dict` of function names and function code
     - `Vector` of the above
-  
+
     ### Example 1
 
     ```julia
