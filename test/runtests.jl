@@ -144,3 +144,22 @@ using DataFrames
     using OffsetArrays
     @test Stipple.convertvalue(R(OffsetArray([1, 2, 3], -2)), [2, 3, 4]) == OffsetArray([2, 3, 4], -2)
 end
+
+
+# Basic rendering tests (should be enhanced over time perhaps...)
+# These tests should probably be repeated in StippleUI to make sure rendering is not overwritten
+@testset "Rendering" begin
+    using Tables
+
+    ds = Dict("hello" => [1, 2, 3, 4], "world" => ["five", "six"])
+    @test render(ds) == ds
+    
+    vd = [Dict("hello" => 1, "world" => 2)]
+    @test render(vd) == vd
+
+    df = DataFrame(:a => [1, 2, 3], :b => ["a", "b", "c"])
+    @test render(df) == OrderedDict("a" => [1, 2, 3], "b" => ["a", "b", "c"])
+    
+    mt = Tables.table([1 2; 3 4])
+    @test render(mt) == OrderedDict(:Column1 => [1, 3], :Column2 => [2, 4])
+end

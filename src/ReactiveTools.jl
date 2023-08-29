@@ -800,7 +800,7 @@ This macro watches a list of variables and defines a code block that is executed
     @in M = 0
     @out result = 0
     # reactive code to be executed when N changes
-    @onchange N M begin
+    @onchange N, M begin
         result = 10*N*M
     end
 end

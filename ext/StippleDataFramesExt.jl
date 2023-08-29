@@ -9,7 +9,7 @@ function Stipple.stipple_parse(::Type{DF} where DF <: DataFrames.AbstractDataFra
   isempty(d) ? DF() : reduce(vcat, DataFrames.DataFrame.(d))
 end
 
-function Stipple.render(df::DataFrames.DataFrame)
+function Stipple.render(df::DataFrames.AbstractDataFrame)
   OrderedDict(zip(names(df), eachcol(df)))
 end
   
