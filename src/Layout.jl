@@ -142,9 +142,11 @@ julia> row(span("Hello"))
 function row(args...; 
   size::Union{Int,AbstractString,Symbol,Nothing} = -1,
   xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, kwargs...)
+  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1,
+  class = "", kwargs...)
 
-  kwargs = flexgrid_kwargs(; class = "row", size, xs, sm, md, lg, xl)
+  class = join(pushfirst!(split(class), "row"), " ")
+  kwargs = flexgrid_kwargs(; class, size, xs, sm, md, lg, xl, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
@@ -168,9 +170,10 @@ function column(args...;
   size::Union{Int,AbstractString,Symbol,Nothing} = -1,
   xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
   lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  kwargs...)
+  class = "", kwargs...)
 
-  kwargs = flexgrid_kwargs(; class = "column", size, xs, sm, md, lg, xl)
+  class = join(pushfirst!(split(class), "column"), " ")
+  kwargs = flexgrid_kwargs(; class, size, xs, sm, md, lg, xl, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
@@ -206,10 +209,10 @@ julia> row(cell(size = 2, md = 6, sm = 12, span("Hello")))
 function cell(args...;
   size::Union{Int,AbstractString,Symbol,Nothing} = 0,
   xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, kwargs...
+  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, class = "", kwargs...
 )
-
-  kwargs = flexgrid_kwargs(; class = "st-col", size, xs, sm, md, lg, xl)
+  class = join(pushfirst!(split(class), "st-col"), " ")
+  kwargs = flexgrid_kwargs(; class, size, xs, sm, md, lg, xl, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
