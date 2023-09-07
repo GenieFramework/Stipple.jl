@@ -488,10 +488,11 @@ macro mixin(expr, prefix = "", postfix = "")
 
   storage = init_storage(__module__)
 
-  quote
-    Stipple.ReactiveTools.update_storage($__module__)
+  Stipple.ReactiveTools.update_storage(__module__)
+  Core.eval(__module__, quote
     Stipple.ReactiveTools.@mixin $storage $expr $prefix $postfix
-  end
+  end)
+  quote end
 end
 
 macro mixin(location, expr, prefix, postfix)
