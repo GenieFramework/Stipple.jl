@@ -122,7 +122,7 @@ end
 """
 abstract type ReactiveModel end
 
-export @vars, @add_vars, @define_mixin, @clear_cache, clear_cache
+export @vars, @add_vars, @define_mixin, @clear_cache, clear_cache, @clear_route, clear_route
 
 # deprecated
 export @reactive, @reactive!, @old_reactive, @old_reactive!
