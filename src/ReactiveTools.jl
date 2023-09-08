@@ -252,6 +252,11 @@ macro type()
   esc(:($type))
 end
 
+import Stipple.@clear_cache
+macro clear_cache()
+  :(Stipple.clear_cache(Stipple.@type)) |> esc
+end
+
 function update_storage(m::Module)
   clear_type(m)
   # isempty(Stipple.Pages._pages) && return
