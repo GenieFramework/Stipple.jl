@@ -339,9 +339,20 @@ macro var_storage(expr, new_inputmode = :auto)
     esc(:($storage))
 end
 
+Stipple.Genie.Router.delete!(M::Type{<:ReactiveModel}) = Stipple.Genie.Router.delete!(Symbol(Stipple.routename(M)))
+
+function clear_route(M::Type{<:ReactiveModel})
+  Stipple.Genie.Router.delete!(M)
+  return nothing
+end
+
+macro clear_route(App)
+  :(Stipple.clear_route($(esc(App))))
+end
+
 function clear_cache(M::Type{<:ReactiveModel})
   delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: M, keys(Stipple.DEPS)))
-  Stipple.Genie.Router.delete!(Symbol(Stipple.routename(M)))
+  Stipple.Genie.Router.delete!(M)
   return nothing
 end
 

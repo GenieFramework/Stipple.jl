@@ -257,6 +257,11 @@ macro clear_cache()
   :(Stipple.clear_cache(Stipple.@type)) |> esc
 end
 
+import Stipple.@clear_route
+macro clear_route()
+  :(Stipple.clear_route(Stipple.@type)) |> esc
+end
+
 function update_storage(m::Module)
   clear_type(m)
   # isempty(Stipple.Pages._pages) && return
@@ -581,8 +586,8 @@ macro init(args...)
                           identity
                         end
                         
-    let model = initfn($(init_args...))
-      instance = new_handlers ? Base.invokelatest(handlersfn, model) : handlersfn(model)
+    instance = let model = initfn($(init_args...))
+      new_handlers ? Base.invokelatest(handlersfn, model) : handlersfn(model)
     end
     for p in Stipple.Pages._pages
       p.context == $__module__ && (p.model = instance)
