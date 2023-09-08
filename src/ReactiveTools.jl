@@ -521,7 +521,44 @@ function init_handlers(m::Module)
   get!(Vector{Expr}, HANDLERS, m)
 end
 
-macro init(modeltype)
+"""
+        @init(kwargs...)
+
+Create a new app with the following kwargs supported:
+- `debounce::Int = JS_DEBOUNCE_TIME`
+- `transport::Module = Genie.WebChannels`
+- `core_theme::Bool = true`
+
+### Example
+```
+@app begin
+  @in n = 10
+  @out s = "Hello"
+end
+
+model = @init(debounce = 50)
+```
+------------
+
+        @init(App, kwargs...)
+
+Create a new app of type `App` with the same kwargs as above
+
+### Example
+
+```
+@app MyApp begin
+  @in n = 10
+  @out s = "Hello"
+end
+
+model = @init(MyApp, debounce = 50)
+```
+"""
+macro init(args...)
+  called_without_type = length(args) == 0 || args[1] isa Expr && args[1].head == :(=)
+  init_args = Stipple.expressions_to_args(args)
+  called_without_type && pushfirst!(init_args, :(Stipple.@type()))
   quote
     local new_handlers = false
     local initfn =  if isdefined($__module__, :init_from_storage)
@@ -538,20 +575,14 @@ macro init(modeltype)
                         else
                           identity
                         end
-
-    instance = new_handlers ? Base.invokelatest(handlersfn, $modeltype |> initfn) : $modeltype |> initfn |> handlersfn
+                        
+    let model = initfn($(init_args...))
+      instance = new_handlers ? Base.invokelatest(handlersfn, model) : handlersfn(model)
+    end
     for p in Stipple.Pages._pages
       p.context == $__module__ && (p.model = instance)
     end
     instance
-  end |> esc
-end
-
-macro init()
-  quote
-    let type = Stipple.@type
-      Stipple.ReactiveTools.@init(type)
-    end
   end |> esc
 end
 

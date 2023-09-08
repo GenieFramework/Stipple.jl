@@ -32,6 +32,9 @@ function Page(  route::Union{Route,String};
                 model::Union{M,Function,Nothing,Expr,Module} = Stipple.init(EmptyModel),
                 layout::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Nothing,Function} = nothing,
                 context::Module = @__MODULE__,
+                debounce::Int = Stipple.JS_DEBOUNCE_TIME,
+                transport::Module = Genie.WebChannels,
+                core_theme::Bool = true,
                 kwargs...
               ) where {M<:ReactiveModel}
 
@@ -39,7 +42,7 @@ function Page(  route::Union{Route,String};
             Core.eval(context, model)
           elseif isa(model, Module)
             context = model
-            @eval(context, @init())
+            @eval(context, @init(debounce = debounce, transport = transport, core_theme = core_theme))
           else
             model
           end
