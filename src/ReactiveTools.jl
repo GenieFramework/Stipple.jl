@@ -922,24 +922,6 @@ end
 
 #===#
 
-macro page(url, view, layout, model, context)
-  quote
-    Stipple.Pages.Page( $url;
-                        view = $view,
-                        layout = $layout,
-                        model = $model,
-                        context = $context)
-  end |> esc
-end
-
-macro page(url, view, layout, model)
-  :(@page($url, $view, $layout, $model, $__module__)) |> esc
-end
-
-macro page(url, view, layout)
-  :(@page($url, $view, $layout, () -> @eval($__module__, @init()))) |> esc
-end
-
 """
 ```julia
 @page(url, view)
@@ -952,8 +934,18 @@ Registers a new page with source in `view` to be rendered at the route `url`.
 @page("/", "view.html")
 ```
 """
-macro page(url, view)
-  :(@page($url, $view, Stipple.ReactiveTools.DEFAULT_LAYOUT())) |> esc
+macro page(url, view, expressions...)
+    args = Stipple.expressions_to_args(
+        expressions; 
+        args_to_kwargs = [:layout, :model, :context],
+        defaults = Dict(
+            :layout => Stipple.ReactiveTools.DEFAULT_LAYOUT(),
+            :context => __module__,
+            :model => () -> @eval(__module__, @init())
+        )
+    )
+
+    :(Stipple.Pages.Page($url; view = $view, $(args...))) |> esc
 end
 
 for f in (:methods, :watch, :computed)
