@@ -566,9 +566,15 @@ model = @init(MyApp, debounce = 50)
 ```
 """
 macro init(args...)
-  called_without_type = length(args) == 0 || args[1] isa Expr && args[1].head == :(=)
   init_args = Stipple.expressions_to_args(args)
-  called_without_type && pushfirst!(init_args, :(Stipple.@type()))
+
+  called_with_params = length(args) > 0 && args[1] isa Expr && args[1].head == :parameters
+  called_without_type = isnothing(findfirst(x -> !isa(x, Expr) || x.head ∉ (:kw, :parameters), init_args))
+  
+  if called_without_type
+    called_with_params ? insert!(init_args, 2, :(Stipple.@type())) : pushfirst!(init_args, :(Stipple.@type()))
+  end
+  
   quote
     local new_handlers = false
     local initfn =  if isdefined($__module__, :init_from_storage)
@@ -975,9 +981,15 @@ Registers a new page with source in `view` to be rendered at the route `url`.
 @page("/", "view.html")
 ```
 """
-macro page(url, view, expressions...)
+macro page(expressions...)
+    # for macros to support semicolon parameter syntax it's required to have no positional arguments in the definition
+    # therefore find indexes of positional arguments by hand
+    inds = findall(x -> !isa(x, Expr) || x.head ∉ (:parameters, :kw), expressions)
+    length(inds) < 2 && throw("Positional arguments 'url' and 'view' required!")
+    url, view = expressions[inds[1:2]]
+    kwarg_inds = setdiff(1:length(expressions), inds)
     args = Stipple.expressions_to_args(
-        expressions; 
+        expressions[kwarg_inds]; 
         args_to_kwargs = [:layout, :model, :context],
         defaults = Dict(
             :layout => Stipple.ReactiveTools.DEFAULT_LAYOUT(),
@@ -985,8 +997,8 @@ macro page(url, view, expressions...)
             :model => () -> @eval(__module__, @init())
         )
     )
-
-    :(Stipple.Pages.Page($url; view = $view, $(args...))) |> esc
+@show args
+    :(Stipple.Pages.Page($(args...), $url, view = $view)) |> esc
 end
 
 for f in (:methods, :watch, :computed)

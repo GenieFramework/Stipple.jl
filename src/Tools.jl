@@ -26,22 +26,30 @@ function expressions_to_args(@nospecialize(expressions); args_to_kwargs::Vector{
     inds = Int[]
 
     expressions isa Tuple && (expressions = Any[expressions...])
+
     # convert assignment expressions to keyword argument expressions
     # and collect the indices of positional arguments
     for (i, ex) in enumerate(expressions)
         if ex isa Expr && ex.head == :(=)
             ex.head = :kw
             push!(keys, ex.args[1])
-        else
+        elseif ex.head != :parameters
             push!(inds, i)
+        end
+    end
+
+    # loop through parameters after semicolon
+    if length(expressions) > 0 && expressions[1] isa Expr && expressions[1].head == :parameters
+        for ex in expressions[1].args
+            push!(keys, ex isa Symbol ? ex : ex.args[1])
         end
     end
 
     # collect positional args and convert them to kwargs according to the symbols in 'args_to_kwargs'
     # if they are not contained in the list of kwargs already and delete them from the list of positional args
-    for (i, kwarg) in zip(inds, args_to_kwargs)
+    for (ind, kwarg) in zip(inds, args_to_kwargs)
         if kwarg ∉ keys
-            push!(expressions, :($(Expr(:kw, kwarg, expressions[i]))))
+            push!(expressions, :($(Expr(:kw, kwarg, expressions[ind]))))
             push!(keys, kwarg)
         end
     end
