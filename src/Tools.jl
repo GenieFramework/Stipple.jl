@@ -33,7 +33,7 @@ function expressions_to_args(@nospecialize(expressions); args_to_kwargs::Vector{
         if ex isa Expr && ex.head == :(=)
             ex.head = :kw
             push!(keys, ex.args[1])
-        elseif ex.head != :parameters
+        elseif !isa(ex, Expr) || ex.head != :parameters
             push!(inds, i)
         end
     end

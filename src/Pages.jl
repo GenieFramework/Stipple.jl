@@ -29,7 +29,7 @@ pages() = _pages
 
 function Page(  route::Union{Route,String};
                 view::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Vector{<:AbstractString},Function},
-                model::Union{M,Function,Nothing,Expr,Module} = Stipple.init(EmptyModel),
+                model::Union{M,Function,Nothing,Expr,Module,Type{M}} = Stipple.init(EmptyModel),
                 layout::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Nothing,Function} = nothing,
                 context::Module = @__MODULE__,
                 debounce::Int = Stipple.JS_DEBOUNCE_TIME,
@@ -42,7 +42,9 @@ function Page(  route::Union{Route,String};
             Core.eval(context, model)
           elseif isa(model, Module)
             context = model
-            @eval(context, @init(debounce = debounce, transport = transport, core_theme = core_theme))
+            @eval(context, Stipple.ReactiveTools.@init(debounce = $debounce, transport = $transport, core_theme = $core_theme))
+          elseif model isa DataType
+            @eval(context, Stipple.ReactiveTools.@init($model; debounce = $debounce, transport = $transport, core_theme = $core_theme))
           else
             model
           end

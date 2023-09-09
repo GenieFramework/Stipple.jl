@@ -17,7 +17,7 @@ export @onchange, @onbutton, @event, @notify
 export @clear, @clear_vars, @clear_handlers
 
 # app handling
-export @page, @init, @handlers, @app, @appname
+export @page, @init, @handlers, @app, @appname, @modelstorage
 
 # js functions on the front-end (see Vue.js docs)
 export @methods, @watch, @computed, @client_data, @add_client_data
@@ -591,7 +591,7 @@ macro init(args...)
                         else
                           identity
                         end
-                        
+    
     instance = let model = initfn($(init_args...))
       new_handlers ? Base.invokelatest(handlersfn, model) : handlersfn(model)
     end
@@ -997,7 +997,7 @@ macro page(expressions...)
             :model => () -> @eval(__module__, @init())
         )
     )
-@show args
+
     :(Stipple.Pages.Page($(args...), $url, view = $view)) |> esc
 end
 
@@ -1254,6 +1254,12 @@ macro notify(args...)
 
   quote
     Base.notify(__model__, $(args...))
+  end |> esc
+end
+
+macro modelstorage()
+  quote
+    using Stipple.ModelStorage.Sessions
   end |> esc
 end
 
