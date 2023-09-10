@@ -574,28 +574,33 @@ macro init(args...)
   called_without_type = isnothing(type_pos)
   
   if called_without_type
+    type_pos = 0 # to prevent erroring in definition of 'handlersfn'
     insert!(init_args, Stipple.has_parameters(init_args) ? 2 : 1, :(Stipple.@type()))
   end
   
   quote
     local new_handlers = false
     local initfn =  if isdefined($__module__, :init_from_storage)
-                      $__module__.init_from_storage
-                    else
-                      Stipple.init
-                    end
+      $__module__.init_from_storage
+    else
+      Stipple.init
+    end
     local handlersfn =  if !$called_without_type
-                          Stipple.ReactiveTools.HANDLERS_FUNCTIONS[@eval($__module__, $(init_args[type_pos]))]
-                        elseif isdefined($__module__, :__GF_AUTO_HANDLERS__)
-                          if length(methods($__module__.__GF_AUTO_HANDLERS__)) == 0
-                            @eval(@handlers())
-                            new_handlers = true
-                          end
-                          $__module__.__GF_AUTO_HANDLERS__
-                        else
-                          identity
-                        end
-    
+      # writing '$(init_kwargs[type_pos])' generates an error during a pre-evaluation
+      # possibly from Revise?
+      # we use 'get' instead of 'getindex'
+      Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$(get(init_args, type_pos, "dummy"))]
+    else
+      if isdefined($__module__, :__GF_AUTO_HANDLERS__)
+        if length(methods($__module__.__GF_AUTO_HANDLERS__)) == 0
+          @eval(@handlers())
+          new_handlers = true
+        end
+        $__module__.__GF_AUTO_HANDLERS__
+      else
+        identity
+      end
+    end
     instance = let model = initfn($(init_args...))
       new_handlers ? Base.invokelatest(handlersfn, model) : handlersfn(model)
     end
