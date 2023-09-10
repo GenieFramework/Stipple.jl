@@ -33,6 +33,8 @@ const REACTIVE_STORAGE = LittleDict{Module,LittleDict{Symbol,Expr}}()
 const HANDLERS = LittleDict{Module,Vector{Expr}}()
 const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
 
+const HANDLERS_FUNCTIONS = LittleDict{Type{<:ReactiveModel},Function}()
+
 function DEFAULT_LAYOUT(; title::String = "Genie App", meta::Dict{<:AbstractString,<:AbstractString} = Dict("og:title" => "Genie App"))
   tags = Genie.Renderers.Html.for_each(x -> """<meta name="$(x.first)" content="$(x.second)">\n    """, meta)
   """
@@ -568,11 +570,11 @@ model = @init(MyApp, debounce = 50)
 macro init(args...)
   init_args = Stipple.expressions_to_args(args)
 
-  called_with_params = length(args) > 0 && args[1] isa Expr && args[1].head == :parameters
-  called_without_type = isnothing(findfirst(x -> !isa(x, Expr) || x.head ∉ (:kw, :parameters), init_args))
+  type_pos = findfirst(x -> !isa(x, Expr) || x.head ∉ (:kw, :parameters), init_args)
+  called_without_type = isnothing(type_pos)
   
   if called_without_type
-    called_with_params ? insert!(init_args, 2, :(Stipple.@type())) : pushfirst!(init_args, :(Stipple.@type()))
+    insert!(init_args, Stipple.has_parameters(init_args) ? 2 : 1, :(Stipple.@type()))
   end
   
   quote
@@ -582,7 +584,9 @@ macro init(args...)
                     else
                       Stipple.init
                     end
-    local handlersfn =  if isdefined($__module__, :__GF_AUTO_HANDLERS__)
+    local handlersfn =  if !$called_without_type
+                          Stipple.ReactiveTools.HANDLERS_FUNCTIONS[@eval($__module__, $(init_args[type_pos]))]
+                        elseif isdefined($__module__, :__GF_AUTO_HANDLERS__)
                           if length(methods($__module__.__GF_AUTO_HANDLERS__)) == 0
                             @eval(@handlers())
                             new_handlers = true
@@ -630,7 +634,10 @@ macro app(typename, expr, handlers_fn_name = :handlers)
   # (avoids model_to_storage)
   newtypename = Symbol(typename, "_!_")
   quote
-    Stipple.ReactiveTools.@handlers $newtypename $expr $handlers_fn_name
+    let model = Stipple.ReactiveTools.@handlers $newtypename $expr $handlers_fn_name
+      Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$typename] = $handlers_fn_name
+      model
+    end
   end |> esc
 end
 
@@ -984,7 +991,7 @@ Registers a new page with source in `view` to be rendered at the route `url`.
 macro page(expressions...)
     # for macros to support semicolon parameter syntax it's required to have no positional arguments in the definition
     # therefore find indexes of positional arguments by hand
-    inds = findall(x -> !isa(x, Expr) || x.head ∉ (:parameters, :kw), expressions)
+    inds = findall(x -> !isa(x, Expr) || x.head ∉ (:parameters, :(=)), expressions)
     length(inds) < 2 && throw("Positional arguments 'url' and 'view' required!")
     url, view = expressions[inds[1:2]]
     kwarg_inds = setdiff(1:length(expressions), inds)
@@ -994,9 +1001,26 @@ macro page(expressions...)
         defaults = Dict(
             :layout => Stipple.ReactiveTools.DEFAULT_LAYOUT(),
             :context => __module__,
-            :model => () -> @eval(__module__, @init())
+            :model => nothing 
         )
     )
+    model_parent, model_ind, model_expr = Stipple.locate_kwarg(args, :model)
+    model = @eval(__module__, $model_expr)
+
+    if model === nothing || model isa DataType && model <: ReactiveModel
+      # remove all other kwargs that are not meant for `@init`
+      init_kwargs = Stipple.delete_kwargs(args, [:layout, :model, :context])
+
+      # add the type if model is a modeltype
+      if model !== nothing
+          insert!(init_kwargs, Stipple.has_parameters(init_kwargs) ? 2 : 1, model_expr)
+      end
+      
+      # modify the entry of the :model keyword by an init function with respective init_kwargs
+      model_parent[model_ind] = :($(Expr(:kw, :model, () -> @eval(__module__, @init($(init_kwargs...))))))
+    else
+      nothing
+    end
 
     :(Stipple.Pages.Page($(args...), $url, view = $view)) |> esc
 end

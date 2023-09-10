@@ -1,3 +1,7 @@
+function has_parameters(expressions::Union{Vector, Tuple})
+    length(expressions) > 0 && expressions[1] isa Expr && expressions[1].head == :parameters
+end
+
 """
     expressions_to_args(@nospecialize(expressions); args_to_kwargs::Vector{Symbol} = [], defaults::AbstractDict{Symbol} = Dict())
 
@@ -39,7 +43,7 @@ function expressions_to_args(@nospecialize(expressions); args_to_kwargs::Vector{
     end
 
     # loop through parameters after semicolon
-    if length(expressions) > 0 && expressions[1] isa Expr && expressions[1].head == :parameters
+    if has_parameters(expressions)
         for ex in expressions[1].args
             push!(keys, ex isa Symbol ? ex : ex.args[1])
         end
@@ -64,3 +68,38 @@ function expressions_to_args(@nospecialize(expressions); args_to_kwargs::Vector{
 
     return expressions
 end
+
+function locate_kwarg(expressions, kwarg::Symbol)
+    ind = findfirst(x -> x isa Expr && x.head == :kw && x.args[1] == kwarg, expressions)
+    parent = if ind === nothing
+      # if not found look in the parameters, which reside at the first position of 'args'
+      ind = findfirst(x -> x == kwarg || x isa Expr && x.head == :kw && x.args[1] == kwarg, expressions[1].args)
+      expressions[1].args
+    else
+      expressions
+    end
+    expr = parent[ind] == kwarg ? kwarg : parent[ind].args[2]
+
+    parent, ind, expr
+end
+
+function delete_kwarg!(expressions, kwarg::Symbol)
+    parent, ind = locate_kwarg(expressions, kwarg)
+    if parent === expressions || parent !== expressions && length(parent) > 1
+        deleteat!(parent, ind)
+    else
+        deleteat!(expressions, 1)
+    end
+    
+    return expressions
+end
+
+function delete_kwargs!(expressions, kwargs::Vector{Symbol})
+    for kw in kwargs
+        delete_kwarg!(expressions, kw)
+    end
+    return expressions
+end
+
+delete_kwarg(expressions, kwarg::Symbol) = delete_kwarg!(Any[copy(x) for x in expressions], kwarg)
+delete_kwargs(expressions, kwarg::Vector{Symbol}) = delete_kwargs!(Any[copy(x) for x in expressions], kwarg)
