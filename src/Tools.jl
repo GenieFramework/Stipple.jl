@@ -1,5 +1,9 @@
 function has_parameters(expressions::Union{Vector, Tuple})
-    length(expressions) > 0 && expressions[1] isa Expr && expressions[1].head == :parameters
+    length(expressions) > 0 && Meta.isexpr(expressions[1], :parameters)
+end
+
+function iskwarg(x, kwarg::Union{Symbol, Nothing} = nothing)
+    x isa Expr && x.head == :kw && (kwarg === nothing || x.args[1] == kwarg)
 end
 
 """
@@ -70,10 +74,10 @@ function expressions_to_args(@nospecialize(expressions); args_to_kwargs::Vector{
 end
 
 function locate_kwarg(expressions, kwarg::Symbol)
-    ind = findfirst(x -> x isa Expr && x.head == :kw && x.args[1] == kwarg, expressions)
+    ind = findfirst(x -> iskwarg(x, kwarg), expressions)
     parent = if ind === nothing
       # if not found look in the parameters, which reside at the first position of 'args'
-      ind = findfirst(x -> x == kwarg || x isa Expr && x.head == :kw && x.args[1] == kwarg, expressions[1].args)
+      ind = findfirst(x -> x == kwarg || iskwarg(x, kwarg), expressions[1].args)
       expressions[1].args
     else
       expressions
