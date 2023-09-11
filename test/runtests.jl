@@ -209,7 +209,11 @@ end
     
         ui() = "DEMO UI"
         debounce = 10
+    end
 
+    @eval model = @init
+    
+    @eval begin
         @page("/", ui)
         @page("/nolayout", ui, layout = "no layout")
         @page("/debounce", ui, debounce = 50)
@@ -261,9 +265,10 @@ end
     
         ui() = "DEMO UI explicit"
         debounce = 11
-        # @eval model = @init(MyApp)
     end
     
+    @eval model = @init(MyApp)
+
     @eval begin
         @page("/", ui; model = MyApp)
         @page("/nolayout", ui, layout = "no layout (explicit)", model = MyApp)
