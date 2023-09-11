@@ -882,7 +882,7 @@ macro onchange(location, vars, expr)
   known_reactive_vars, known_non_reactive_vars = get_known_vars(loc)
   known_vars = vcat(known_reactive_vars, known_non_reactive_vars)
   on_vars = fieldnames_to_fields(vars, known_vars)
-
+  
   expr, used_vars = mask(expr, known_vars)
   do_vars = Symbol[]
 
@@ -960,7 +960,7 @@ macro onbutton(location, var, expr)
   var = fieldnames_to_fields(var, known_vars)
 
   expr = fieldnames_to_fields(expr, known_non_reactive_vars)
-  expr = fieldnames_to_fieldcontent(expr, known_reactive_vars)
+  expr = fieldnames_to_fieldcontent(expr, known_reactive_vars, known_reactive_vars)
   expr = unmask(expr, known_vars)
 
   ex = :(onbutton($var) do
