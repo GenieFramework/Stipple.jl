@@ -34,8 +34,8 @@ const HANDLERS = LittleDict{Module,Vector{Expr}}()
 const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
 
 function DEFAULT_LAYOUT(; title::String = "Genie App",
-                          meta::Dict{<:AbstractString,<:AbstractString} = Dict())
-  tags = Genie.Renderers.Html.for_each(x -> """<meta name="$(x.first)" content="$(x.second)">\n""", meta)
+                          meta::D = Dict()) where {D <:AbstractDict}
+  tags = Genie.Renderers.Html.for_each(x -> """<meta name="$(string(x.first))" content="$(string(x.second))">\n""", meta)
   """
 <!DOCTYPE html>
 <html>

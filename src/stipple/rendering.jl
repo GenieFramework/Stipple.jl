@@ -1,5 +1,5 @@
 """
-    join_js(xx, delim = ""; skip_empty = true, pre::Function = identity, 
+    join_js(xx, delim = ""; skip_empty = true, pre::Function = identity,
       strip_delimiter = true, pre_delim::Union{Function,Nothing} = nothing)
 
 Join elements of an iterator similar to [`join`](@ref) with additonal features
@@ -86,7 +86,7 @@ function julia_to_vue(field, mapping_keys = mapping_keys()) :: String
       extraparts = map((x) -> uppercasefirst(string(x)), parts[2:end])
       string(parts[1], join(extraparts))
     else
-      parts |> string
+      join(parts) |> string
     end
   else
     field |> string
