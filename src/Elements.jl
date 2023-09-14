@@ -328,7 +328,7 @@ Sometimes preprocessing of the events is necessary, e.g. to add or skip informat
 ```
 """
 macro on(arg, expr, preprocess = nothing)
-  kw = Symbol("v-on:", arg isa String ? arg : arg isa QuoteNode ? arg.value : arg.head == :vect ? join(lstrip.(string.(arg.args), ':'), '.') : 
+  kw = Symbol("v-on:", arg isa String ? arg : arg isa QuoteNode ? arg.value : arg.head == :vect ? join(lstrip.(string.(arg.args), ':'), '.') :
     throw("Value '$arg' for `arg` not supported. `arg` should be of type Symbol, String, or Vector{Union{String, Symbol}}"))
 
   isevent = expr isa QuoteNode && expr.value isa Symbol
