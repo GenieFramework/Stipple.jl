@@ -107,20 +107,36 @@ function container(args...; fluid = false, kwargs...)
   Genie.Renderer.Html.div(args...; kwargs...)
 end
 
-function flexgrid_kwargs(; class = "", flexgrid_mappings::Dict{Symbol,Symbol} = Dict{Symbol,Symbol}(), kwargs...)
+function flexgrid_kwargs(; class = "", class! = nothing, flexgrid_mappings::Dict{Symbol,Symbol} = Dict{Symbol,Symbol}(), kwargs...)
   kwargs = Dict{Symbol,Any}(kwargs...)
-  classes = [class]
+  
+  # make a classes array that contains strings
+  # while class will contain a js expression as Symbol
+  # if either class is a Symbol or class! is not nothing.
+  # So an argument of the form `class! = "'my-class' + 'your-class'` is supported
+  classes = String[]
+  if class isa Symbol
+    class! != nothing && (class = Symbol("$class! + $class"))
+  else
+    push!(classes, "$class")
+    class! != nothing && (class = Symbol("$class!"))
+  end
 
   for key in (:col, :xs, :sm, :md, :lg, :xl)
     newkey = get(flexgrid_mappings, key, key)
     if haskey(kwargs, newkey)
-      class = sizetocol(kwargs[newkey], key)
-      length(class) > 0 && push!(classes, class)
+      colclass = sizetocol(kwargs[newkey], key)
+      length(colclass) > 0 && push!(classes, colclass)
       delete!(kwargs, newkey)
     end
   end
-  class = join(classes[classes .!= ""], ' ')
-  length(class) > 0 && (kwargs[:class] = class)
+  colclass = join(classes[classes .!= ""], ' ')
+
+  if length(colclass) != 0
+    class = class isa Symbol ? Symbol("$class + ' $colclass'") : colclass
+  end
+  
+  (class isa Symbol || length(class) > 0) && (kwargs[:class] = class)
 
   return kwargs
 end
@@ -148,7 +164,7 @@ function row(args...;
   # for compatibility with size
   col == -1 && size != -1 && (col = size)
 
-  class = join(pushfirst!(split(class), "row"), " ")
+  class = class isa Symbol ? Symbol("'row ' + $class") : join(pushfirst!(split(class), "row"), " ")
   kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
@@ -178,7 +194,7 @@ function column(args...;
   # for compatibility with size
   col == -1 && size != -1 && (col = size)
 
-  class = join(pushfirst!(split(class), "column"), " ")
+  class = class isa Symbol ? Symbol("'column ' + $class") : join(pushfirst!(split(class), "row"), " ")
   kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
@@ -221,7 +237,7 @@ function cell(args...;
   # for compatibility with size
   col == 0 && size != 0 && (col = size)
   
-  class = join(pushfirst!(split(class), "st-col"), " ")
+  class = class isa Symbol ? Symbol("'st-col ' + $class") : join(pushfirst!(split(class), "row"), " ")
   kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
