@@ -107,7 +107,7 @@ function container(args...; fluid = false, kwargs...)
   Genie.Renderer.Html.div(args...; kwargs...)
 end
 
-function flexgrid_kwargs(; class = "", class! = nothing, flexgrid_mappings::Dict{Symbol,Symbol} = Dict{Symbol,Symbol}(), kwargs...)
+function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = true, flexgrid_mappings::Dict{Symbol,Symbol} = Dict{Symbol,Symbol}(), kwargs...)
   kwargs = Dict{Symbol,Any}(kwargs...)
   
   # make a classes array that contains strings
@@ -138,6 +138,11 @@ function flexgrid_kwargs(; class = "", class! = nothing, flexgrid_mappings::Dict
   
   (class isa Symbol || length(class) > 0) && (kwargs[:class] = class)
 
+  if ! symbol_class && class isa Symbol
+    kwargs[:class!] = string(kwargs[:class])
+    delete!(kwargs, :class)
+  end
+
   return kwargs
 end
 
@@ -165,7 +170,7 @@ function row(args...;
   col == -1 && size != -1 && (col = size)
 
   class = class isa Symbol ? Symbol("$class + ' row'") : join(pushfirst!(split(class), "row"), " ")
-  kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, kwargs...)
+  kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
@@ -195,7 +200,7 @@ function column(args...;
   col == -1 && size != -1 && (col = size)
 
   class = class isa Symbol ? Symbol("$class + ' column'") : join(pushfirst!(split(class), "st-col"), " ")
-  kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, kwargs...)
+  kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
@@ -238,7 +243,7 @@ function cell(args...;
   col == 0 && size != 0 && (col = size)
   
   class = class isa Symbol ? Symbol("$class + ' st-col'") : join(pushfirst!(split(class), "st-col"), " ")
-  kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, kwargs...)
+  kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
