@@ -169,7 +169,7 @@ function row(args...;
   # for backward compatibility with `size` kwarg
   col == -1 && size != -1 && (col = size)
 
-  class = class isa Symbol ? Symbol("$class + ' row'") : join(pushfirst!(split(class), "row"), " ")
+  class = class isa Symbol ? Symbol("$class + ' row'") : join(push!(split(class), "row"), " ")
   kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
@@ -199,7 +199,7 @@ function column(args...;
   # for backward compatibility with `size` kwarg
   col == -1 && size != -1 && (col = size)
 
-  class = class isa Symbol ? Symbol("$class + ' column'") : join(pushfirst!(split(class), "st-col"), " ")
+  class = class isa Symbol ? Symbol("$class + ' column'") : join(push!(split(class), "column"), " ")
   kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
@@ -242,7 +242,7 @@ function cell(args...;
   # for backward compatibility with `size` kwarg
   col == 0 && size != 0 && (col = size)
   
-  class = class isa Symbol ? Symbol("$class + ' st-col'") : join(pushfirst!(split(class), "st-col"), " ")
+  class = class isa Symbol ? Symbol("$class + ' st-col'") : join(push!(split(class), "st-col"), " ")
   kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
