@@ -17,7 +17,7 @@ export @onchange, @onbutton, @event, @notify
 export @clear, @clear_vars, @clear_handlers
 
 # app handling
-export @page, @init, @handlers, @app, @appname
+export @page, @init, @handlers, @app, @appname, @modelstorage
 
 # js functions on the front-end (see Vue.js docs)
 export @methods, @watch, @computed, @client_data, @add_client_data
@@ -32,6 +32,8 @@ export @onchangeany # deprecated
 const REACTIVE_STORAGE = LittleDict{Module,LittleDict{Symbol,Expr}}()
 const HANDLERS = LittleDict{Module,Vector{Expr}}()
 const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
+
+const HANDLERS_FUNCTIONS = LittleDict{Type{<:ReactiveModel},Function}()
 
 function DEFAULT_LAYOUT(; title::String = "Genie App",
                           meta::D = Dict()) where {D <:AbstractDict}
@@ -251,6 +253,16 @@ macro type()
   end
 
   esc(:($type))
+end
+
+import Stipple.@clear_cache
+macro clear_cache()
+  :(Stipple.clear_cache(Stipple.@type)) |> esc
+end
+
+import Stipple.@clear_route
+macro clear_route()
+  :(Stipple.clear_route(Stipple.@type)) |> esc
 end
 
 function update_storage(m::Module)
@@ -522,37 +534,81 @@ function init_handlers(m::Module)
   get!(Vector{Expr}, HANDLERS, m)
 end
 
-macro init(modeltype)
+"""
+        @init(kwargs...)
+
+Create a new app with the following kwargs supported:
+- `debounce::Int = JS_DEBOUNCE_TIME`
+- `transport::Module = Genie.WebChannels`
+- `core_theme::Bool = true`
+
+### Example
+```
+@app begin
+  @in n = 10
+  @out s = "Hello"
+end
+
+model = @init(debounce = 50)
+```
+------------
+
+        @init(App, kwargs...)
+
+Create a new app of type `App` with the same kwargs as above
+
+### Example
+
+```
+@app MyApp begin
+  @in n = 10
+  @out s = "Hello"
+end
+
+model = @init(MyApp, debounce = 50)
+```
+"""
+macro init(args...)
+  init_args = Stipple.expressions_to_args(args)
+
+  type_pos = findfirst(x -> !isa(x, Expr) || x.head ∉ (:kw, :parameters), init_args)
+  called_without_type = isnothing(type_pos)
+  
+  if called_without_type
+    type_pos = 0 # to prevent erroring in definition of 'handlersfn'
+    insert!(init_args, Stipple.has_parameters(init_args) ? 2 : 1, :(Stipple.@type()))
+  end
+  
   quote
     local new_handlers = false
     local initfn =  if isdefined($__module__, :init_from_storage)
-                      $__module__.init_from_storage
-                    else
-                      Stipple.init
-                    end
-    local handlersfn =  if isdefined($__module__, :__GF_AUTO_HANDLERS__)
-                          if length(methods($__module__.__GF_AUTO_HANDLERS__)) == 0
-                            @eval(@handlers())
-                            new_handlers = true
-                          end
-                          $__module__.__GF_AUTO_HANDLERS__
-                        else
-                          identity
-                        end
-
-    instance = new_handlers ? Base.invokelatest(handlersfn, $modeltype |> initfn) : $modeltype |> initfn |> handlersfn
+      $__module__.init_from_storage
+    else
+      Stipple.init
+    end
+    local handlersfn =  if !$called_without_type
+      # writing '$(init_kwargs[type_pos])' generates an error during a pre-evaluation
+      # possibly from Revise?
+      # we use 'get' instead of 'getindex'
+      Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$(get(init_args, type_pos, "dummy"))]
+    else
+      if isdefined($__module__, :__GF_AUTO_HANDLERS__)
+        if length(methods($__module__.__GF_AUTO_HANDLERS__)) == 0
+          @eval(@handlers())
+          new_handlers = true
+        end
+        $__module__.__GF_AUTO_HANDLERS__
+      else
+        identity
+      end
+    end
+    instance = let model = initfn($(init_args...))
+      new_handlers ? Base.invokelatest(handlersfn, model) : handlersfn(model)
+    end
     for p in Stipple.Pages._pages
       p.context == $__module__ && (p.model = instance)
     end
     instance
-  end |> esc
-end
-
-macro init()
-  quote
-    let type = Stipple.@type
-      Stipple.ReactiveTools.@init(type)
-    end
   end |> esc
 end
 
@@ -584,7 +640,10 @@ macro app(typename, expr, handlers_fn_name = :handlers)
   # (avoids model_to_storage)
   newtypename = Symbol(typename, "_!_")
   quote
-    Stipple.ReactiveTools.@handlers $newtypename $expr $handlers_fn_name
+    let model = Stipple.ReactiveTools.@handlers $newtypename $expr $handlers_fn_name
+      Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$typename] = $handlers_fn_name
+      model
+    end
   end |> esc
 end
 
@@ -824,7 +883,7 @@ macro onchange(location, vars, expr)
   known_reactive_vars, known_non_reactive_vars = get_known_vars(loc)
   known_vars = vcat(known_reactive_vars, known_non_reactive_vars)
   on_vars = fieldnames_to_fields(vars, known_vars)
-
+  
   expr, used_vars = mask(expr, known_vars)
   do_vars = Symbol[]
 
@@ -902,7 +961,7 @@ macro onbutton(location, var, expr)
   var = fieldnames_to_fields(var, known_vars)
 
   expr = fieldnames_to_fields(expr, known_non_reactive_vars)
-  expr = fieldnames_to_fieldcontent(expr, known_reactive_vars)
+  expr = fieldnames_to_fieldcontent(expr, known_reactive_vars, known_reactive_vars)
   expr = unmask(expr, known_vars)
 
   ex = :(onbutton($var) do
@@ -923,24 +982,6 @@ end
 
 #===#
 
-macro page(url, view, layout, model, context)
-  quote
-    Stipple.Pages.Page( $url;
-                        view = $view,
-                        layout = $layout,
-                        model = $model,
-                        context = $context)
-  end |> esc
-end
-
-macro page(url, view, layout, model)
-  :(@page($url, $view, $layout, $model, $__module__)) |> esc
-end
-
-macro page(url, view, layout)
-  :(@page($url, $view, $layout, () -> @eval($__module__, @init()))) |> esc
-end
-
 """
 ```julia
 @page(url, view)
@@ -953,8 +994,41 @@ Registers a new page with source in `view` to be rendered at the route `url`.
 @page("/", "view.html")
 ```
 """
-macro page(url, view)
-  :(@page($url, $view, Stipple.ReactiveTools.DEFAULT_LAYOUT())) |> esc
+macro page(expressions...)
+    # for macros to support semicolon parameter syntax it's required to have no positional arguments in the definition
+    # therefore find indexes of positional arguments by hand
+    inds = findall(x -> !isa(x, Expr) || x.head ∉ (:parameters, :(=)), expressions)
+    length(inds) < 2 && throw("Positional arguments 'url' and 'view' required!")
+    url, view = expressions[inds[1:2]]
+    kwarg_inds = setdiff(1:length(expressions), inds)
+    args = Stipple.expressions_to_args(
+        expressions[kwarg_inds]; 
+        args_to_kwargs = [:layout, :model, :context],
+        defaults = Dict(
+            :layout => Stipple.ReactiveTools.DEFAULT_LAYOUT(),
+            :context => __module__,
+            :model => nothing 
+        )
+    )
+    model_parent, model_ind, model_expr = Stipple.locate_kwarg(args, :model)
+    model = @eval(__module__, $model_expr)
+
+    if model === nothing || model isa DataType && model <: ReactiveModel
+      # remove all other kwargs that are not meant for `@init`
+      init_kwargs = Stipple.delete_kwargs(args, [:layout, :model, :context])
+
+      # add the type if model is a modeltype
+      if model !== nothing
+          insert!(init_kwargs, Stipple.has_parameters(init_kwargs) ? 2 : 1, model_expr)
+      end
+      
+      # modify the entry of the :model keyword by an init function with respective init_kwargs
+      model_parent[model_ind] = :($(Expr(:kw, :model, () -> @eval(__module__, @init($(init_kwargs...))))))
+    else
+      nothing
+    end
+
+    :(Stipple.Pages.Page($(args...), $url, view = $view)) |> esc
 end
 
 for f in (:methods, :watch, :computed)
@@ -1210,6 +1284,12 @@ macro notify(args...)
 
   quote
     Base.notify(__model__, $(args...))
+  end |> esc
+end
+
+macro modelstorage()
+  quote
+    using Stipple.ModelStorage.Sessions
   end |> esc
 end
 

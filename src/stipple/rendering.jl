@@ -39,7 +39,7 @@ function join_js(xx, delim = ""; skip_empty = true, pre::Function = identity, st
   for x_raw in xx
     x = x_raw isa Base.Callable ? x_raw() : x_raw
     io2 = IOBuffer()
-    if x isa Union{AbstractDict, Pair, Base.Pairs, Vector{<:Pair}}
+    if x isa Union{AbstractDict, Pair, Base.Iterators.Pairs, Vector{<:Pair}}
       s = json(Dict(k => JSONText(v) for (k, v) in (x isa Pair ? [x] : x)))[2:end - 1]
       print(io2, s)
     else
