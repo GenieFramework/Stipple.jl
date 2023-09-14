@@ -161,10 +161,10 @@ function row(args...;
   lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, size::Union{Int,AbstractString,Symbol,Nothing} = -1,
   class = "", kwargs...)
 
-  # for compatibility with size
+  # for backward compatibility with `size` kwarg
   col == -1 && size != -1 && (col = size)
 
-  class = class isa Symbol ? Symbol("'row ' + $class") : join(pushfirst!(split(class), "row"), " ")
+  class = class isa Symbol ? Symbol("$class + ' row'") : join(pushfirst!(split(class), "row"), " ")
   kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
@@ -191,10 +191,10 @@ function column(args...;
   lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, size::Union{Int,AbstractString,Symbol,Nothing} = -1,
   class = "", kwargs...)
 
-  # for compatibility with size
+  # for backward compatibility with `size` kwarg
   col == -1 && size != -1 && (col = size)
 
-  class = class isa Symbol ? Symbol("'column ' + $class") : join(pushfirst!(split(class), "row"), " ")
+  class = class isa Symbol ? Symbol("$class + ' column'") : join(pushfirst!(split(class), "st-col"), " ")
   kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
@@ -234,10 +234,10 @@ function cell(args...;
   lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, size::Union{Int,AbstractString,Symbol,Nothing} = 0,
   class = "", kwargs...
 )
-  # for compatibility with size
+  # for backward compatibility with `size` kwarg
   col == 0 && size != 0 && (col = size)
   
-  class = class isa Symbol ? Symbol("'st-col ' + $class") : join(pushfirst!(split(class), "row"), " ")
+  class = class isa Symbol ? Symbol("$class + ' st-col'") : join(pushfirst!(split(class), "st-col"), " ")
   kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
