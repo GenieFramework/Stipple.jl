@@ -111,7 +111,7 @@ function flexgrid_kwargs(; class = "", flexgrid_mappings::Dict{Symbol,Symbol} = 
   kwargs = Dict{Symbol,Any}(kwargs...)
   classes = [class]
 
-  for key in (:size, :xs, :sm, :md, :lg, :xl)
+  for key in (:col, :xs, :sm, :md, :lg, :xl)
     newkey = get(flexgrid_mappings, key, key)
     if haskey(kwargs, newkey)
       class = sizetocol(kwargs[newkey], key)
@@ -140,13 +140,16 @@ julia> row(span("Hello"))
 ```
 """
 function row(args...; 
-  size::Union{Int,AbstractString,Symbol,Nothing} = -1,
+  col::Union{Int,AbstractString,Symbol,Nothing} = -1,
   xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1,
+  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, size::Union{Int,AbstractString,Symbol,Nothing} = -1,
   class = "", kwargs...)
 
+  # for compatibility with size
+  col == -1 && size != -1 && (col = size)
+
   class = join(pushfirst!(split(class), "row"), " ")
-  kwargs = flexgrid_kwargs(; class, size, xs, sm, md, lg, xl, kwargs...)
+  kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
@@ -167,13 +170,16 @@ julia> column(span("Hello"))
 ```
 """
 function column(args...;
-  size::Union{Int,AbstractString,Symbol,Nothing} = -1,
+  col::Union{Int,AbstractString,Symbol,Nothing} = -1,
   xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1,
+  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, size::Union{Int,AbstractString,Symbol,Nothing} = -1,
   class = "", kwargs...)
 
+  # for compatibility with size
+  col == -1 && size != -1 && (col = size)
+
   class = join(pushfirst!(split(class), "column"), " ")
-  kwargs = flexgrid_kwargs(; class, size, xs, sm, md, lg, xl, kwargs...)
+  kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
@@ -207,20 +213,24 @@ julia> row(cell(size = 2, md = 6, sm = 12, span("Hello")))
 ```
 """
 function cell(args...;
-  size::Union{Int,AbstractString,Symbol,Nothing} = 0,
+  col::Union{Int,AbstractString,Symbol,Nothing} = 0,
   xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, class = "", kwargs...
+  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, size::Union{Int,AbstractString,Symbol,Nothing} = 0,
+  class = "", kwargs...
 )
+  # for compatibility with size
+  col == 0 && size != 0 && (col = size)
+  
   class = join(pushfirst!(split(class), "st-col"), " ")
-  kwargs = flexgrid_kwargs(; class, size, xs, sm, md, lg, xl, kwargs...)
+  kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, kwargs...)
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
 
-function sizetocol(size::Union{String,Int,Nothing,Symbol} = -1, tag::Symbol = :size)
+function sizetocol(size::Union{String,Int,Nothing,Symbol} = -1, tag::Symbol = :col)
   (size == -1 || size === nothing) && return ""
   out = ["col"]
-  tag != :size && push!(out, String(tag))
+  tag != :col && push!(out, String(tag))
   if size isa Int
     size > 0 && push!(out, "$size")
   else
