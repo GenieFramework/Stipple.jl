@@ -191,6 +191,7 @@ function setmode! end
 function deletemode! end
 function init_storage end
 
+include("Tools.jl")
 include("ReactiveTools.jl")
 
 #===#

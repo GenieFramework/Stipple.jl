@@ -122,7 +122,7 @@ end
 """
 abstract type ReactiveModel end
 
-export @vars, @add_vars, @define_mixin
+export @vars, @add_vars, @define_mixin, @clear_cache, clear_cache, @clear_route, clear_route
 
 # deprecated
 export @reactive, @reactive!, @old_reactive, @old_reactive!
@@ -349,6 +349,27 @@ macro var_storage(expr, new_inputmode = :auto)
     end
 
     esc(:($storage))
+end
+
+Stipple.Genie.Router.delete!(M::Type{<:ReactiveModel}) = Stipple.Genie.Router.delete!(Symbol(Stipple.routename(M)))
+
+function clear_route(M::Type{<:ReactiveModel})
+  Stipple.Genie.Router.delete!(M)
+  return nothing
+end
+
+macro clear_route(App)
+  :(Stipple.clear_route($(esc(App))))
+end
+
+function clear_cache(M::Type{<:ReactiveModel})
+  delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: M, keys(Stipple.DEPS)))
+  Stipple.Genie.Router.delete!(M)
+  return nothing
+end
+
+macro clear_cache(App)
+  :(Stipple.clear_cache($(esc(App))))
 end
 
 macro type(modelname, storage)
