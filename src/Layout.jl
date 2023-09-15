@@ -116,10 +116,10 @@ function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = tr
   # So an argument of the form `class! = "'my-class' + 'your-class'` is supported
   classes = String[]
   if class isa Symbol
-    class! != nothing && (class = Symbol("$class! + $class"))
+    class! !== nothing && (class = Symbol("$class! + $class"))
   else
     push!(classes, "$class")
-    class! != nothing && (class = Symbol("$class!"))
+    class! !== nothing && (class = Symbol("$class!"))
   end
 
   for key in (:col, :xs, :sm, :md, :lg, :xl)
