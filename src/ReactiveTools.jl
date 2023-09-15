@@ -345,7 +345,8 @@ function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); sour
   update_storage(m)
 end
 
-function binding(expr::Expr, storage::LittleDict{Symbol, Expr}, @nospecialize(mode::Any = nothing); source = nothing, reactive = true, m::Module)
+function binding(expr::Expr, storage::LittleDict{Symbol, Expr}, @nospecialize(mode::Any = nothing); source = nothing,
+                  reactive = true, m::Module)
   intmode = mode isa Integer ? Int(mode) : @eval Stipple.$mode
 
   var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
@@ -957,96 +958,98 @@ macro page(url, view)
   :(@page($url, $view, Stipple.ReactiveTools.DEFAULT_LAYOUT())) |> esc
 end
 
-for f in (:methods, :watch, :computed)
-  f_str = string(f)
-  Core.eval(@__MODULE__, quote
-    """
-        @$($f_str)(expr)
-        @$($f_str)(App, expr)
+function __init()
+  for f in (:methods, :watch, :computed)
+    f_str = string(f)
+    Core.eval(@__MODULE__, quote
+      """
+          @$($f_str)(expr)
+          @$($f_str)(App, expr)
 
-    Defines js functions for the `$($f_str)` section of the vue element.
+      Defines js functions for the `$($f_str)` section of the vue element.
 
-    `expr` can be
-    - `String` containing javascript code
-    - `Pair` of function name and function code
-    - `Function` returning String of javascript code
-    - `Dict` of function names and function code
-    - `Vector` of the above
-
-    ### Example 1
-
-    ```julia
-    @$($f_str) "greet: function(name) {console.log('Hello ' + name)}"
-    ```
-
-    ### Example 2
-
-    ```julia
-    js_greet() = :greet => "function(name) {console.log('Hello ' + name)}"
-    js_bye() = :bye => "function() {console.log('Bye!')}"
-    @$($f_str) MyApp [js_greet, js_bye]
-    ```
-    Checking the result can be done in the following way
-    ```
-    julia> render(MyApp())[:$($f_str)].s |> println
-    {
-        "greet":function(name) {console.log('Hello ' + name)},
-        "bye":function() {console.log('Bye!')}
-    }
-    ```
-    """
-    macro $f(args...)
-      vue_options($f_str, args...)
-    end
-  end)
-end
-
-#=== Lifecycle hooks ===#
-
-for (f, field) in (
-  (:before_create, :beforeCreate), (:created, :created), (:before_mount, :beforeMount), (:mounted, :mounted),
-  (:before_update, :beforeUpdate), (:updated, :updated), (:activated, :activated), (:deactivated, :deactivated),
-  (:before_destroy, :beforeDestroy), (:destroyed, :destroyed), (:error_captured, :errorCaptured),)
-
-  f_str = string(f)
-  field_str = string(field)
-  Core.eval(@__MODULE__, quote
-    """
-        @$($f_str)(expr)
-
-    Defines js statements for the `$($field_str)` section of the vue element.
-
-    expr can be
+      `expr` can be
       - `String` containing javascript code
+      - `Pair` of function name and function code
       - `Function` returning String of javascript code
+      - `Dict` of function names and function code
       - `Vector` of the above
 
-    ### Example 1
+      ### Example 1
 
-    ```julia
-    @$($f_str) \"\"\"
-        if (this.cameraon) { startcamera() }
-    \"\"\"
-    ```
+      ```julia
+      @$($f_str) "greet: function(name) {console.log('Hello ' + name)}"
+      ```
 
-    ### Example 2
+      ### Example 2
 
-    ```julia
-    startcamera() = "if (this.cameraon) { startcamera() }"
-    stopcamera() = "if (this.cameraon) { stopcamera() }"
+      ```julia
+      js_greet() = :greet => "function(name) {console.log('Hello ' + name)}"
+      js_bye() = :bye => "function() {console.log('Bye!')}"
+      @$($f_str) MyApp [js_greet, js_bye]
+      ```
+      Checking the result can be done in the following way
+      ```
+      julia> render(MyApp())[:$($f_str)].s |> println
+      {
+          "greet":function(name) {console.log('Hello ' + name)},
+          "bye":function() {console.log('Bye!')}
+      }
+      ```
+      """
+      macro $f(args...)
+        vue_options($f_str, args...)
+      end
+    end)
+  end
 
-    @$($f_str) MyApp [startcamera, stopcamera]
-    ```
-    Checking the result can be done in the following way
-    ```
-    julia> render(MyApp())[:$($field_str)]
-    JSONText("function(){\n    if (this.cameraon) { startcamera() }\n\n    if (this.cameraon) { stopcamera() }\n}")
-    ```
-    """
-    macro $f(args...)
-      vue_options($f_str, args...)
-    end
-  end)
+  #=== Lifecycle hooks ===#
+
+  for (f, field) in (
+    (:before_create, :beforeCreate), (:created, :created), (:before_mount, :beforeMount), (:mounted, :mounted),
+    (:before_update, :beforeUpdate), (:updated, :updated), (:activated, :activated), (:deactivated, :deactivated),
+    (:before_destroy, :beforeDestroy), (:destroyed, :destroyed), (:error_captured, :errorCaptured),)
+
+    f_str = string(f)
+    field_str = string(field)
+    Core.eval(@__MODULE__, quote
+      """
+          @$($f_str)(expr)
+
+      Defines js statements for the `$($field_str)` section of the vue element.
+
+      expr can be
+        - `String` containing javascript code
+        - `Function` returning String of javascript code
+        - `Vector` of the above
+
+      ### Example 1
+
+      ```julia
+      @$($f_str) \"\"\"
+          if (this.cameraon) { startcamera() }
+      \"\"\"
+      ```
+
+      ### Example 2
+
+      ```julia
+      startcamera() = "if (this.cameraon) { startcamera() }"
+      stopcamera() = "if (this.cameraon) { stopcamera() }"
+
+      @$($f_str) MyApp [startcamera, stopcamera]
+      ```
+      Checking the result can be done in the following way
+      ```
+      julia> render(MyApp())[:$($field_str)]
+      JSONText("function(){\n    if (this.cameraon) { startcamera() }\n\n    if (this.cameraon) { stopcamera() }\n}")
+      ```
+      """
+      macro $f(args...)
+        vue_options($f_str, args...)
+      end
+    end)
+  end
 end
 
 #=== Lifecycle hooks ===#
@@ -1068,7 +1071,6 @@ function vue_options(hook_type, args...)
 end
 
 macro event(M, eventname, expr)
-
   known_reactive_vars, known_non_reactive_vars = get_known_vars(@eval(__module__, $M))
   known_vars = vcat(known_reactive_vars, known_non_reactive_vars)
   expr, used_vars = mask(expr, known_vars)
@@ -1095,7 +1097,8 @@ Executes the code in `expr` when a specific `event` is triggered by a UI compone
 
 **Usage**
 
-Define an event trigger such as a click, keypress or file upload for a component using the @on macro. Then, define the handler for the event with @event.
+Define an event trigger such as a click, keypress or file upload for a component using the @on macro.
+Then, define the handler for the event with @event.
 
 
 **Examples**
@@ -1116,6 +1119,7 @@ ui() =  textfield(class = "q-my-md", "Input", :input, hint = "Please enter some 
 ```
 
 =======
+
 ```julia
 <q-input hint="Please enter some words" v-on:keyup.enter="function(event) { handle_event(event, 'keypress') }" label="Input" v-model="input" class="q-my-md"></q-input>
 ```
@@ -1147,6 +1151,7 @@ macro event(event, expr)
     @event Stipple.@type() $event $expr
   end |> esc
 end
+
 
 macro client_data(expr)
   if expr.head != :block
@@ -1212,5 +1217,7 @@ macro notify(args...)
     Base.notify(__model__, $(args...))
   end |> esc
 end
+
+__init()
 
 end

@@ -181,7 +181,7 @@ function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict; keep_ch
   m1 = eval(haskey(storage_1, :modes__) ? storage_1[:modes__].args[end] : LittleDict{Symbol, Int}())
   m2 = eval(haskey(storage_2, :modes__) ? storage_2[:modes__].args[end] : LittleDict{Symbol, Int}())
   modes = merge(m1, m2)
-  
+
   keep_channel && haskey(storage_2, :channel__) && (storage_2 = delete!(copy(storage_2), :channel__))
   for (field, expr) in storage_2
     field == :modes__ && continue
@@ -233,18 +233,30 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
       # change type T to type R{T}
       var.args[2] = :($Rtype{$(var.args[2])})
     else
-      # add type definition `::R{T}` to the var where T is the type of the default value
-      T = @eval m typeof($(expr.args[2]))
-      expr.args[1] = :($var::$Rtype{$T})
-      Rtype
+      try
+        # add type definition `::R{T}` to the var where T is the type of the default value
+        T = @eval m typeof($(expr.args[2]))
+        expr.args[1] = :($var::$Rtype{$T})
+        Rtype
+      catch ex
+        # if the default value is not defined, we can't infer the type
+        # so we just set the type to R{Any}
+        :($Rtype{Any})
+      end
     end
     expr.args[2] = :($type($(expr.args[2]), $mode, false, false, $source))
   end
 
   # if no type is defined, set the type of the default value
   if expr.args[1] isa Symbol
-    T = @eval m typeof($(expr.args[2]))
-    expr.args[1] = :($(expr.args[1])::$T)
+    try
+      T = @eval m typeof($(expr.args[2]))
+      expr.args[1] = :($(expr.args[1])::$T)
+    catch ex
+      # if the default value is not defined, we can't infer the type
+      # so we just set the type to Any
+      expr.args[1] = :($(expr.args[1])::Any)
+    end
   end
   expr.args[1].args[1], expr
 end
@@ -351,7 +363,7 @@ macro type(modelname, storage)
     # Revise seems to call the macro line by line internally for code tracking purposes.
     # Interstingly, Revise will not populate output.args in that case and will generate an empty model.
     # We use this to our advantage and prevent additional model generation when length(output.args) <= 1.
-    local is_called_by_revise = length(output.args) <= 1 
+    local is_called_by_revise = length(output.args) <= 1
     eval(quote
       $is_called_by_revise || Stipple.@kwredef mutable struct $$modelconst_qn <: $$modelname
         $output
