@@ -491,7 +491,11 @@ function init(::Type{M};
         update!(model, field, newval, oldval)
       catch ex
         # send the error to the frontend
-        return ex
+        if Genie.Configuration.isdev()
+          return ex
+        else
+          return "An error has occured -- please check the logs"
+        end
       end
 
       ok_response
