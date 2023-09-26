@@ -485,9 +485,15 @@ function init(::Type{M};
       end
 
       push!(model, field => newval; channel = channel, except = client)
-      update!(model, field, newval, oldval)
-
       LAST_ACTIVITY[Symbol(channel)] = now()
+
+      try
+        update!(model, field, newval, oldval)
+      catch ex
+        # send the error to the frontend
+        return ex
+      end
+
       ok_response
     end
   end
