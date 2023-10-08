@@ -351,3 +351,14 @@ end
 
     @test cell(col = -1, sm = 9) == "<div class=\"st-col col-sm-9\"></div>"
 end
+
+@testset "Compatibility of JSONText between JSON3 and JSON" begin
+    using JSON
+    using Stipple
+    jt1 = JSON.JSONText("json text 1")
+    jt2 = Stipple.JSONText("json text 2")
+    @test JSON.json(jt1) == "json text 1"
+    @test Stipple.json(jt1) == "json text 1"
+    @test JSON.json(jt2) == "json text 2"
+    @test Stipple.json(jt2) == "json text 2"
+end
