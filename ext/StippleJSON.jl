@@ -2,7 +2,7 @@
 
 JSON.JSONText(json::Stipple.JSONText) = JSON.JSONText(json.s)
 JSON.show_json(io::JSON.Writer.CompactContext, s::JSON.Writer.CS, json::Stipple.JSONText) = write(io, json.s)
-JSON.Writer.lower(json::Stipple.JSONText) = JSON.parse(json.s)
+JSON.Writer.lower(json::Stipple.JSONText) = json.s
 
 Stipple.JSONText(json::JSON.JSONText) = Stipple.JSONText(json.s)
 @inline StructTypes.StructType(::Type{JSON.JSONText}) = JSON3.RawType()
