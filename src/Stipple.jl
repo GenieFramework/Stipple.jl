@@ -487,9 +487,19 @@ function init(::Type{M};
       end
 
       push!(model, field => newval; channel = channel, except = client)
-      update!(model, field, newval, oldval)
-
       LAST_ACTIVITY[Symbol(channel)] = now()
+
+      try
+        update!(model, field, newval, oldval)
+      catch ex
+        # send the error to the frontend
+        if Genie.Configuration.isdev()
+          return ex
+        else
+          return "An error has occured -- please check the logs"
+        end
+      end
+
       ok_response
     end
   end
