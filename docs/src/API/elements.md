@@ -8,7 +8,7 @@ elem
 vm
 vue_integration
 @iif
-@elsiff
+@elsiif
 @els
 @recur
 @text
