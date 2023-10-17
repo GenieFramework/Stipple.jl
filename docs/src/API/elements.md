@@ -1,5 +1,5 @@
 ```@meta
-CurrentModule = Elements
+CurrentModule = Stipple.Elements
 ```
 
 ```@docs

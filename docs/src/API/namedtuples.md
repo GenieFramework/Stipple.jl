@@ -3,5 +3,5 @@ CurrentModule = Stipple.NamedTuples
 ```
 
 ```@docs
-Core.NamedTuple
+# Core.NamedTuple
 ```
