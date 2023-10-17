@@ -10,12 +10,12 @@ isdefined(Base, :get_extension) ? using JSON : using ..JSON
 # pure proper JSON. For transmissions of bindings, though, we need to allow to pass object names.
 
 JSON.JSONText(json::Stipple.JSONText) = JSON.JSONText(json.s)
-JSON.show_json(io::JSON.Writer.CompactContext, s::JSON.Writer.CS, json::Stipple.JSONText) = write(io, json.s)
+JSON.show_json(io::JSON.Writer.CompactContext, ::JSON.Writer.CS, json::Stipple.JSONText) = write(io, json.s)
 JSON.Writer.lower(json::Stipple.JSONText) = json.s
 
 Stipple.JSONText(json::JSON.JSONText) = Stipple.JSONText(json.s)
 @inline StructTypes.StructType(::Type{JSON.JSONText}) = JSON3.RawType()
-@inline StructTypes.construct(::Type{JSON.JSONText}, json::JSON3.RawValue) = JSONText(string(json))
+@inline StructTypes.construct(::Type{JSON.JSONText}, json::JSON3.RawValue) = JSON.JSONText(string(json))
 @inline JSON3.rawbytes(json::JSON.JSONText) = codeunits(json.s)
 
 end
