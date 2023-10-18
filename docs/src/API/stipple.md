@@ -5,11 +5,8 @@ CurrentModule = Stipple
 ```@docs
 Reactive
 ReactiveModel
-# @reactors
-# @reactive
-# @reactive!
-# Settings
-# MissingPropertyException
+Settings # missing docstring
+MissingPropertyException # missing docstring
 render
 update!
 watch
@@ -23,10 +20,10 @@ register_components
 components
 setindex_withoutwatchers!
 setfield_withoutwatchers!
-# convertvalue
-# stipple_parse
+convertvalue # missing docstring
+stipple_parse # missing docstring
 init
-# stipple_deps
+stipple_deps # missing docstring
 setup
 Base.push!(m::M, vals::Pair{Symbol, T}; kwargs...) where {T, M <: ReactiveModel}
 rendering_mappings
@@ -34,10 +31,10 @@ julia_to_vue
 parse_jsfunction
 replace_jsfunction!
 replace_jsfunction
-# deps_routes
+deps_routes # missing docstring
 deps
 @R_str
-# on
+on
 onbutton
 @js_str
 @kwredef

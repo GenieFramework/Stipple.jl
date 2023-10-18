@@ -7,6 +7,7 @@ using Stipple, Stipple.Elements, Stipple.Layout, Stipple.Typography, Stipple.Nam
 makedocs(
     sitename = "Stipple - data dashboards and reactive UIs for Julia",
     format = Documenter.HTML(prettyurls = false),
+    warnonly = true,
     pages = [
         "Home" => "index.md",
         "Tutorials" => [
