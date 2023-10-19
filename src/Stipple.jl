@@ -15,6 +15,8 @@ existing Vue.js libraries.
 """
 module Stipple
 
+const PRECOMPILE = Ref(false)
+
 """
 @using_except(expr)
 
@@ -206,15 +208,15 @@ function __init__()
 
   @static if !isdefined(Base, :get_extension)
     @require OffsetArrays  = "6fe1bfb0-de20-5000-8ca7-80f57d26f881" begin
-      # evaluate the code of the extension without the surrounding module
-      include(joinpath(@__DIR__, "..", "ext", "StippleOffsetArrays.jl"))
-      # Core.eval(@__MODULE__, Meta.parse(join(jl, ';')).args[3])
+      include(joinpath(@__DIR__, "..", "ext", "StippleOffsetArraysExt.jl"))
     end
 
     @require DataFrames  = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0" begin
-      # evaluate the code of the extension without the surrounding module
-      include(joinpath(@__DIR__, "..", "ext", "StippleDataFrames.jl"))
-      # Core.eval(@__MODULE__, Meta.parse(join(jl, ';')).args[3])
+      include(joinpath(@__DIR__, "..", "ext", "StippleDataFramesExt.jl"))
+    end
+
+    @require JSON  = "682c06a0-de6a-54ab-a142-c8b1cf79cde6" begin
+      include(joinpath(@__DIR__, "..", "ext", "StippleJSONExt.jl"))
     end
   end
 end
@@ -443,7 +445,7 @@ function init(::Type{M};
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
   LAST_ACTIVITY[Symbol(getchannel(model))] = now()
 
-  Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
+  PRECOMPILE[] || Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
 
   if is_channels_webtransport()
     Genie.Assets.channels_subscribe(channel)
