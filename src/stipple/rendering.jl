@@ -155,3 +155,12 @@ Default rendering of `Reactive` values. Specialize `Stipple.render` to define cu
 function Stipple.render(o::Reactive{T}, fieldname::Union{Symbol,Nothing} = nothing) where {T}
   Stipple.render(o[], fieldname)
 end
+
+"""
+    js_attr(x)
+
+Renders a Julia expression as Javascript Expression that can be passed as an attribute value in html elements.
+"""
+function js_attr(x)
+  Symbol(replace(json(render(x)), "'" => raw"\'", '"' => '''))
+end

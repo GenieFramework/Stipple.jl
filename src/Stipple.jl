@@ -76,7 +76,7 @@ using Logging, Mixers, Random, Reexport, Dates, Tables
 import Genie.Router.download
 @reexport @using_except Genie.Renderer.Html: mark, div, time, view, render, Headers
 const htmldiv = Html.div
-export render, htmldiv
+export render, htmldiv, js_attr
 @reexport using JSON3
 @reexport using StructTypes
 @reexport using Parameters
