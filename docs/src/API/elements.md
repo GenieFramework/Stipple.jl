@@ -1,5 +1,5 @@
 ```@meta
-CurrentModule = Elements
+CurrentModule = Stipple.Elements
 ```
 
 ```@docs
@@ -8,7 +8,7 @@ elem
 vm
 vue_integration
 @iif
-@elsiff
+@elsiif
 @els
 @recur
 @text

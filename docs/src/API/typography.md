@@ -1,5 +1,5 @@
 ```@meta
-CurrentModule = Typography
+CurrentModule = Stipple.Typography
 ```
 
 ```@docs
