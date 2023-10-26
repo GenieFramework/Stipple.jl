@@ -169,11 +169,12 @@ julia> span("Bad stuff's about to happen", class="warning", @if(:warning))
 "<span class=\"warning\" v-if='warning'>Bad stuff's about to happen</span>"
 ```
 """
-macro var"if"(expr)
+macro iif(expr)
   Expr(:kw, Symbol("v-if"), esc_expr(expr))
 end
+const var"@if" = var"@iif"
 
-"""
+  """
     @elseif(expr)
 
 Generates `v-else-if` Vue.js code using `expr` as the condition.
@@ -186,9 +187,10 @@ julia> span("An error has occurred", class="error", @elseif(:error))
 "<span class=\"error\" v-else-if='error'>An error has occurred</span>"
 ```
 """
-macro var"elseif"(expr)
+macro elsiif(expr)
   Expr(:kw, Symbol("v-else-if"), esc_expr(expr))
 end
+const var"@elseif" = var"@elsiif"
 
 """
     @else(expr)
@@ -203,9 +205,10 @@ julia> span("Might want to keep an eye on this", class="notice", @else(:notice))
 "<span class=\"notice\" v-else='notice'>Might want to keep an eye on this</span>"
 ```
 """
-macro var"else"(expr)
+macro els(expr)
   Expr(:kw, Symbol("v-else"), esc_expr(expr))
 end
+const var"@else" = var"@els"
 
 """
 Generates `v-for` directive to render a list of items based on an array.
@@ -219,42 +222,10 @@ julia> p(" {{todo}} ", class="warning", @for(:"todo in todos"))
 ```
 
 """
-macro var"for"(expr)
+macro recur(expr)
   Expr(:kw, Symbol("v-for"), esc_expr(expr))
 end
-
-
-"""
-`@recur` is deprecated and has been replaced by `@for`.
-It is kept for compatibility reasons and will be removed in a future release.
-"""
-macro iif(expr)
-  esc(:(@if($expr)))
-end
-
-"""
-`@recur` is deprecated and has been replaced by `@for`.
-It is kept for compatibility reasons and will be removed in a future release.
-"""
-macro els(expr)
-  esc(:(@else($expr)))
-end
-
-"""
-`@recur` is deprecated and has been replaced by `@for`.
-It is kept for compatibility reasons and will be removed in a future release.
-"""
-macro elsiif(expr)
-  esc(:(@elseif($expr)))
-end
-
-"""
-`@recur` is deprecated and has been replaced by `@for`.
-It is kept for compatibility reasons and will be removed in a future release.
-"""
-macro recur(expr)
-  esc(:(@for($expr)))
-end
+const var"@for" = var"@recur"
 
 """
     @text(expr)
