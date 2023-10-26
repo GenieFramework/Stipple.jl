@@ -7,10 +7,10 @@ root
 elem
 vm
 vue_integration
-@iif
-@elsiif
-@els
-@recur
+@if
+@elseif
+@else
+@for
 @text
 @bind
 @data
