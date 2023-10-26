@@ -352,6 +352,23 @@ end
     @test cell(col = -1, sm = 9) == "<div class=\"st-col col-sm-9\"></div>"
 end
 
+@testset "Vue Conditionals and Iterator" begin
+    el = column("Hello", @if(:visible))
+    @test contains(el, "v-if=\"visible\"")
+
+    el = column("Hello", @else(:visible))
+    @test contains(el, "v-else=\"visible\"")
+
+    el = column("Hello", @elseif(:visible))
+    @test contains(el, "v-else-if=\"visible\"")
+
+    el = row(@showif("n > 0"), "The result is '{{ n }}'")
+    @test el == "<div v-show=\"n > 0\" class=\"row\">The result is '{{ n }}'</div>"
+
+    el = row(@for("i in [1, 2, 3, 4, 5]"), "{{ i }}")
+    @test contains(el, "v-for=\"i in [1, 2, 3, 4, 5]\"")
+end
+
 @testset "Compatibility of JSONText between JSON3 and JSON" begin
     using JSON
     using Stipple
