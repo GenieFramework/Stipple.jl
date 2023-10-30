@@ -33,7 +33,7 @@ function Page(  route::Union{Route,String};
                 layout::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Nothing,Function} = nothing,
                 context::Module = @__MODULE__,
                 debounce::Int = Stipple.JS_DEBOUNCE_TIME,
-                transport::Module = Genie.WebChannels,
+                transport::Module = Stipple.WEB_TRANSPORT[],
                 core_theme::Bool = true,
                 kwargs...
               ) where {M<:ReactiveModel}
@@ -56,15 +56,15 @@ function Page(  route::Union{Route,String};
           else
             view
           end
-  
+
   route = isa(route, String) ? Route(; method = GET, path = route) : route
   layout = isa(layout, String) && length(layout) < Stipple.IF_ITS_THAT_LONG_IT_CANT_BE_A_FILENAME && isfile(layout) ? filepath(layout) :
             isa(layout, ParsedHTMLString) || isa(layout, String) ? string(layout) :
               layout
 
-  route.action = () -> (isa(view, Function) ? html! : html)(view; layout, context, model = (isa(model,Function) ? Base.invokelatest(model) : model), kwargs...)
+  route.action = () -> (isa(view, Function) ? html! : html)(view; layout, context, model = (isa(model, Function) ? Base.invokelatest(model) : model), kwargs...)
 
-  page = Page(route, view, typeof((isa(model,Function) || isa(model,DataType) ? Base.invokelatest(model) : model)), layout, context)
+  page = Page(route, view, typeof((isa(model, Function) || isa(model, DataType) ? Base.invokelatest(model) : model)), layout, context)
 
   if isempty(_pages)
     push!(_pages, page)

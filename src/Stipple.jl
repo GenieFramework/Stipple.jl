@@ -203,7 +203,11 @@ if !isdefined(Base, :get_extension)
 end
 
 function __init__()
-  Genie.config.websockets_server = true
+  if (get(ENV, "STIPPLE_TRANSPORT", "webchannels") |> lowercase) == "webthreads"
+    webtransport!(Genie.WebThreads)
+  else
+    Genie.config.websockets_server = true
+  end
   deps_routes(core_theme = true)
 
   @static if !isdefined(Base, :get_extension)
