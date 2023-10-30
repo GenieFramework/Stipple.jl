@@ -11,7 +11,7 @@ isdefined(Base, :get_extension) ? using JSON : using ..JSON
 
 JSON.JSONText(json::Stipple.JSONText) = JSON.JSONText(json.s)
 JSON.show_json(io::JSON.Writer.CompactContext, ::JSON.Writer.CS, json::Stipple.JSONText) = write(io, json.s)
-JSON.Writer.lower(json::Stipple.JSONText) = json.s
+JSON.Writer.lower(json::Stipple.JSONText) = json
 
 Stipple.JSONText(json::JSON.JSONText) = Stipple.JSONText(json.s)
 @inline StructTypes.StructType(::Type{JSON.JSONText}) = JSON3.RawType()

@@ -1,5 +1,5 @@
 ```@meta
-CurrentModule = NamedTuples
+CurrentModule = Stipple.NamedTuples
 ```
 
 ```@docs
