@@ -114,6 +114,10 @@ function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = tr
   # while class will contain a js expression as Symbol
   # if either class is a Symbol or class! is not nothing.
   # So an argument of the form `class! = "'my-class' + 'your-class'` is supported
+  # Furthermore Vectors are now supported
+  class isa Vector && (class = Symbol(join(js_attr.(class), " + ")))
+  class! isa Vector && (class! = join(js_attr.(class!), " + "))
+  
   classes = String[]
   if class isa Symbol
     class! !== nothing && (class = Symbol("$class! + $class"))

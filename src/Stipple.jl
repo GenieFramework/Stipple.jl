@@ -925,15 +925,23 @@ function attributes(kwargs::Union{Vector{<:Pair}, Base.Iterators.Pairs, Dict},
   for (k,v) in kwargs
     v === nothing && continue
     mapped = false
+    
+    k_str = string(k)
 
-    if haskey(mappings, string(k))
-      k = mappings[string(k)]
+    if haskey(mappings, k_str)
+      k_str = mappings[k_str]
     end
-
-    attr_key = string((isa(v, Symbol) && ! startswith(string(k), ":") &&
-                ! ( startswith(string(k), "v-") || startswith(string(k), "v" * Genie.config.html_parser_char_dash) ) ? ":" : ""), "$k") |> Symbol
-    attr_val = isa(v, Symbol) && ! startswith(string(k), ":") ? Stipple.julia_to_vue(v) : v
-
+    
+    v_isa_jsexpr = v isa Symbol || !isa(v, Union{AbstractString, Bool, Number})
+    attr_key = string((v_isa_jsexpr && ! startswith(k_str, ":") &&
+                ! (endswith(k_str, "!") || startswith(k_str, "v-") || startswith(k_str, "v" * Genie.config.html_parser_char_dash)) ? ":" : ""), k_str) |> Symbol
+    attr_val = if isa(v, Symbol) && ! startswith(k_str, ":")
+      Stipple.julia_to_vue(v)
+    elseif v isa Symbol || ! v_isa_jsexpr
+      v
+    else
+      js_attr(v)
+    end
     attrs[attr_key] = attr_val
   end
 
