@@ -10,8 +10,11 @@ using Stipple
 
 import Genie.Renderer.Html: HTMLString, normal_element
 
-export root, elem, vm, @iif, @elsiif, @els, @recur, @text, @bind, @data, @on, @click, @showif
+export root, elem, vm, @if, @else, @elseif, @for, @text, @bind, @data, @on, @click, @showif
 export stylesheet, kw_to_str
+
+# deprecated
+export @iif, @elsiif, @els, @recur
 
 #===#
 
@@ -154,7 +157,7 @@ function kw_to_str(; kwargs...)
 end
 
 """
-    @iif(expr)
+    @if(expr)
 
 Generates `v-if` Vue.js code using `expr` as the condition.
 <https://vuejs.org/v2/api/#v-if>
@@ -162,16 +165,17 @@ Generates `v-if` Vue.js code using `expr` as the condition.
 ### Example
 
 ```julia
-julia> span("Bad stuff's about to happen", class="warning", @iif(:warning))
+julia> span("Bad stuff's about to happen", class="warning", @if(:warning))
 "<span class=\"warning\" v-if='warning'>Bad stuff's about to happen</span>"
 ```
 """
 macro iif(expr)
   Expr(:kw, Symbol("v-if"), esc_expr(expr))
 end
+const var"@if" = var"@iif"
 
-"""
-    @elsiif(expr)
+  """
+    @elseif(expr)
 
 Generates `v-else-if` Vue.js code using `expr` as the condition.
 <https://vuejs.org/v2/api/#v-else-if>
@@ -179,16 +183,17 @@ Generates `v-else-if` Vue.js code using `expr` as the condition.
 ### Example
 
 ```julia
-julia> span("An error has occurred", class="error", @elsiif(:error))
+julia> span("An error has occurred", class="error", @elseif(:error))
 "<span class=\"error\" v-else-if='error'>An error has occurred</span>"
 ```
 """
 macro elsiif(expr)
   Expr(:kw, Symbol("v-else-if"), esc_expr(expr))
 end
+const var"@elseif" = var"@elsiif"
 
 """
-    @els(expr)
+    @else(expr)
 
 Generates `v-else` Vue.js code using `expr` as the condition.
 <https://vuejs.org/v2/api/#v-else>
@@ -196,13 +201,14 @@ Generates `v-else` Vue.js code using `expr` as the condition.
 ### Example
 
 ```julia
-julia> span("Might want to keep an eye on this", class="notice", @els(:notice))
+julia> span("Might want to keep an eye on this", class="notice", @else(:notice))
 "<span class=\"notice\" v-else='notice'>Might want to keep an eye on this</span>"
 ```
 """
 macro els(expr)
   Expr(:kw, Symbol("v-else"), esc_expr(expr))
 end
+const var"@else" = var"@els"
 
 """
 Generates `v-for` directive to render a list of items based on an array.
@@ -211,7 +217,7 @@ Generates `v-for` directive to render a list of items based on an array.
 ### Example
 
 ```julia
-julia> p(" {{todo}} ", class="warning", @recur(:"todo in todos"))
+julia> p(" {{todo}} ", class="warning", @for(:"todo in todos"))
 "<p v-for='todo in todos'>\n {{todo}} \n</p>\n"
 ```
 
@@ -219,6 +225,7 @@ julia> p(" {{todo}} ", class="warning", @recur(:"todo in todos"))
 macro recur(expr)
   Expr(:kw, Symbol("v-for"), esc_expr(expr))
 end
+const var"@for" = var"@recur"
 
 """
     @text(expr)
