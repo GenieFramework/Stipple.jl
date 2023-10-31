@@ -245,7 +245,7 @@ It is also possible to loop over `(v, k)` or `v`; index will always be zero-base
 
 """
 macro recur(expr)
-  Base.isexpr(expr, :call) && expr.args[1] == :in && (expr.args[2] = string(expr.args[2]))
+  expr isa Expr && expr.head == :call && expr.args[1] == :in && (expr.args[2] = string(expr.args[2]))
   expr = (MacroTools.@capture(expr, y_ in z_)) ? :("$($y) in $($z isa Union{AbstractDict, AbstractVector} ? js_attr($z) : $z)") : :("$($expr)")
 
   Expr(:kw, Symbol("v-for"), esc_expr(expr))
