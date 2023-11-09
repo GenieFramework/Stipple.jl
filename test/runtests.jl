@@ -384,23 +384,59 @@ end
     using Genie.HTTPUtils.HTTP
     up()
 
-    p1, p2 = ParsedHTMLString("""<q-btn @click="i = i+1">Change @click $(randstring(10))</q-btn>"""), ParsedHTMLString("<a></a>")
-    ui() = p1
+    # rand is needed to avoid re-using cached routes
+    view() = [ParsedHTMLString("""<div id="test" @click="i = i+1">Change @click</div>"""), a("test $(rand(1:10^10))")]
+    p1 = view()[1]
+    
+    ui() = ParsedHTMLString(view())
+
+    # route function resulting in ParsedHTMLString
     @page("/", ui)
     payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:8000")))
-    @test match(r"<q-btn.*q-btn>", payload).match == p1 
-    @test contains(payload, """<link href="/stippleui.jl/master/assets/""")
+    @test match(r"<div id=\"test\" .*?div>", payload).match == p1
+    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
 
+    # route constant ParsedHTMLString
     @page("/", ui())
     payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:8000")))
-    @test match(r"<q-btn.*q-btn>", payload).match == p1 
-    @test contains(payload, """<link href="/stippleui.jl/master/assets/""")
+    @test match(r"<div id=\"test\" .*?div>", payload).match == p1 
+    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
     
-    # Supply a String instead of a ParsedHTMLString. As the '@' character is not correctly parsed, this test fails
-    @page("/", ui().data)
+    # ----------------------------
+
+    ui() = view()
+
+    # route function resulting in Vector{ParsedHTMLString}
+    @page("/", ui)
     payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:8000")))
-    @test match(r"<q-btn.*q-btn>", payload).match != p1
-    @test contains(payload, """<link href="/stippleui.jl/master/assets/""")
+    @test match(r"<div id=\"test\" .*?div>", payload).match == p1
+    @test contains(payload, r"<a>test \d+</a>")
+
+    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
+
+    # route constant Vector{ParsedHTMLString}
+    @page("/", ui())
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:8000")))
+    @test match(r"<div id=\"test\" .*?div>", payload).match == p1 
+    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
+
+    # Supply a String instead of a ParsedHTMLString.
+    # As the '@' character is not correctly parsed, the match is expected to differ
+    ui() = join(view())
+    
+    # route function resulting in String
+    @page("/", ui)
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:8000")))
+    @test match(r"<div id=\"test\" .*?div>", payload).match != p1
+    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
+    @test contains(payload, r"<a>test \d+</a>")
+    
+    # route constant String
+    @page("/", ui())
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:8000")))
+    @test match(r"<div id=\"test\" .*?div>", payload).match != p1
+    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
+    @test contains(payload, r"<a>test \d+</a>")
 
     down()
 end
