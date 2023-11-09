@@ -379,3 +379,28 @@ end
     @test JSON.json(jt2) == "json text 2"
     @test Stipple.json(jt2) == "json text 2"
 end
+
+@testset "@page macro with ParsedHTMLStrings" begin
+    using Genie.HTTPUtils.HTTP
+    up()
+
+    p1, p2 = ParsedHTMLString("""<q-btn @click="i = i+1">Change @click $(randstring(10))</q-btn>"""), ParsedHTMLString("<a></a>")
+    ui() = p1
+    @page("/", ui)
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:8000")))
+    @test match(r"<q-btn.*q-btn>", payload).match == p1 
+    @test contains(payload, """<link href="/stippleui.jl/master/assets/""")
+
+    @page("/", ui())
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:8000")))
+    @test match(r"<q-btn.*q-btn>", payload).match == p1 
+    @test contains(payload, """<link href="/stippleui.jl/master/assets/""")
+    
+    # Supply a String instead of a ParsedHTMLString. As the '@' character is not correctly parsed, this test fails
+    @page("/", ui().data)
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:8000")))
+    @test match(r"<q-btn.*q-btn>", payload).match != p1
+    @test contains(payload, """<link href="/stippleui.jl/master/assets/""")
+
+    down()
+end
