@@ -382,8 +382,10 @@ end
 
 @testset "@page macro with ParsedHTMLStrings" begin
     using Genie.HTTPUtils.HTTP
-    up()
-
+    
+    port = rand(8001:9000)
+    up(;port, ws_port = port)
+    
     # rand is needed to avoid re-using cached routes
     view() = [ParsedHTMLString("""<div id="test" @click="i = i+1">Change @click</div>"""), a("test $(rand(1:10^10))")]
     p1 = view()[1]
@@ -392,13 +394,13 @@ end
 
     # route function resulting in ParsedHTMLString
     @page("/", ui)
-    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:8000")))
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
     @test match(r"<div id=\"test\" .*?div>", payload).match == p1
     @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
 
     # route constant ParsedHTMLString
     @page("/", ui())
-    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:8000")))
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
     @test match(r"<div id=\"test\" .*?div>", payload).match == p1 
     @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
     
@@ -408,7 +410,7 @@ end
 
     # route function resulting in Vector{ParsedHTMLString}
     @page("/", ui)
-    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:8000")))
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
     @test match(r"<div id=\"test\" .*?div>", payload).match == p1
     @test contains(payload, r"<a>test \d+</a>")
 
@@ -416,7 +418,7 @@ end
 
     # route constant Vector{ParsedHTMLString}
     @page("/", ui())
-    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:8000")))
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
     @test match(r"<div id=\"test\" .*?div>", payload).match == p1 
     @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
 
@@ -426,14 +428,14 @@ end
     
     # route function resulting in String
     @page("/", ui)
-    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:8000")))
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
     @test match(r"<div id=\"test\" .*?div>", payload).match != p1
     @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
     @test contains(payload, r"<a>test \d+</a>")
     
     # route constant String
     @page("/", ui())
-    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:8000")))
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
     @test match(r"<div id=\"test\" .*?div>", payload).match != p1
     @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
     @test contains(payload, r"<a>test \d+</a>")
