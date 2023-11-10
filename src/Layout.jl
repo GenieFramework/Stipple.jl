@@ -7,7 +7,7 @@ module Layout
 
 using Genie, Stipple
 
-export layout
+export layout, add_css, remove_css
 export page, app, row, column, cell, container, flexgrid_kwargs
 
 export theme
@@ -300,5 +300,47 @@ function theme(; core_theme::Bool = true) :: Vector{String}
   output
 end
 
+"""
+    add_css(css::Function; update = true)
+
+Add a css function to the `THEMES`.
+
+### Params
+* `css::Function` - a function that results in a vector of style elements
+* `update` - determines, whether existing style sheets with the same name shall be removed
+
+### Example
+```julia
+# css to remove the stipple-core color format of q-table rows
+# (this will enable font color setting by the attribute `table-class`)
+
+function mycss()
+  [
+    style(\"\"\"
+    .stipple-core .q-table tbody tr { color: inherit; }
+    \"\"\")
+  ]
+end
+
+add_css(mycss)
+```
+`
+"""
+function add_css(css::Function; update = true)
+  # removal can only be done by name, as the old function has already been overwritten
+  update && remove_css(css::Function, byname = true)
+  push!(Stipple.Layout.THEMES, css)
+end
+
+"""
+    remove_css(css::Function, byname::Bool = false)
+
+Remove a stylesheet function from the stack (`Stipple.Layout.THEMES`)
+If called with `byname = true`, the function will be identified by name rather than by the function itself.
+"""
+function remove_css(css::Function; byname::Bool = false)
+  inds = byname ? nameof.(Stipple.Layout.THEMES) .== nameof(css) : Stipple.Layout.THEMES .== css
+  deleteat!(Stipple.Layout.THEMES, inds)
+end
 
 end

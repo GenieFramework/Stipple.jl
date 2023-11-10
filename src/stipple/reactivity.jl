@@ -121,6 +121,9 @@ end
 import Base.map!
 @inline Base.map!(f::F, r::Reactive, os...; update::Bool=true) where F = Base.map!(f::F, getfield(r, :o), os...; update=update)
 
+Base.axes(r::Reactive, args...) = Base.axes(getfield(getfield(r, :o), :val), args...)
+Base.lastindex(r::Reactive, args...) = Base.lastindex(getfield(getfield(r, :o), :val), args...)
+
 const R = Reactive
 const PUBLIC = 1
 const PRIVATE = 2
