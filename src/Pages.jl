@@ -48,9 +48,12 @@ function Page(  route::Union{Route,String};
           else
             model
           end
-
-  view =  if isa(view, ParsedHTMLString) || isa(view, Vector{<:AbstractString})
-            string(view)
+  view =  if isa(view, Function) || isa(view, ParsedHTMLString)
+            view
+          elseif isa(view, Vector{ParsedHTMLString})
+            ParsedHTMLString(view)
+          elseif isa(view, Vector{<:AbstractString})
+            join(view)
           elseif isa(view, AbstractString)
             isfile(view) ? filepath(view) : view
           else
