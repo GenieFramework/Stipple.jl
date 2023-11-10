@@ -395,3 +395,24 @@ end
     @test df[end, end] == 14
     @test df[:, end] == 12:14
 end
+
+@testset "adding and removing stylesheets" begin
+    function my_css()
+        [style("""
+            .stipple-core .q-table tbody tr { color: inherit; }
+        """)]
+    end
+
+    add_css(my_css)
+    @test Stipple.Layout.THEMES[end] == my_css
+    
+    n = length(Stipple.Layout.THEMES)
+    remove_css(my_css)
+    @test length(Stipple.Layout.THEMES) == n - 1
+    @test findfirst(==(my_css), Stipple.Layout.THEMES) === nothing
+    
+    add_css(my_css)
+    @test Stipple.Layout.THEMES[end] == my_css
+    remove_css(my_css, byname = true)
+    @test findfirst(==(my_css), Stipple.Layout.THEMES) === nothing
+end
