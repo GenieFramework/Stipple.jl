@@ -380,6 +380,22 @@ end
     @test Stipple.json(jt2) == "json text 2"
 end
 
+@testset "Indexing with `end`" begin
+    r = R([1, 2, 3])
+    on(r) do r
+        r[end - 1] += 1
+    end
+    @test r[end] == 3
+    r[end] = 4
+    @test r[end - 1] == 3
+    @test r[end] == 4
+
+    df = DataFrame(:a => 1:3, :b => 12:14)
+    @test df[end, 1] == 3
+    @test df[end, end] == 14
+    @test df[:, end] == 12:14
+end
+
 @testset "adding and removing stylesheets" begin
     function my_css()
         [style("""
