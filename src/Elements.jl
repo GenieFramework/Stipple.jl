@@ -97,14 +97,13 @@ function vue_integration(::Type{M};
 
   window.parse_payload = function(payload){
     if (payload.key) {
-      window.$(vue_app_name).revive_payload(payload)
-      window.$(vue_app_name).updateField(payload.key, payload.value);
+       window.$(vue_app_name).updateField(payload.key, payload.value);
     }
   }
 
   function app_ready() {
       $vue_app_name.isready = true;
-
+      Genie.addReviver(window.$(vue_app_name).revive_jsfunction);
       $(transport == Genie.WebChannels &&
       "
       try {

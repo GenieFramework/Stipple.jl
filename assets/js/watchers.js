@@ -54,20 +54,13 @@ const watcherMixin = {
 
 const reviveMixin = {
   methods: {
-    revive_payload: function(obj) {
-      if (typeof obj === 'object') {
-        for (var key in obj) {
-          if ( (typeof obj[key] === 'object') && (obj[key]!=null) && !(obj[key].jsfunction) ) {
-            this.revive_payload(obj[key])
-          } else {
-            if ( (obj[key]!=null) && (obj[key].jsfunction) ) {
-              obj[key] = Function(obj[key].jsfunction.arguments, obj[key].jsfunction.body)
-            }
-          }
-        }
+    revive_jsfunction: function (k, v) {
+      if ( (typeof v==='object') && (v!=null) && (v.jsfunction) ) {
+        return Function(v.jsfunction.arguments, v.jsfunction.body)
+      } else {
+        return v
       }
-      return obj;
-    }
+     }
   }
 }
 
