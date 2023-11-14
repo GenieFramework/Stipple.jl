@@ -112,6 +112,7 @@ Stipple.stipple_parse(::Complex, z::Dict{String, Any}) = float(z["re"]) + z["im"
 ```
 """
 jsrender(x, args...) = render(x, args...)
+jsrender(r::Reactive, args...) = jsrender(getfield(getfield(r,:o), :val), args...)
 
 """
     function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dict{Symbol,Any} where {M<:ReactiveModel}
