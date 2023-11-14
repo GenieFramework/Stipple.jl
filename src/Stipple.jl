@@ -741,12 +741,8 @@ function injectdeps(output::Vector{AbstractString}, M::Type{<:ReactiveModel}) ::
     push!(output, DEPS[AM]()...)
     # furthermore, include deps who's keys start with "_<name of the ReactiveModel>_"
     model_prefix = "_$(vm(AM))_"
-    @show model_prefix
     for (key, f) in DEPS
-      println("hi 1")
-      @show key
       key isa Symbol || continue
-      @show startswith("$key", model_prefix)
       startswith("$key", model_prefix) && push!(output, f()...)
     end
   end
