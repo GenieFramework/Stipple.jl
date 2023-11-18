@@ -94,6 +94,27 @@ function julia_to_vue(field, mapping_keys = mapping_keys()) :: String
 end
 
 """
+    jsrender(x, args...)
+
+Defines separate rendering for the Vue instance. This method is only necessary for non-standard types that
+are not transmittable by regular json. Such types need a reviver to be transmitted via json and (optionally)
+a render method that is only applied for the rendering of the model.
+The model is not transmitted via json but via a js-file. So there it is possible to define non-serializable values.
+
+### Example
+
+```
+Stipple.render(z::Complex) = Dict(:mathjs => "Complex", :re => z.re, :im => z.im)
+function Stipple.jsrender(z::Union{Complex, R{<:Complex}}, args...)
+    JSONText("math.complex('\$(replace(strip(repr(Observables.to_value(z)), '"'), 'm' => ""))')")
+end
+Stipple.stipple_parse(::Complex, z::Dict{String, Any}) = float(z["re"]) + z["im"]
+```
+"""
+jsrender(x, args...) = render(x, args...)
+jsrender(r::Reactive, args...) = jsrender(getfield(getfield(r,:o), :val), args...)
+
+"""
     function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dict{Symbol,Any} where {M<:ReactiveModel}
 
 Renders the Julia `ReactiveModel` `app` as the corresponding Vue.js JavaScript code.
@@ -107,7 +128,7 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
     occursin(SETTINGS.private_pattern, String(field)) && continue
     f isa Reactive && f.r_mode == PRIVATE && continue
 
-    result[julia_to_vue(field)] = Stipple.render(f, field)
+    result[julia_to_vue(field)] = Stipple.jsrender(f, field)
   end
 
   vue = Dict( :el => JSONText("rootSelector"),

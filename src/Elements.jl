@@ -12,7 +12,7 @@ using MacroTools
 import Genie.Renderer.Html: HTMLString, normal_element
 
 export root, elem, vm, @if, @else, @elseif, @for, @text, @bind, @data, @on, @click, @showif
-export stylesheet, kw_to_str
+export stylesheet, kw_to_str, js_add_reviver
 
 # deprecated
 export @iif, @elsiif, @els, @recur
@@ -40,6 +40,14 @@ function elem(app::M)::String where {M<:ReactiveModel}
 end
 
 const vm = root
+
+function js_add_reviver(revivername::String)
+  """
+  Genie.WebChannels.subscriptionHandlers.push(function(event) {
+      Genie.Revivers.addReviver($revivername);
+  });
+  """
+end
 
 #===#
 
@@ -97,14 +105,13 @@ function vue_integration(::Type{M};
 
   window.parse_payload = function(payload){
     if (payload.key) {
-      window.$(vue_app_name).revive_payload(payload)
-      window.$(vue_app_name).updateField(payload.key, payload.value);
+       window.$(vue_app_name).updateField(payload.key, payload.value);
     }
   }
 
   function app_ready() {
       $vue_app_name.isready = true;
-
+      Genie.Revivers.addReviver(window.$(vue_app_name).revive_jsfunction);
       $(transport == Genie.WebChannels &&
       "
       try {
