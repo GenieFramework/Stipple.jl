@@ -176,3 +176,53 @@ end
 
 const jscreated = js_created
 const jsmounted = js_mounted
+
+"""
+    js_add_reviver(revivername::String)
+
+Add a reviver function to the list of Genie's revivers.
+
+### Example
+
+Adding the reviver function of 'mathjs'
+```julia
+js_add_reviver("math.reviver")
+```
+This function is meant for package developer who want to make additional js content available for the user.
+This resulting script needs to be added to the dependencies of an app in order to be executed.
+For detailed information have a look at the package StippleMathjs.
+
+If you want to add a custom reviver to your model you should rather consider using `@mounted`, e.g.
+
+```julia
+@methods \"\"\"
+myreviver: function(key, value) { return (key.endsWith('_onebased') ? value - 1 : value) }
+\"\"\"
+@mounted "Genie.Revivers.addReviver(this.myreviver)"
+```
+"""  
+function js_add_reviver(revivername::String)
+  """
+  Genie.WebChannels.subscriptionHandlers.push(function(event) {
+      Genie.Revivers.addReviver($revivername);
+  });
+  """
+end
+
+"""
+    js_initscript(initscript::String)
+
+Add a js script that is executed as soon as the connection to the server is established.
+It needs to be added to the dependencies of an app in order to be executed, e.g.
+
+```julia
+@deps () -> [script(js_initscript("console.log('Hello from my App')"))]
+```
+"""
+function js_initscript(initscript::String)
+  """
+  Genie.WebChannels.subscriptionHandlers.push(function(event) {
+      $(initscript)
+  });
+  """
+end

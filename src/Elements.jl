@@ -12,7 +12,7 @@ using MacroTools
 import Genie.Renderer.Html: HTMLString, normal_element
 
 export root, elem, vm, @if, @else, @elseif, @for, @text, @bind, @data, @on, @click, @showif
-export stylesheet, kw_to_str, js_add_reviver
+export stylesheet, kw_to_str
 
 # deprecated
 export @iif, @elsiif, @els, @recur
@@ -40,14 +40,6 @@ function elem(app::M)::String where {M<:ReactiveModel}
 end
 
 const vm = root
-
-function js_add_reviver(revivername::String)
-  """
-  Genie.WebChannels.subscriptionHandlers.push(function(event) {
-      Genie.Revivers.addReviver($revivername);
-  });
-  """
-end
 
 #===#
 
