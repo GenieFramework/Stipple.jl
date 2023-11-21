@@ -60,9 +60,9 @@ const reviveMixin = {
       } else {
         return v
       }
-     },
-     // deprecated, kept for compatibility
-     revive_payload: function(obj) {
+    },
+    // deprecated, kept for compatibility
+    revive_payload: function(obj) {
       if (typeof obj === 'object') {
         for (var key in obj) {
           if ( (typeof obj[key] === 'object') && (obj[key]!=null) && !(obj[key].jsfunction) ) {
