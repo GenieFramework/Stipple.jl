@@ -60,7 +60,22 @@ const reviveMixin = {
       } else {
         return v
       }
-     }
+     },
+     // deprecated, kept for compatibility
+     revive_payload: function(obj) {
+      if (typeof obj === 'object') {
+        for (var key in obj) {
+          if ( (typeof obj[key] === 'object') && (obj[key]!=null) && !(obj[key].jsfunction) ) {
+            this.revive_payload(obj[key])
+          } else {
+            if ( (obj[key]!=null) && (obj[key].jsfunction) ) {
+              obj[key] = Function(obj[key].jsfunction.arguments, obj[key].jsfunction.body)
+            }
+          }
+        }
+      }
+      return obj;
+    }
   }
 }
 
