@@ -13,6 +13,9 @@ export @readonly, @private, @in, @out, @jsfn, @readonly!, @private!, @in!, @out!
 #definition of handlers/events
 export @onchange, @onbutton, @event, @notify
 
+# definition of dependencies
+export @deps, @clear_deps
+
 # deletion
 export @clear, @clear_vars, @clear_handlers
 
@@ -1299,6 +1302,71 @@ __init()
 macro modelstorage()
   quote
     using Stipple.ModelStorage.Sessions
+  end |> esc
+end
+
+"""
+  @deps f
+
+
+Add a function f to the dependencies of the current app.
+
+------------------------
+
+  @deps M::Module
+
+  
+Add the dependencies of the module M to the dependencies of the current app.
+"""
+macro deps(expr)
+  quote
+    Stipple.deps!(Stipple.@type(), $expr)
+  end |> esc
+end
+
+"""
+  @deps(MyApp::ReactiveModel, f::Function)
+
+
+Add a function f to the dependencies of the app MyApp.
+The module needs to define a function `deps()`.
+
+------------------------
+
+  @deps(MyApp::ReactiveModel, M::Module)
+
+  
+Add the dependencies of the module M to the dependencies of the app MyApp.
+The module needs to define a function `deps()`.
+"""
+macro deps(M, expr)
+  quote
+    Stipple.deps!($M, $expr)
+  end |> esc
+end
+
+"""
+  @clear_deps
+
+
+Delete all dependencies of the current app.
+
+------------------------
+
+  @clear_deps MyApp
+
+
+Delete all dependencies of the app MyApp.
+"""
+macro clear_deps()
+  quote
+    Stipple.clear_deps!(Stipple.@type())
+  end |> esc
+end
+
+macro clear_deps(M)
+  quote
+    Stipple.clear_deps!($M)
   end |> esc
 end
 

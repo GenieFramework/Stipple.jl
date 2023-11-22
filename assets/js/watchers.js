@@ -54,6 +54,14 @@ const watcherMixin = {
 
 const reviveMixin = {
   methods: {
+    revive_jsfunction: function (k, v) {
+      if ( (typeof v==='object') && (v!=null) && (v.jsfunction) ) {
+        return Function(v.jsfunction.arguments, v.jsfunction.body)
+      } else {
+        return v
+      }
+    },
+    // deprecated, kept for compatibility
     revive_payload: function(obj) {
       if (typeof obj === 'object') {
         for (var key in obj) {

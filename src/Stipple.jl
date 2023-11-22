@@ -74,7 +74,7 @@ using Logging, Mixers, Random, Reexport, Dates, Tables
 @reexport using Observables
 @reexport @using_except Genie: download
 import Genie.Router.download
-@reexport @using_except Genie.Renderer.Html: mark, div, time, view, render, Headers
+@reexport @using_except Genie.Renderers.Html: mark, div, time, view, render, Headers, menu
 const htmldiv = Html.div
 export render, htmldiv, js_attr
 @reexport using JSON3
@@ -731,11 +731,21 @@ end
 function injectdeps(output::Vector{AbstractString}, M::Type{<:ReactiveModel}) :: Vector{AbstractString}
   for (key, f) in DEPS
     key isa DataType && key <: ReactiveModel && continue
+    # exclude keys starting with '_' 
+    key isa Symbol && startswith("$key", '_') && continue
     push!(output, f()...)
   end
   AM = get_abstract_type(M)
-  haskey(DEPS, AM) && push!(output, DEPS[AM]()...)
-
+  if haskey(DEPS, AM)
+    # DEPS[AM] contains the stipple-generated deps
+    push!(output, DEPS[AM]()...)
+    # furthermore, include deps who's keys start with "_<name of the ReactiveModel>_"
+    model_prefix = "_$(vm(AM))_"
+    for (key, f) in DEPS
+      key isa Symbol || continue
+      startswith("$key", model_prefix) && push!(output, f()...)
+    end
+  end
   output
 end
 
@@ -772,6 +782,29 @@ end
 
 function deps!(m::Any, f::Function)
   DEPS[m] = f
+end
+
+function deps!(m::Any, M::Module)
+  DEPS[m] = M.deps
+end
+
+function deps!(M::Type{<:ReactiveModel}, f::Function; extra_deps = true)
+  key = extra_deps ? Symbol("_$(vm(M))_$(nameof(f))") : M
+  DEPS[key] = f isa Function ? f : f.deps 
+end
+
+deps!(M::Type{<:ReactiveModel}, modul::Module; extra_deps = true) = deps!(M, modul.deps; extra_deps)
+
+deps!(m::Any, v::Vector{Union{Function, Module}}) = deps!.(Ref(m), v)
+deps!(m::Any, t::Tuple) = [deps!(m, f) for f in t]
+deps!(m, args...) = [deps!(m, f) for f in args]
+
+function clear_deps!(M::Type{<:ReactiveModel})
+  delete!(DEPS, M)
+  model_prefix = "_$(vm(M))_"
+  for k in keys(Stipple.DEPS)
+    k isa Symbol && startswith("$k", model_prefix) && delete!(DEPS, k)
+  end
 end
 
 @specialize

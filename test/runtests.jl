@@ -379,3 +379,103 @@ end
     @test JSON.json(jt2) == "json text 2"
     @test Stipple.json(jt2) == "json text 2"
 end
+
+@testset "@page macro with ParsedHTMLStrings" begin
+    using Genie.HTTPUtils.HTTP
+    
+    port = rand(8001:9000)
+    up(;port, ws_port = port)
+    
+    # rand is needed to avoid re-using cached routes
+    view() = [ParsedHTMLString("""<div id="test" @click="i = i+1">Change @click</div>"""), a("test $(rand(1:10^10))")]
+    p1 = view()[1]
+    
+    ui() = ParsedHTMLString(view())
+
+    # route function resulting in ParsedHTMLString
+    @page("/", ui)
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
+    @test match(r"<div id=\"test\" .*?div>", payload).match == p1
+    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
+
+    # route constant ParsedHTMLString
+    @page("/", ui())
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
+    @test match(r"<div id=\"test\" .*?div>", payload).match == p1 
+    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
+    
+    # ----------------------------
+
+    ui() = view()
+
+    # route function resulting in Vector{ParsedHTMLString}
+    @page("/", ui)
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
+    @test match(r"<div id=\"test\" .*?div>", payload).match == p1
+    @test contains(payload, r"<a>test \d+</a>")
+
+    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
+
+    # route constant Vector{ParsedHTMLString}
+    @page("/", ui())
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
+    @test match(r"<div id=\"test\" .*?div>", payload).match == p1 
+    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
+
+    # Supply a String instead of a ParsedHTMLString.
+    # As the '@' character is not correctly parsed, the match is expected to differ
+    ui() = join(view())
+    
+    # route function resulting in String
+    @page("/", ui)
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
+    @test match(r"<div id=\"test\" .*?div>", payload).match != p1
+    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
+    @test contains(payload, r"<a>test \d+</a>")
+    
+    # route constant String
+    @page("/", ui())
+    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
+    @test match(r"<div id=\"test\" .*?div>", payload).match != p1
+    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
+    @test contains(payload, r"<a>test \d+</a>")
+
+    down()
+end
+
+@testset "Indexing with `end`" begin
+    r = R([1, 2, 3])
+    on(r) do r
+        r[end - 1] += 1
+    end
+    @test r[end] == 3
+    r[end] = 4
+    @test r[end - 1] == 3
+    @test r[end] == 4
+
+    df = DataFrame(:a => 1:3, :b => 12:14)
+    @test df[end, 1] == 3
+    @test df[end, end] == 14
+    @test df[:, end] == 12:14
+end
+
+@testset "adding and removing stylesheets" begin
+    function my_css()
+        [style("""
+            .stipple-core .q-table tbody tr { color: inherit; }
+        """)]
+    end
+
+    add_css(my_css)
+    @test Stipple.Layout.THEMES[end] == my_css
+    
+    n = length(Stipple.Layout.THEMES)
+    remove_css(my_css)
+    @test length(Stipple.Layout.THEMES) == n - 1
+    @test findfirst(==(my_css), Stipple.Layout.THEMES) === nothing
+    
+    add_css(my_css)
+    @test Stipple.Layout.THEMES[end] == my_css
+    remove_css(my_css, byname = true)
+    @test findfirst(==(my_css), Stipple.Layout.THEMES) === nothing
+end
