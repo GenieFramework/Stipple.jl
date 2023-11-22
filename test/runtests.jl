@@ -12,7 +12,7 @@ function get_channel(s::String)
 end
 
 function get_debounce(port, modelname)
-    s = string_get("http://localhost:$port/stipple.jl/$(Genie.Assets.package_version("Genie"))/assets/js/$modelname.js")
+    s = string_get("http://localhost:$port/stipple.jl/$(Genie.Assets.package_version("Stipple"))/assets/js/$modelname.js")
     parse(Int, match(r"_.debounce\(.+?(\d+)\)", s).captures[1])
 end
 
@@ -382,14 +382,14 @@ end
 
 @testset "@page macro with ParsedHTMLStrings" begin
     using Genie.HTTPUtils.HTTP
-    
+
     port = rand(8001:9000)
     up(;port, ws_port = port)
-    
+
     # rand is needed to avoid re-using cached routes
     view() = [ParsedHTMLString("""<div id="test" @click="i = i+1">Change @click</div>"""), a("test $(rand(1:10^10))")]
     p1 = view()[1]
-    
+
     ui() = ParsedHTMLString(view())
 
     # route function resulting in ParsedHTMLString
@@ -401,9 +401,9 @@ end
     # route constant ParsedHTMLString
     @page("/", ui())
     payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
-    @test match(r"<div id=\"test\" .*?div>", payload).match == p1 
+    @test match(r"<div id=\"test\" .*?div>", payload).match == p1
     @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
-    
+
     # ----------------------------
 
     ui() = view()
@@ -419,20 +419,20 @@ end
     # route constant Vector{ParsedHTMLString}
     @page("/", ui())
     payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
-    @test match(r"<div id=\"test\" .*?div>", payload).match == p1 
+    @test match(r"<div id=\"test\" .*?div>", payload).match == p1
     @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
 
     # Supply a String instead of a ParsedHTMLString.
     # As the '@' character is not correctly parsed, the match is expected to differ
     ui() = join(view())
-    
+
     # route function resulting in String
     @page("/", ui)
     payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
     @test match(r"<div id=\"test\" .*?div>", payload).match != p1
     @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
     @test contains(payload, r"<a>test \d+</a>")
-    
+
     # route constant String
     @page("/", ui())
     payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
@@ -468,12 +468,12 @@ end
 
     add_css(my_css)
     @test Stipple.Layout.THEMES[end] == my_css
-    
+
     n = length(Stipple.Layout.THEMES)
     remove_css(my_css)
     @test length(Stipple.Layout.THEMES) == n - 1
     @test findfirst(==(my_css), Stipple.Layout.THEMES) === nothing
-    
+
     add_css(my_css)
     @test Stipple.Layout.THEMES[end] == my_css
     remove_css(my_css, byname = true)
