@@ -12,7 +12,7 @@ function get_channel(s::String)
 end
 
 function get_debounce(port, modelname)
-    s = string_get("http://localhost:$port/stipple.jl/master/assets/js/$modelname.js")
+    s = string_get("http://localhost:$port/stipple.jl/$(Genie.Assets.package_version("Genie"))/assets/js/$modelname.js")
     parse(Int, match(r"_.debounce\(.+?(\d+)\)", s).captures[1])
 end
 
@@ -26,7 +26,7 @@ end
         i = 100
         s = "Hello", READONLY
     end
-    
+
     function handlers(model)
         on(model.i) do i
             model.s[] = "$i"
@@ -37,7 +37,7 @@ end
 
     model = TestApp |> init |> handlers
     model2 = TestApp |> init |> handlers
-    
+
     # channels have to be different
     @test model.channel__ != model2.channel__
 
@@ -76,7 +76,7 @@ using Stipple.ReactiveTools
     @app TestApp2 begin
         @in i = 100
         @out s = "Hello"
-    
+
         @onchange i begin
             s = "$i"
         end
@@ -84,7 +84,7 @@ using Stipple.ReactiveTools
 
     model = TestApp2 |> init |> handlers
     model2 = TestApp2 |> init |> handlers
-    
+
     # channels have to be different
     @test model.channel__ != model2.channel__
 
@@ -100,7 +100,7 @@ end
     @eval @app TestApp begin
         @in i = 100
         @out s = "Hello"
-    
+
         @mixin TestMixin
         @mixin mixin_::TestMixin
         @mixin TestMixin "pre_" "_post"
@@ -112,7 +112,7 @@ end
 
     @eval model = TestApp |> init |> handlers
     @test propertynames(model) == (:channel__, :modes__, :isready, :isprocessing, :i, :s, :j, :t, :mixin_j, :mixin_t, :pre_j_post, :pre_t_post)
-        
+
     # check reactivity
     @eval model.i[] = 20
     @test model.s[] == "20"
@@ -130,7 +130,7 @@ end
 
     @eval model = @init
     @eval model2 = @init
-    
+
     # channels have to be different
     @eval @test model.channel__ != model2.channel__
 
@@ -146,7 +146,7 @@ end
     @eval @app begin
         @in i3 = 100
         @out s3 = "Hello"
-    
+
         @mixin TestMixin
         @mixin mixin_::TestMixin
         @mixin TestMixin "pre_" "_post"
@@ -167,7 +167,7 @@ using DataFrames
 @testset "Extensions" begin
     d = Dict(:a => [1, 2, 3], :b => ["a", "b", "c"])
     df = DataFrame(:a => [1, 2, 3], :b => ["a", "b", "c"])
-    
+
     @test Stipple.stipple_parse(DataFrame, [d]) == df
     @test render(df) == OrderedDict("a" => [1, 2, 3], "b" => ["a", "b", "c"])
 
@@ -183,13 +183,13 @@ end
 
     ds = Dict("hello" => [1, 2, 3, 4], "world" => ["five", "six"])
     @test render(ds) == ds
-    
+
     vd = [Dict("hello" => 1, "world" => 2)]
     @test render(vd) == vd
 
     df = DataFrame(:a => [1, 2, 3], :b => ["a", "b", "c"])
     @test render(df) == OrderedDict("a" => [1, 2, 3], "b" => ["a", "b", "c"])
-    
+
     mt = Tables.table([1 2; 3 4])
     @test render(mt) == OrderedDict(:Column1 => [1, 3], :Column2 => [2, 4])
 end
@@ -206,13 +206,13 @@ end
                 s3 = "$i3"
             end
         end
-    
+
         ui() = "DEMO UI"
         debounce = 10
     end
 
     @eval model = @init
-    
+
     @eval begin
         @page("/", ui)
         @page("/nolayout", ui, layout = "no layout")
@@ -220,16 +220,16 @@ end
         @page("/debounce2", ui; debounce)
         @page("/static", ui; model)
     end
-    
+
     port = rand(8001:9000)
     up(;port, ws_port = port)
 
     @test occursin("<p>DEMO UI</p>", string_get("http://localhost:$port"))
 
     @test string_get("http://localhost:$port/nolayout") == "<!DOCTYPE html><html>\n  <body>\n    <p>no layout</p>\n  </body></html>"
-    
+
     @test get_debounce(port, "main_reactivemodel") == 300
-    
+
     @clear_cache
     # first get the main page to trigger init function, which sets up the assets
     string_get("http://localhost:$port/debounce")
@@ -257,16 +257,16 @@ end
         @app MyApp begin
             @in i3 = 100
             @out s3 = "Hello"
-    
+
             @onchange i3 begin
                 s3 = "$i3"
             end
         end
-    
+
         ui() = "DEMO UI explicit"
         debounce = 11
     end
-    
+
     @eval model = @init(MyApp)
 
     @eval begin
@@ -276,26 +276,26 @@ end
         @page("/debounce2", ui; debounce, model = MyApp)
         @page("/static1", ui; model)
     end
-    
+
     port = rand(8001:9000)
     up(;port, ws_port = port)
-    
+
     @clear_cache MyApp
     @test occursin("<p>DEMO UI explicit</p>", string_get("http://localhost:$port"))
-    
+
     @test string_get("http://localhost:$port/nolayout") == "<!DOCTYPE html><html>\n  <body>\n    <p>no layout (explicit)</p>\n  </body></html>"
-    
+
     @test get_debounce(port, "myapp") == 300
-    
+
     @clear_cache MyApp
     # first get the main page to trigger init function, which sets up the assets
     string_get("http://localhost:$port/debounce")
     @test get_debounce(port, "myapp") == 51
-    
+
     @clear_cache MyApp
     string_get("http://localhost:$port/debounce2")
     @test get_debounce(port, "myapp") == 11
-    
+
     s1 = string_get("http://localhost:$port/")
     s2 = string_get("http://localhost:$port/")
 
@@ -304,7 +304,7 @@ end
 
     @test get_channel(s2) != get_channel(s1)
     @test get_channel(s3) == get_channel(s4)
-    
+
     @clear_cache MyApp
     down()
 end
