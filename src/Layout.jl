@@ -8,7 +8,7 @@ module Layout
 using Genie, Stipple
 
 export layout, add_css, remove_css
-export page, app, row, column, cell, container, flexgrid_kwargs
+export page, app, row, column, cell, container, flexgrid_kwargs, htmldiv
 
 export theme
 const THEMES = Function[]
@@ -247,6 +247,20 @@ function cell(args...;
   col == 0 && size != 0 && (col = size)
   
   class = class isa Symbol ? Symbol("$class + ' st-col'") : join(push!(split(class), "st-col"), " ")
+  kwargs = Stipple.attributes(flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...))
+
+  Genie.Renderer.Html.div(args...; kwargs...)
+end
+
+function htmldiv(args...;
+  col::Union{Int,AbstractString,Symbol,Nothing} = -1,
+  xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
+  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, size::Union{Int,AbstractString,Symbol,Nothing} = -1,
+  class = "", kwargs...)
+
+  # for backward compatibility with `size` kwarg
+  col == -1 && size != -1 && (col = size)
+
   kwargs = Stipple.attributes(flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...))
 
   Genie.Renderer.Html.div(args...; kwargs...)
