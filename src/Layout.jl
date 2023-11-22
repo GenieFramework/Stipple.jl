@@ -174,7 +174,7 @@ function row(args...;
   col == -1 && size != -1 && (col = size)
 
   class = class isa Symbol ? Symbol("$class + ' row'") : join(push!(split(class), "row"), " ")
-  kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...)
+  kwargs = Stipple.attributes(flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...))
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
@@ -204,7 +204,7 @@ function column(args...;
   col == -1 && size != -1 && (col = size)
 
   class = class isa Symbol ? Symbol("$class + ' column'") : join(push!(split(class), "column"), " ")
-  kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...)
+  kwargs = Stipple.attributes(flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...))
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
@@ -247,7 +247,7 @@ function cell(args...;
   col == 0 && size != 0 && (col = size)
   
   class = class isa Symbol ? Symbol("$class + ' st-col'") : join(push!(split(class), "st-col"), " ")
-  kwargs = flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...)
+  kwargs = Stipple.attributes(flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...))
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
