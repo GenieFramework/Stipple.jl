@@ -3,6 +3,8 @@ using Stipple.Genie.HTTPUtils.HTTP
 
 using Test
 
+version = Genie.Assets.package_version(Stipple)
+
 function string_get(x)
     String(HTTP.get(x, retries = 0, status_exception = false).body)
 end
@@ -396,13 +398,13 @@ end
     @page("/", ui)
     payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
     @test match(r"<div id=\"test\" .*?div>", payload).match == p1
-    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
+    @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
 
     # route constant ParsedHTMLString
     @page("/", ui())
     payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
     @test match(r"<div id=\"test\" .*?div>", payload).match == p1
-    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
+    @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
 
     # ----------------------------
 
@@ -414,13 +416,13 @@ end
     @test match(r"<div id=\"test\" .*?div>", payload).match == p1
     @test contains(payload, r"<a>test \d+</a>")
 
-    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
+    @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
 
     # route constant Vector{ParsedHTMLString}
     @page("/", ui())
     payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
     @test match(r"<div id=\"test\" .*?div>", payload).match == p1
-    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
+    @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
 
     # Supply a String instead of a ParsedHTMLString.
     # As the '@' character is not correctly parsed, the match is expected to differ
@@ -430,14 +432,14 @@ end
     @page("/", ui)
     payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
     @test match(r"<div id=\"test\" .*?div>", payload).match != p1
-    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
+    @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
     @test contains(payload, r"<a>test \d+</a>")
 
     # route constant String
     @page("/", ui())
     payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
     @test match(r"<div id=\"test\" .*?div>", payload).match != p1
-    @test contains(payload, """<link href="/stipple.jl/master/assets/css/stipplecore.css""")
+    @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
     @test contains(payload, r"<a>test \d+</a>")
 
     down()
