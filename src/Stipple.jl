@@ -471,6 +471,8 @@ function init(::Type{M};
         @error ex
       end
 
+      @debug payload
+
       field = Symbol(payload["field"])
 
       #check if field exists
