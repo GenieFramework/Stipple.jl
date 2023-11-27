@@ -525,6 +525,13 @@ function init(::Type{M};
       # form handler parameter & call event notifier
       handler = Symbol(get(event, "name", nothing))
       event_info = get(event, "event", nothing)
+      
+      # add client id if requested
+      if event_info isa Dict && get(event_info, "_addclient", false)
+        client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
+        push!(event_info, "_client" => client)
+      end
+      
       isempty(methods(notify, (M, Val{handler}))) || notify(model, Val(handler))
       isempty(methods(notify, (M, Val{handler}, Any))) || notify(model, Val(handler), event_info)
       LAST_ACTIVITY[Symbol(channel)] = now()

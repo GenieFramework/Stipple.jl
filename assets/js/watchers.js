@@ -81,8 +81,9 @@ const reviveMixin = {
 
 const eventMixin = {
   methods: {
-    handle_event: function (event_data, event_handler) {
+    handle_event: function (event_data, event_handler, mode) {
       console.debug('event: ' + JSON.stringify(event_data) + ":" + event_handler)
+      if (mode=='addclient') { event_data._addclient = true}
       Genie.WebChannels.sendMessageTo(window.CHANNEL, 'events', {
           'event': {
               'name': event_handler,
