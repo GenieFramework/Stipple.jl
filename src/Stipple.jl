@@ -461,7 +461,7 @@ function init(::Type{M};
   if ! Genie.Router.ischannel(Symbol(ch))
     Genie.Router.channel(ch, named = Symbol(ch)) do
       payload = Genie.Requests.payload(:payload)["payload"]
-      client = transport == Genie.WebChannels ? Genie.Requests.wsclient() : Genie.Requests.wtclient()
+      client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
 
       try
         haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) &&
@@ -608,15 +608,16 @@ const max_retry_times = 10
 
 """
     Base.push!(app::M, vals::Pair{Symbol,T}; channel::String,
-                except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt}) where {T,M<:ReactiveModel}
+                except::Union{Nothing,UInt,Vector{UInt}}) where {T,M<:ReactiveModel}
 
 Pushes data payloads over to the frontend by broadcasting the `vals` through the `channel`.
 """
 function Base.push!(app::M, vals::Pair{Symbol,T};
-                    channel::String = Genie.config.webchannels_default_route,
-                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing)::Bool where {T,M<:ReactiveModel}
+                    channel::String = getchannel(model),
+                    except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                    restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T,M<:ReactiveModel}
   try
-    webtransport().broadcast(channel, json(Dict("key" => julia_to_vue(vals[1]), "value" => Stipple.render(vals[2], vals[1]))), except = except)
+    webtransport().broadcast(channel, json(Dict("key" => julia_to_vue(vals[1]), "value" => Stipple.render(vals[2], vals[1]))); except, restrict)
   catch ex
     @debug ex
     false
@@ -625,13 +626,16 @@ end
 
 function Base.push!(model::M, vals::Pair{Symbol,Reactive{T}};
                     channel::String = getchannel(model),
-                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing)::Bool where {T,M<:ReactiveModel}
+                    except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                    restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T,M<:ReactiveModel}
                     v = vals[2].r_mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
-  push!(model, Symbol(julia_to_vue(vals[1])) => v; channel, except)
+  push!(model, Symbol(julia_to_vue(vals[1])) => v; channel, except, restrict)
 end
 
 function Base.push!(model::M;
                     channel::String = getchannel(model),
+                    except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                    restrict::Union{Nothing,UInt,Vector{UInt}} = nothing,
                     skip::Vector{Symbol} = Symbol[])::Bool where {M<:ReactiveModel}
 
   result = true
@@ -639,15 +643,18 @@ function Base.push!(model::M;
   for field in fieldnames(M)
     (isprivate(field, model) || field in skip) && continue
 
-    push!(model, field => getproperty(model, field); channel) === false && (result = false)
+    push!(model, field => getproperty(model, field); channel, except, restrict) === false && (result = false)
   end
 
   result
 end
 
-function Base.push!(model::M, field::Symbol; channel::String = getchannel(model))::Bool where {M<:ReactiveModel}
+function Base.push!(model::M, field::Symbol;
+                  channel::String = getchannel(model),
+                  except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                  restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {M<:ReactiveModel}
   isprivate(field, model) && return false
-  push!(model, field => getproperty(model, field); channel)
+  push!(model, field => getproperty(model, field); channel, except, restrict)
 end
 
 @specialize
