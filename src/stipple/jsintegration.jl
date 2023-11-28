@@ -87,9 +87,9 @@ end
 
 Execute js code in the frontend. `context` can be `:model`, `:app` or `:console`
 """
-function Base.run(model::ReactiveModel, jscode::String; context = :model)
-  context ∈ (:model, :app) && return push!(model, Symbol("js_", context) => jsfunction(jscode); channel = getchannel(model))
-  context == :console && push!(model, :js_model => jsfunction("console.log('$jscode')"); channel = getchannel(model))
+function Base.run(model::ReactiveModel, jscode::String; context = :model, kwargs...)
+  context ∈ (:model, :app) && return push!(model, Symbol("js_", context) => jsfunction(jscode); channel = getchannel(model), kwargs...)
+  context == :console && push!(model, :js_model => jsfunction("console.log('$jscode')"); channel = getchannel(model), kwargs...)
 
   nothing
 end
