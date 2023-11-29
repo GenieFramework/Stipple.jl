@@ -160,11 +160,11 @@ function Stipple.render(app::M; mode::Symbol = :vue)::LittleDict{Symbol,Any} whe
   vue
 end
 
-function get_mixins(::Type{<:ReactiveModel})::Vector{Type{ReactiveModel}}
+function get_mixins(::Type{<:ReactiveModel})::Vector{Type{<:ReactiveModel}}
     Type{ReactiveModel}[]
 end
 
-function get_mixins(app::ReactiveModel)::Vector{ReactiveModel}
+function get_mixins(app::ReactiveModel)::Vector{Type{<:ReactiveModel}}
   get_mixins(get_abstract_type(typeof(app)))
 end
 

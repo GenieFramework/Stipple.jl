@@ -8,7 +8,7 @@ import Genie
 import Stipple: deletemode!, parse_expression!, init_storage
 
 # definition of variables
-export @readonly, @private, @in, @out, @jsfn, @readonly!, @private!, @in!, @out!, @jsfn!, @mixin
+export @readonly, @private, @in, @out, @jsfn, @readonly!, @private!, @in!, @out!, @jsfn!, @mixin, @mixins
 
 #definition of handlers/events
 export @onchange, @onbutton, @event, @notify
@@ -532,8 +532,54 @@ macro mixin(location, expr, prefix, postfix)
   end |> esc
 end
 
-macro mixins(location, mixins)
-  :(Stipple.get_mixins(::Type{$location}) = Type{<:ReactiveModel}[$mixins...]) |> esc
+"""
+  @mixins [DemoMixin1, DemoMixin2]
+
+Add one or more ReactiveModels as mixin to the app. The mixins need to be passed as a Vector.
+This feature is meant to be able to design functionalities that can be reused within other apps.
+
+All fields, client data, and js functions like watchers, life cycle hooks, etc are automatically embedded.
+
+However, the recommended way of embedding the fields
+is via the `@mixin` in the app definition, because only then they are automatically synchronised according to their definition.
+So in order to include a mixin with data and functions, two steps are needed.
+
+This feature is still tentative and might be redesigned in the future.
+```julia
+@app GreetMixin begin
+  @in name = "John Doe"
+end
+
+@mounted GreetMixin = "console.log('Just mounted the App including the GreetMixin')"
+
+@methods GreetMixin \"\"\"
+greet: function() { console.log('Hi ' + this.name + '!') }
+\"\"\"
+
+@mixins [GreetMixin]
+
+@app begin
+  @mixin GreetMixin
+  @in s = "Hi"
+  @in i = 10
+end
+
+ui() = btn("Say Hello", @click("greet"))
+
+@page("/", ui())
+
+up(open_browser = true)
+"""
+macro mixins(expr)
+  esc(quote
+    let M = Stipple.@type
+      Stipple.ReactiveTools.@mixins M $expr
+    end
+  end)
+end
+
+macro mixins(App, mixins)
+  :(Stipple.get_mixins(::Type{<:$App}) = Type{<:ReactiveModel}[$mixins...]) |> esc
 end
 
 #===#
