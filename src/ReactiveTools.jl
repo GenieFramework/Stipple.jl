@@ -532,6 +532,10 @@ macro mixin(location, expr, prefix, postfix)
   end |> esc
 end
 
+macro mixins(location, mixins)
+  :(Stipple.get_mixins(::Type{$location}) = Type{<:ReactiveModel}[$mixins...]) |> esc
+end
+
 #===#
 
 function init_handlers(m::Module)

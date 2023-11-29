@@ -761,6 +761,13 @@ function injectdeps(output::Vector{AbstractString}, M::Type{<:ReactiveModel}) ::
       startswith("$key", model_prefix) && push!(output, f()...)
     end
   end
+  for mixin in get_mixins(M)
+    modelfields = fieldnames(Stipple.get_concrete_type(M))
+    mixinfields = fieldnames(Stipple.get_concrete_type(mixin))
+    # if all fields are already part of the model, don't include data
+    mode = isempty(setdiff(mixinfields, modelfields)) ? :mixindeps : :mixin
+    push!(output, mixin_dep(mixin; mode)())
+  end
   output
 end
 
@@ -809,6 +816,7 @@ function deps!(M::Type{<:ReactiveModel}, f::Function; extra_deps = true)
 end
 
 deps!(M::Type{<:ReactiveModel}, modul::Module; extra_deps = true) = deps!(M, modul.deps; extra_deps)
+deps!(M::Type{<:ReactiveModel}, mixin::ReactiveModel; extra_deps = true) = deps!(M, mixin_deps(mixin); extra_deps)
 
 deps!(m::Any, v::Vector{Union{Function, Module}}) = deps!.(Ref(m), v)
 deps!(m::Any, t::Tuple) = [deps!(m, f) for f in t]
