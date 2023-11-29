@@ -169,7 +169,12 @@ function get_mixins(app::ReactiveModel)::Vector{ReactiveModel}
 end
 
 function mixin_dep(Mixin::Type{<:ReactiveModel}; mode::Symbol = :mixindeps)
-  mixin_dep() = script("const $(nameof(Mixin)) = $(strip(json(render(Mixin(); mode)), '"'))\n")
+  mix = strip(json(render(Mixin(); mode)), '"')
+  mixin_dep() = if mix == "{}"
+    nothing
+  else
+    script("const $(nameof(Mixin)) = $mix\n")
+  end
 end
 
 

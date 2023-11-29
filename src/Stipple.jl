@@ -766,7 +766,8 @@ function injectdeps(output::Vector{AbstractString}, M::Type{<:ReactiveModel}) ::
     mixinfields = fieldnames(Stipple.get_concrete_type(mixin))
     # if all fields are already part of the model, don't include data
     mode = isempty(setdiff(mixinfields, modelfields)) ? :mixindeps : :mixin
-    push!(output, mixin_dep(mixin; mode)())
+    out = mixin_dep(mixin; mode)()
+    out === nothing || push!(output, out)
   end
   output
 end
