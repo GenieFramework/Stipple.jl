@@ -121,8 +121,9 @@ Renders the Julia `ReactiveModel` `app` as the corresponding Vue.js JavaScript c
 """
 function Stipple.render(app::M; mode::Symbol = :vue)::LittleDict{Symbol,Any} where {M<:ReactiveModel}
   result = LittleDict{String,Any}()
-
-  for field in fieldnames(typeof(app))
+  ff = collect(fieldnames(typeof(app)))
+  mode == :vue || setdiff!(ff, [:channel__, :modes__], Stipple.AUTOFIELDS)
+  for field in ff
     f = getfield(app, field)
 
     occursin(SETTINGS.private_pattern, String(field)) && continue
