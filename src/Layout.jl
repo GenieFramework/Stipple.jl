@@ -115,8 +115,8 @@ function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = tr
   # if either class is a Symbol or class! is not nothing.
   # So an argument of the form `class! = "'my-class' + 'your-class'` is supported
   # Furthermore Vectors are now supported
-  class isa Vector && (class = Symbol(join(js_attr.(class), " + ")))
-  class! isa Vector && (class! = join(js_attr.(class!), " + "))
+  class isa Vector && (class = Symbol(join(js_attr.(class), " + ' ' + ")))
+  class! isa Vector && (class! = join(js_attr.(class!), " + ' ' + "))
   
   classes = String[]
   if class isa Symbol
@@ -173,7 +173,7 @@ function row(args...;
   # for backward compatibility with `size` kwarg
   col == -1 && size != -1 && (col = size)
 
-  class = class isa Symbol ? Symbol("$class + ' row'") : join(push!(split(class), "row"), " ")
+  class = class isa Symbol ? Symbol("$class + ' row'") : class isa Vector ? push!(class, "row") : join(push!(split(class), "row"), " ")
   kwargs = Stipple.attributes(flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...))
 
   Genie.Renderer.Html.div(args...; kwargs...)
