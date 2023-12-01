@@ -119,10 +119,11 @@ jsrender(r::Reactive, args...) = jsrender(getfield(getfield(r,:o), :val), args..
 
 Renders the Julia `ReactiveModel` `app` as the corresponding Vue.js JavaScript code.
 """
-function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
-  result = Dict{String,Any}()
-
-  for field in fieldnames(typeof(app))
+function Stipple.render(app::M; mode::Symbol = :vue)::LittleDict{Symbol,Any} where {M<:ReactiveModel}
+  result = LittleDict{String,Any}()
+  ff = collect(fieldnames(typeof(app)))
+  mode == :vue || setdiff!(ff, [:channel__, :modes__], Stipple.AUTOFIELDS)
+  for field in ff
     f = getfield(app, field)
 
     occursin(SETTINGS.private_pattern, String(field)) && continue
@@ -131,9 +132,17 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
     result[julia_to_vue(field)] = Stipple.jsrender(f, field)
   end
 
-  vue = Dict( :el => JSONText("rootSelector"),
-              :mixins => JSONText("[watcherMixin, reviveMixin, eventMixin]"),
-              :data => merge(result, client_data(app)))
+  vue = LittleDict{Symbol, Any}()
+  mixin_names = Symbol[nameof(m) for m in get_mixins(app)]
+  
+  if mode == :vue
+    push!(vue, :el => JSONText("rootSelector"))
+    mixin_names = vcat([:watcherMixin, :reviveMixin, :eventMixin], mixin_names)
+  end
+
+  isempty(mixin_names) || push!(vue, :mixins => JSONText("[$(join(mixin_names, ", "))]"))
+  mode == :mixindeps || push!(vue, :data => merge(result, client_data(app)))
+  
   for (f, field) in ((components, :components), (js_methods, :methods), (js_computed, :computed), (js_watch, :watch))
     js = join_js(f(app), ",\n    "; pre = strip)
     isempty(js) || push!(vue, field => JSONText("{\n    $js\n}"))
@@ -150,6 +159,24 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
 
   vue
 end
+
+function get_mixins(::Type{<:ReactiveModel})::Vector{Type{<:ReactiveModel}}
+    Type{ReactiveModel}[]
+end
+
+function get_mixins(app::ReactiveModel)::Vector{Type{<:ReactiveModel}}
+  get_mixins(get_abstract_type(typeof(app)))
+end
+
+function mixin_dep(Mixin::Type{<:ReactiveModel}; mode::Symbol = :mixindeps)
+  mix = strip(json(render(Mixin(); mode)), '"')
+  mixin_dep() = if mix == "{}"
+    nothing
+  else
+    script("const $(nameof(Mixin)) = $mix\n")
+  end
+end
+
 
 """
     function Stipple.render(val::T, fieldname::Union{Symbol,Nothing} = nothing) where {T}
