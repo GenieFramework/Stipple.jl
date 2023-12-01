@@ -656,8 +656,13 @@ macro init(args...)
         identity
       end
     end
-    instance = let model = initfn($(init_args...))
-      new_handlers ? Base.invokelatest(handlersfn, model) : handlersfn(model)
+    instance = initfn($(init_args...))
+    # append eventhandlers
+    new_handlers ? Base.invokelatest(handlersfn, instance) : handlersfn(instance)
+    # append eventhandlers of mixins
+    for mixin in Stipple.get_mixins(instance)
+      handlers = get(Stipple.ReactiveTools.HANDLERS_FUNCTIONS, mixin, nothing)
+      handlers === nothing || handlers(instance)
     end
     for p in Stipple.Pages._pages
       p.context == $__module__ && (p.model = instance)
