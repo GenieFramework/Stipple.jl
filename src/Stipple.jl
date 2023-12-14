@@ -347,6 +347,18 @@ end
 function channeldefault() :: Union{String,Nothing}
   params(CHANNELPARAM, (haskey(ENV, "$CHANNELPARAM") ? (Genie.Router.params!(CHANNELPARAM, ENV["$CHANNELPARAM"])) : nothing))
 end
+function channeldefault(::Type{M}) where M<:ReactiveModel
+  haskey(ENV, "$CHANNELPARAM") && (Genie.Router.params!(CHANNELPARAM, ENV["$CHANNELPARAM"]))
+  haskey(params(), CHANNELPARAM) && return params(CHANNELPARAM)
+
+  if ! haskey(Genie.Router.params(), :CHANNEL) && ! haskey(Genie.Router.params(), :ROUTE)
+    return nothing
+  end
+
+  model_id = Symbol(Stipple.routename(M))
+  stored_model = Stipple.ModelStorage.Sessions.GenieSession.get(model_id, nothing)
+  stored_model === nothing ? nothing : getfield(stored_model, Stipple.CHANNELFIELDNAME)
+end
 
 @nospecialize
 
@@ -422,10 +434,10 @@ frontend and perform the 2-way backend-frontend data sync. Returns the instance 
 hs_model = Stipple.init(HelloPie)
 ```
 """
-function init(::Type{M};
+function init(t::Type{M};
               vue_app_name::S = Stipple.Elements.root(M),
               endpoint::S = vue_app_name,
-              channel::Union{Any,Nothing} = channeldefault(),
+              channel::Union{Any,Nothing} = channeldefault(t),
               debounce::Int = JS_DEBOUNCE_TIME,
               transport::Module = Genie.WebChannels,
               core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
@@ -443,7 +455,7 @@ function init(::Type{M};
   elseif hasproperty(model, CHANNELFIELDNAME)
     getchannel(model)
   else
-    setchannel(model, channelfactory())
+    setchannel(model, channel)
   end
 
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
@@ -451,83 +463,86 @@ function init(::Type{M};
 
   PRECOMPILE[] || Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
 
-  if is_channels_webtransport()
-    Genie.Assets.channels_subscribe(channel)
-  else
-    Genie.Assets.webthreads_subscribe(channel)
-    Genie.Assets.webthreads_push_pull(channel)
-  end
+  # register channels and routes only if within a request
+  if haskey(Genie.Router.params(), :CHANNEL) || haskey(Genie.Router.params(), :ROUTE)
+    if is_channels_webtransport()
+      Genie.Assets.channels_subscribe(channel)
+    else
+      Genie.Assets.webthreads_subscribe(channel)
+      Genie.Assets.webthreads_push_pull(channel)
+    end
 
-  ch = "/$channel/watchers"
-  if ! Genie.Router.ischannel(Symbol(ch))
-    Genie.Router.channel(ch, named = Symbol(ch)) do
-      payload = Genie.Requests.payload(:payload)["payload"]
-      client = transport == Genie.WebChannels ? Genie.Requests.wsclient() : Genie.Requests.wtclient()
+    ch = "/$channel/watchers"
+    # if ! Genie.Router.ischannel(Router.channelname(ch))
+      Genie.Router.channel(ch, named = Router.channelname(ch)) do
+        payload = Genie.Requests.payload(:payload)["payload"]
+        client = transport == Genie.WebChannels ? Genie.Requests.wsclient() : Genie.Requests.wtclient()
 
-      try
-        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) &&
-          Genie.Router.params!(:session,
-                                Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
-      catch ex
-        @error ex
-      end
-
-      field = Symbol(payload["field"])
-
-      #check if field exists
-      hasfield(CM, field) || return ok_response
-
-      valtype = Dict(zip(fieldnames(CM), CM.types))[field]
-      val = valtype <: Reactive ? getfield(model, field) : Ref{valtype}(getfield(model, field))
-
-      # reject non-public types
-      ( isprivate(field, model) || isreadonly(field, model) ) && return ok_response
-
-      newval = convertvalue(val, payload["newval"])
-      oldval = try
-        convertvalue(val, payload["oldval"])
-      catch ex
-        val[]
-      end
-
-      push!(model, field => newval; channel = channel, except = client)
-      LAST_ACTIVITY[Symbol(channel)] = now()
-
-      try
-        update!(model, field, newval, oldval)
-      catch ex
-        # send the error to the frontend
-        if Genie.Configuration.isdev()
-          return ex
-        else
-          return "An error has occured -- please check the logs"
+        try
+          haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) &&
+            Genie.Router.params!(:session,
+                                  Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
+        catch ex
+          @error ex
         end
+
+        field = Symbol(payload["field"])
+
+        #check if field exists
+        hasfield(CM, field) || return ok_response
+
+        valtype = Dict(zip(fieldnames(CM), CM.types))[field]
+        val = valtype <: Reactive ? getfield(model, field) : Ref{valtype}(getfield(model, field))
+
+        # reject non-public types
+        ( isprivate(field, model) || isreadonly(field, model) ) && return ok_response
+
+        newval = convertvalue(val, payload["newval"])
+        oldval = try
+          convertvalue(val, payload["oldval"])
+        catch ex
+          val[]
+        end
+
+        push!(model, field => newval; channel = channel, except = client)
+        LAST_ACTIVITY[Symbol(channel)] = now()
+
+        try
+          update!(model, field, newval, oldval)
+        catch ex
+          # send the error to the frontend
+          if Genie.Configuration.isdev()
+            return ex
+          else
+            return "An error has occured -- please check the logs"
+          end
+        end
+
+        ok_response
       end
+    # end
 
-      ok_response
+    ch = "/$channel/keepalive"
+    if ! Genie.Router.ischannel(Router.channelname(ch))
+      Genie.Router.channel(ch, named = Router.channelname(ch)) do
+        LAST_ACTIVITY[Symbol(channel)] = now()
+        ok_response
+      end
     end
-  end
 
-  ch = "/$channel/keepalive"
-  if ! Genie.Router.ischannel(Symbol(ch))
-    Genie.Router.channel(ch, named = Symbol(ch)) do
-      LAST_ACTIVITY[Symbol(channel)] = now()
-      ok_response
-    end
-  end
-
-  ch = "/$channel/events"
-  if ! Genie.Router.ischannel(Symbol(ch))
-    Genie.Router.channel(ch, named = Symbol(ch)) do
-      # get event name
-      event = Genie.Requests.payload(:payload)["event"]
-      # form handler parameter & call event notifier
-      handler = Symbol(get(event, "name", nothing))
-      event_info = get(event, "event", nothing)
-      isempty(methods(notify, (M, Val{handler}))) || notify(model, Val(handler))
-      isempty(methods(notify, (M, Val{handler}, Any))) || notify(model, Val(handler), event_info)
-      LAST_ACTIVITY[Symbol(channel)] = now()
-      ok_response
+    ch = "/$channel/events"
+    if ! Genie.Router.ischannel(Router.channelname(ch))
+      Genie.Router.channel(ch, named = Router.channelname(ch)) do
+        # get event name
+        event = Genie.Requests.payload(:payload)["event"]
+        # form handler parameter & call event notifier
+        handler = Symbol(get(event, "name", nothing))
+        event_info = get(event, "event", nothing)
+        isempty(methods(notify, (M, Val{handler}))) || notify(model, Val(handler))
+        isempty(methods(notify, (M, Val{handler}, Any))) || notify(model, Val(handler), event_info)
+        LAST_ACTIVITY[Symbol(channel)] = now()
+        ok_response
+      end
     end
   end
 
@@ -731,7 +746,7 @@ end
 function injectdeps(output::Vector{AbstractString}, M::Type{<:ReactiveModel}) :: Vector{AbstractString}
   for (key, f) in DEPS
     key isa DataType && key <: ReactiveModel && continue
-    # exclude keys starting with '_' 
+    # exclude keys starting with '_'
     key isa Symbol && startswith("$key", '_') && continue
     push!(output, f()...)
   end
@@ -790,7 +805,7 @@ end
 
 function deps!(M::Type{<:ReactiveModel}, f::Function; extra_deps = true)
   key = extra_deps ? Symbol("_$(vm(M))_$(nameof(f))") : M
-  DEPS[key] = f isa Function ? f : f.deps 
+  DEPS[key] = f isa Function ? f : f.deps
 end
 
 deps!(M::Type{<:ReactiveModel}, modul::Module; extra_deps = true) = deps!(M, modul.deps; extra_deps)
@@ -958,13 +973,13 @@ function attributes(kwargs::Union{Vector{<:Pair}, Base.Iterators.Pairs, Dict},
   for (k,v) in kwargs
     v === nothing && continue
     mapped = false
-    
+
     k_str = string(k)
 
     if haskey(mappings, k_str)
       k_str = mappings[k_str]
     end
-    
+
     v_isa_jsexpr = v isa Symbol || !isa(v, Union{AbstractString, Bool, Number})
     attr_key = string((v_isa_jsexpr && ! startswith(k_str, ":") &&
                 ! (endswith(k_str, "!") || startswith(k_str, "v-") || startswith(k_str, "v" * Genie.config.html_parser_char_dash)) ? ":" : ""), k_str) |> Symbol

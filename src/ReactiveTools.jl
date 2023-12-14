@@ -585,12 +585,16 @@ macro init(args...)
 
   quote
     local new_handlers = false
-    local initfn =  if isdefined($__module__, :init_from_storage)
+
+    local initfn =
+    if isdefined($__module__, :init_from_storage)
       $__module__.init_from_storage
     else
       Stipple.init
     end
-    local handlersfn =  if !$called_without_type
+
+    local handlersfn =
+    if !$called_without_type
       # writing '$(init_kwargs[type_pos])' generates an error during a pre-evaluation
       # possibly from Revise?
       # we use 'get' instead of 'getindex'
@@ -606,13 +610,27 @@ macro init(args...)
         identity
       end
     end
+
     instance = let model = initfn($(init_args...))
       new_handlers ? Base.invokelatest(handlersfn, model) : handlersfn(model)
     end
     for p in Stipple.Pages._pages
       p.context == $__module__ && (p.model = instance)
     end
+
     instance
+  end |> esc
+end
+
+macro app(typename, expr, handlers_fn_name = :handlers)
+  # indicate to the @handlers macro that old typefields have to be cleared
+  # (avoids model_to_storage)
+  newtypename = Symbol(typename, "_!_")
+  quote
+    let model = Stipple.ReactiveTools.@handlers $newtypename $expr $handlers_fn_name
+      Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$typename] = $handlers_fn_name
+      model
+    end
   end |> esc
 end
 
@@ -636,18 +654,6 @@ macro handlers(expr)
     $expr
 
     @handlers
-  end |> esc
-end
-
-macro app(typename, expr, handlers_fn_name = :handlers)
-  # indicate to the @handlers macro that old typefields have to be cleared
-  # (avoids model_to_storage)
-  newtypename = Symbol(typename, "_!_")
-  quote
-    let model = Stipple.ReactiveTools.@handlers $newtypename $expr $handlers_fn_name
-      Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$typename] = $handlers_fn_name
-      model
-    end
   end |> esc
 end
 
@@ -1315,7 +1321,7 @@ Add a function f to the dependencies of the current app.
 
   @deps M::Module
 
-  
+
 Add the dependencies of the module M to the dependencies of the current app.
 """
 macro deps(expr)
@@ -1335,7 +1341,7 @@ The module needs to define a function `deps()`.
 
   @deps(MyApp::ReactiveModel, M::Module)
 
-  
+
 Add the dependencies of the module M to the dependencies of the app MyApp.
 The module needs to define a function `deps()`.
 """
