@@ -75,7 +75,6 @@ using Logging, Mixers, Random, Reexport, Dates, Tables
 @reexport @using_except Genie: download
 import Genie.Router.download
 @reexport @using_except Genie.Renderers.Html: mark, div, time, view, render, Headers, menu
-const htmldiv = Html.div
 export render, htmldiv, js_attr
 @reexport using JSON3
 @reexport using StructTypes
@@ -473,17 +472,49 @@ function init(t::Type{M};
     end
 
     ch = "/$channel/watchers"
-    # if ! Genie.Router.ischannel(Router.channelname(ch))
-      Genie.Router.channel(ch, named = Router.channelname(ch)) do
-        payload = Genie.Requests.payload(:payload)["payload"]
-        client = transport == Genie.WebChannels ? Genie.Requests.wsclient() : Genie.Requests.wtclient()
+    Genie.Router.channel(ch, named = Router.channelname(ch)) do
+      payload = Genie.Requests.payload(:payload)["payload"]
+      client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
 
-        try
-          haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) &&
-            Genie.Router.params!(:session,
-                                  Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
-        catch ex
-          @error ex
+      try
+        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) &&
+          Genie.Router.params!(:session,
+                                Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
+      catch ex
+        @error ex
+      end
+
+      @debug payload
+
+      field = Symbol(payload["field"])
+
+      #check if field exists
+      hasfield(CM, field) || return ok_response
+
+      valtype = Dict(zip(fieldnames(CM), CM.types))[field]
+      val = valtype <: Reactive ? getfield(model, field) : Ref{valtype}(getfield(model, field))
+
+      # reject non-public types
+      ( isprivate(field, model) || isreadonly(field, model) ) && return ok_response
+
+      newval = convertvalue(val, payload["newval"])
+      oldval = try
+        convertvalue(val, payload["oldval"])
+      catch ex
+        val[]
+      end
+
+      push!(model, field => newval; channel = channel, except = client)
+      LAST_ACTIVITY[Symbol(channel)] = now()
+
+      try
+        update!(model, field, newval, oldval)
+      catch ex
+        # send the error to the frontend
+        if Genie.Configuration.isdev()
+          return ex
+        else
+          return "An error has occured -- please check the logs"
         end
 
         field = Symbol(payload["field"])
@@ -520,7 +551,7 @@ function init(t::Type{M};
 
         ok_response
       end
-    # end
+    end
 
     ch = "/$channel/keepalive"
     if ! Genie.Router.ischannel(Router.channelname(ch))
@@ -538,6 +569,13 @@ function init(t::Type{M};
         # form handler parameter & call event notifier
         handler = Symbol(get(event, "name", nothing))
         event_info = get(event, "event", nothing)
+
+        # add client id if requested
+        if event_info isa Dict && get(event_info, "_addclient", false)
+          client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
+          push!(event_info, "_client" => client)
+        end
+
         isempty(methods(notify, (M, Val{handler}))) || notify(model, Val(handler))
         isempty(methods(notify, (M, Val{handler}, Any))) || notify(model, Val(handler), event_info)
         LAST_ACTIVITY[Symbol(channel)] = now()
@@ -622,46 +660,53 @@ const max_retry_times = 10
 
 """
     Base.push!(app::M, vals::Pair{Symbol,T}; channel::String,
-                except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt}) where {T,M<:ReactiveModel}
+                except::Union{Nothing,UInt,Vector{UInt}}) where {T,M<:ReactiveModel}
 
 Pushes data payloads over to the frontend by broadcasting the `vals` through the `channel`.
 """
 function Base.push!(app::M, vals::Pair{Symbol,T};
-                    channel::String = Genie.config.webchannels_default_route,
-                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing)::Bool where {T,M<:ReactiveModel}
+                    channel::String = getchannel(app),
+                    except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                    restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T,M<:ReactiveModel}
   try
-    webtransport().broadcast(channel, json(Dict("key" => julia_to_vue(vals[1]), "value" => Stipple.render(vals[2], vals[1]))), except = except)
+    webtransport().broadcast(channel, json(Dict("key" => julia_to_vue(vals[1]), "value" => Stipple.render(vals[2], vals[1]))); except, restrict)
   catch ex
     @debug ex
     false
   end
 end
 
-function Base.push!(model::M, vals::Pair{Symbol,Reactive{T}};
-                    channel::String = getchannel(model),
-                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing)::Bool where {T,M<:ReactiveModel}
+function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
+                    channel::String = getchannel(app),
+                    except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                    restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T,M<:ReactiveModel}
                     v = vals[2].r_mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
-  push!(model, Symbol(julia_to_vue(vals[1])) => v; channel, except)
+  push!(app, Symbol(julia_to_vue(vals[1])) => v; channel, except, restrict)
 end
 
-function Base.push!(model::M;
-                    channel::String = getchannel(model),
+function Base.push!(app::M;
+                    channel::String = getchannel(app),
+                    except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                    restrict::Union{Nothing,UInt,Vector{UInt}} = nothing,
                     skip::Vector{Symbol} = Symbol[])::Bool where {M<:ReactiveModel}
 
   result = true
 
   for field in fieldnames(M)
-    (isprivate(field, model) || field in skip) && continue
+    (isprivate(field, app) || field in skip) && continue
 
-    push!(model, field => getproperty(model, field); channel) === false && (result = false)
+    push!(app, field => getproperty(app, field); channel, except, restrict) === false && (result = false)
   end
 
   result
 end
 
-function Base.push!(model::M, field::Symbol; channel::String = getchannel(model))::Bool where {M<:ReactiveModel}
-  isprivate(field, model) && return false
-  push!(model, field => getproperty(model, field); channel)
+function Base.push!(app::M, field::Symbol;
+                  channel::String = getchannel(app),
+                  except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                  restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {M<:ReactiveModel}
+  isprivate(field, app) && return false
+  push!(app, field => getproperty(app, field); channel, except, restrict)
 end
 
 @specialize

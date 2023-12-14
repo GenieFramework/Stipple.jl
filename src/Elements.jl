@@ -359,6 +359,7 @@ Sometimes preprocessing of the events is necessary, e.g. to add or skip informat
 ```
 """
 macro on(arg, expr, preprocess = nothing)
+  preprocess isa QuoteNode && preprocess == :(:addclient) && (preprocess = "event._addclient = true")
   kw = Symbol("v-on:", arg isa String ? arg : arg isa QuoteNode ? arg.value : arg.head == :vect ? join(lstrip.(string.(arg.args), ':'), '.') :
     throw("Value '$arg' for `arg` not supported. `arg` should be of type Symbol, String, or Vector{Union{String, Symbol}}"))
 
@@ -370,7 +371,7 @@ macro on(arg, expr, preprocess = nothing)
           :(replace("""function(event) {
               const preprocess = (event) => { """ * replace($preprocess, '"' => "\\\"") * """; return event }
               handle_event(preprocess(event), '$($(esc(expr)))')
-          }'""", '\n' => ';'))
+          }""", '\n' => ';'))
       end
   else
       esc_expr(expr)
