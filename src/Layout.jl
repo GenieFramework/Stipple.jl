@@ -141,6 +141,7 @@ function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = tr
       vcat([JSONText(class)], classes)
     elseif class isa AbstractDict
       T = first(typeof(class).parameters)
+      class = convert(Dict{T, Any}, class)
       for c in classes
         push!(class, T(c) => true)
       end
@@ -163,6 +164,19 @@ function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = tr
   end
 
   return kwargs
+end
+
+function append_class(class, subclass)
+  subclass isa Symbol && (subclass = JSONText(subclass))
+  if class isa Symbol
+    [JSONText(class), subclass]
+  elseif class isa String
+    subclass isa String ? join(push!(split(class), subclass), " ") : vcat(split(class), [subclass])
+  elseif class isa Vector
+    vcat(class, [subclass])
+  else # Dict
+    [class, subclass]
+  end
 end
 
 """
@@ -188,7 +202,8 @@ function row(args...;
   # for backward compatibility with `size` kwarg
   col == -1 && size != -1 && (col = size)
 
-  class = class isa Symbol ? Symbol("$class + ' row'") : class isa Vector ? push!(class, "row") : join(push!(split(class), "row"), " ")
+  # class = class isa Symbol ? Symbol("$class + ' row'") : class isa Vector ? push!(class, "row") : join(push!(split(class), "row"), " ")
+  class = append_class(class, "row")
   kwargs = Stipple.attributes(flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...))
 
   Genie.Renderer.Html.div(args...; kwargs...)
@@ -217,8 +232,7 @@ function column(args...;
 
   # for backward compatibility with `size` kwarg
   col == -1 && size != -1 && (col = size)
-
-  class = class isa Symbol ? Symbol("$class + ' column'") : join(push!(split(class), "column"), " ")
+  class = append_class(class, "column")
   kwargs = Stipple.attributes(flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...))
 
   Genie.Renderer.Html.div(args...; kwargs...)
@@ -261,7 +275,8 @@ function cell(args...;
   # for backward compatibility with `size` kwarg
   col == 0 && size != 0 && (col = size)
   
-  class = class isa Symbol ? Symbol("$class + ' st-col'") : join(push!(split(class), "st-col"), " ")
+  # class = class isa Symbol ? Symbol("$class + ' st-col'") : join(push!(split(class), "st-col"), " ")
+  class = append_class(class, "st-col")
   kwargs = Stipple.attributes(flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...))
 
   Genie.Renderer.Html.div(args...; kwargs...)

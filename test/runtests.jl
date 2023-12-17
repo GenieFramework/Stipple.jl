@@ -319,13 +319,13 @@ end
     @test contains(el, "class=\"myclass column col-2 col-sm-9")
 
     el = column(col = 2, sm = 9, class = :myclass)
-    @test contains(el, r":class=\"myclass \+ .*column.* col-2 col-sm-9'")
+    @test contains(el, ":class=\"[myclass,'column','col-2','col-sm-9']\"")
 
     el = column(col = 2, sm = 9, class! = "myclass")
-    @test contains(el, r":class=\"myclass \+ .*column.* col-2 col-sm-9'")
+    @test contains(el, ":class=\"[myclass,'column','col-2','col-sm-9']\"")
 
     el = column(col = 2, sm = 9, class! = :myclass)
-    @test contains(el, r":class=\"myclass \+ .*column.* col-2 col-sm-9'")
+    @test contains(el, ":class=\"[myclass,'column','col-2','col-sm-9']\"")
 
     # ---------
 
@@ -333,10 +333,10 @@ end
     @test contains(el, "class=\"myclass row col-2 col-sm-9")
 
     el = row(col = 2, sm = 9, class = :myclass)
-    @test contains(el, r":class=\"myclass \+ .*row.* col-2 col-sm-9'")
-
+    @test contains(el, ":class=\"[myclass,'row','col-2','col-sm-9']\"")
+    
     el = row(col = 2, sm = 9, class! = "myclass")
-    @test contains(el, r":class=\"myclass \+ .*row.* col-2 col-sm-9'")
+    @test contains(el, ":class=\"[myclass,'row','col-2','col-sm-9']\"")
 
     # ---------
 
@@ -344,14 +344,18 @@ end
     @test contains(el, "class=\"myclass st-col col-2 col-sm-9")
 
     el = cell(col = 2, sm = 9, class = :myclass)
-    @test contains(el, r":class=\"myclass \+ .*st-col.* col-2 col-sm-9'")
+    @test contains(el, ":class=\"[myclass,'st-col','col-2','col-sm-9']\"")
 
     el = column(col = 2, sm = 9, class! = "myclass")
-    @test contains(el, r":class=\"myclass \+ .*column.* col-2 col-sm-9'")
+    @test contains(el, ":class=\"[myclass,'column','col-2','col-sm-9']\"")
 
     @test cell(sm = 9) == "<div class=\"st-col col col-sm-9\"></div>"
 
     @test cell(col = -1, sm = 9) == "<div class=\"st-col col-sm-9\"></div>"
+
+    @test htmldiv(col = 9, class = "a b c") == "<div class=\"a b c col-9\"></div>"
+
+    @test htmldiv(col = 9, class = split("a b c")) == "<div :class=\"['a','b','c','col-9']\"></div>"
 end
 
 @testset "Vue Conditionals and Iterator" begin
