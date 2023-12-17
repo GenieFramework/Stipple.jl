@@ -110,22 +110,23 @@ end
 function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = true, flexgrid_mappings::Dict{Symbol,Symbol} = Dict{Symbol,Symbol}(), kwargs...)
   kwargs = Dict{Symbol,Any}(kwargs...)
   
-  # make a classes array that contains strings
-  # while class will contain a js expression as Symbol
-  # if either class is a Symbol or class! is not nothing.
-  # So an argument of the form `class! = "'my-class' + 'your-class'` is supported
-  # Furthermore Vectors are now supported
-  class isa Vector && (class = Symbol(join(js_attr.(class), " + ' ' + ")))
-  class! isa Vector && (class! = join(js_attr.(class!), " + ' ' + "))
-  
-  classes = String[]
-  if class isa Symbol
-    class! !== nothing && (class = Symbol("$class! + $class"))
-  else
-    push!(classes, "$class")
-    class! !== nothing && (class = Symbol("$class!"))
+  # support all different types of classes that vue supports: String, Expressions (Symbols), Arrays, Dicts
+  # todo check if vector contains only strings ...
+  if class! !== nothing
+    class = if class isa Symbol
+      Any[JSONText(class!) + JSONText(class)]
+    elseif class isa String
+      vcat(Any[JSONText(class!)], split(class))
+    elseif class isa AbstractDict
+      Any[JSONText(class!), class]
+    elseif class isa Vector
+      vcat([JSONText(class!)], class)
+    else
+      class
+    end
   end
 
+  classes = String[]
   for key in (:col, :xs, :sm, :md, :lg, :xl)
     newkey = get(flexgrid_mappings, key, key)
     if haskey(kwargs, newkey)
@@ -134,16 +135,30 @@ function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = tr
       delete!(kwargs, newkey)
     end
   end
-  colclass = join(classes[classes .!= ""], ' ')
 
-  if length(colclass) != 0
-    class = class isa Symbol ? Symbol("$class + ' $colclass'") : colclass
+  if length(classes) != 0
+    class = if class isa Symbol
+      vcat([JSONText(class)], classes)
+    elseif class isa AbstractDict
+      T = first(typeof(class).parameters)
+      for c in classes
+        push!(class, T(c) => true)
+      end
+    elseif class isa Vector
+      vcat(class, classes)
+    else
+      join(pushfirst!(classes, class), ' ')
+    end
   end
-  
-  (class isa Symbol || length(class) > 0) && (kwargs[:class] = class)
+   
+  (class isa Symbol || class isa String && length(class) > 0) && (kwargs[:class] = class)
 
-  if ! symbol_class && class isa Symbol
-    kwargs[:class!] = string(kwargs[:class])
+  if ! symbol_class && class isa Symbol || class isa Vector || class isa AbstractDict
+    kwargs[:class!] = if class isa Symbol || class isa String
+      string(kwargs[:class])
+    else
+      js_attr(class)
+    end
     delete!(kwargs, :class)
   end
 
