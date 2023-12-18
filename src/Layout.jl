@@ -109,15 +109,16 @@ end
 
 function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = true, flexgrid_mappings::Dict{Symbol,Symbol} = Dict{Symbol,Symbol}(), kwargs...)
   kwargs = Dict{Symbol,Any}(kwargs...)
-  
+
   # support all different types of classes that vue supports: String, Expressions (Symbols), Arrays, Dicts
   # todo check if vector contains only strings ...
   if class! !== nothing
     class = if class isa Symbol
-      Any[JSONText(class!) + JSONText(class)]
+      Any[JSONText(class!), JSONText(class)]
     elseif class isa String
-      vcat(Any[JSONText(class!)], split(class))
+      vcat(JSONText(class!), split(class))
     elseif class isa AbstractDict
+      class = LittleDict(k => JSONText(v)  for (k, v) in class)
       Any[JSONText(class!), class]
     elseif class isa Vector
       vcat([JSONText(class!)], class)
@@ -140,18 +141,15 @@ function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = tr
     class = if class isa Symbol
       vcat([JSONText(class)], classes)
     elseif class isa AbstractDict
-      T = first(typeof(class).parameters)
-      class = convert(Dict{T, Any}, class)
-      for c in classes
-        push!(class, T(c) => true)
-      end
+      class = LittleDict(k => JSONText(v)  for (k, v) in class)
+      vcat(class, classes)
     elseif class isa Vector
       vcat(class, classes)
     else
       join(pushfirst!(classes, class), ' ')
     end
   end
-   
+  
   (class isa Symbol || class isa String && length(class) > 0) && (kwargs[:class] = class)
 
   if ! symbol_class && class isa Symbol || class isa Vector || class isa AbstractDict

@@ -356,6 +356,8 @@ end
     @test htmldiv(col = 9, class = "a b c") == "<div class=\"a b c col-9\"></div>"
 
     @test htmldiv(col = 9, class = split("a b c")) == "<div :class=\"['a','b','c','col-9']\"></div>"
+
+    @test htmldiv(col = 9, class = Dict(:myclass => "b"), class! = "test") == "<div :class=\"[test,{'myclass':b},'col-9']\"></div>"
 end
 
 @testset "Vue Conditionals and Iterator" begin
