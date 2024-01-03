@@ -1011,6 +1011,16 @@ macro page(expressions...)
     # therefore find indexes of positional arguments by hand
     inds = findall(x -> !isa(x, Expr) || x.head ∉ (:parameters, :(=)), expressions)
     length(inds) < 2 && throw("Positional arguments 'url' and 'view' required!")
+    # allow for keyword `app` instead of `model`
+    for a in expressions
+      if a isa Expr
+        if a.head == :(=) && a.args[1] == :app
+          a.args[1] = :model
+        elseif a.head == :parameters && a.args[1].head == :kw && a.args[1].args[1] == :app
+          a.args[1].args[1] = :model
+        end
+      end
+    end
     url, view = expressions[inds[1:2]]
     kwarg_inds = setdiff(1:length(expressions), inds)
     args = Stipple.expressions_to_args(
