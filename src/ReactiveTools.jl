@@ -421,7 +421,7 @@ Declares a reactive variable that is public and can be written to from the UI.
 end
 ```
 """
-macro in end
+macro var"in" end
 
 """
 ```julia

@@ -557,6 +557,7 @@ function init(t::Type{M};
     if ! Genie.Router.ischannel(Router.channelname(ch))
       Genie.Router.channel(ch, named = Router.channelname(ch)) do
         LAST_ACTIVITY[Symbol(channel)] = now()
+
         ok_response
       end
     end
@@ -578,7 +579,9 @@ function init(t::Type{M};
 
         isempty(methods(notify, (M, Val{handler}))) || notify(model, Val(handler))
         isempty(methods(notify, (M, Val{handler}, Any))) || notify(model, Val(handler), event_info)
+
         LAST_ACTIVITY[Symbol(channel)] = now()
+
         ok_response
       end
     end
@@ -588,10 +591,6 @@ function init(t::Type{M};
 
   setup(model, channel)
 end
-function init(m::M; kwargs...)::M where {M<:ReactiveModel}
-  error("This method has been removed -- please use `init($M; kwargs...)` instead")``
-end
-
 
 function routename(::Type{M}) where M<:ReactiveModel
   AM = get_abstract_type(M)
