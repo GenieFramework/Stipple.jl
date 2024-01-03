@@ -15,6 +15,7 @@ existing Vue.js libraries.
 """
 module Stipple
 
+using PrecompileTools
 const PRECOMPILE = Ref(false)
 
 """
@@ -1220,5 +1221,40 @@ include("Layout.jl")
 @reexport using .Typography
 @reexport using .Elements
 @reexport using .Layout
+
+# precompilation ...
+
+using Stipple.ReactiveTools
+@setup_workload begin
+  # Putting some things in `setup` can reduce the size of the
+  # precompile file and potentially make loading faster.
+  using Genie.HTTPUtils.HTTP
+  PRECOMPILE[] = true
+  @compile_workload begin
+      # all calls in this block will be precompiled, regardless of whether
+      # they belong to your package or not (on Julia 1.8 and higher)
+      ui() = [cell("hello"), row("world"), htmldiv("Hello World")]
+
+      @app Demo begin
+        @in demo_i = 1
+        @out demo_s = "Hi"
+
+        @onchange demo_i begin
+          println(demo_i)
+        end
+      end
+
+      route("/") do 
+        model = @init Demo
+        page(model, ui) |> html
+      end
+      up()
+        
+      HTTP.get("http://localhost:8000")
+      # HTTP.get("http://127.0.0.1:8000/genie.jl/v5.23.6/assets/js/channels.js")
+      # HTTP.get("http://localhost:8000/stipple.jl/v0.27.26/assets/js/stipplecore.js")
+      down()
+  end
+end
 
 end
