@@ -195,5 +195,5 @@ quasar(
 ```
 """
 function js_attr(x)
-  Symbol(replace(json(render(x)), "'" => raw"\'", '"' => '''))
+  Symbol(replace(replace(json(render(x)), "'" => raw"\'"), '"' => '''))
 end
