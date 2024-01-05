@@ -102,6 +102,7 @@ function vue_integration(::Type{M};
   }
 
   function app_ready() {
+      $vue_app_name.channel_ = window.CHANNEL;
       $vue_app_name.isready = true;
       Genie.Revivers.addReviver(window.$(vue_app_name).revive_jsfunction);
       $(transport == Genie.WebChannels &&

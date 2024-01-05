@@ -397,12 +397,16 @@ function deletemode!(modes, fieldnames::Symbol...)
 end
 
 function init_storage()
+  ch = channelfactory()
+
   LittleDict{Symbol, Expr}(
     CHANNELFIELDNAME =>
-      :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = Stipple.channelfactory()),
-    :modes__ => :(modes__::Stipple.LittleDict{Symbol, Int} = Stipple.LittleDict{Symbol, Int}()),
+      :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = $ch),
+    :modes__ => :(modes__::Stipple.LittleDict{Symbol,Int} = Stipple.LittleDict{Symbol,Int}()),
     :isready => :(isready::Stipple.R{Bool} = false),
-    :isprocessing => :(isprocessing::Stipple.R{Bool} = false)
+    :isprocessing => :(isprocessing::Stipple.R{Bool} = false),
+    :channel_ => :(channel_::String = $ch),
+    :fileuploads => :(fileuploads::Stipple.R{Dict{AbstractString,AbstractString}} = Dict{AbstractString,AbstractString}())
   )
 end
 
@@ -456,6 +460,9 @@ function init(t::Type{M};
   else
     setchannel(model, channel)
   end
+
+  # make sure we store the channel name in the model
+  Stipple.ModelStorage.Sessions.store(model)
 
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
   LAST_ACTIVITY[Symbol(getchannel(model))] = now()
@@ -667,6 +674,17 @@ function Base.push!(app::M, vals::Pair{Symbol,T};
                     channel::String = getchannel(app),
                     except::Union{Nothing,UInt,Vector{UInt}} = nothing,
                     restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T,M<:ReactiveModel}
+  try
+    _push!(vals, channel; except, restrict)
+  catch ex
+    @debug ex
+    false
+  end
+end
+
+function _push!(vals::Pair{Symbol,T}, channel::String;
+                except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T}
   try
     webtransport().broadcast(channel, json(Dict("key" => julia_to_vue(vals[1]), "value" => Stipple.render(vals[2], vals[1]))); except, restrict)
   catch ex

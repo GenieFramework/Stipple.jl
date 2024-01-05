@@ -171,13 +171,15 @@ function setchannel(m::M, value) where {M<:ReactiveModel}
   setfield!(m, CHANNELFIELDNAME, ChannelName(value))
 end
 
-const AUTOFIELDS = [:isready, :isprocessing] # not DRY but we need a reference to the auto-set fields
+const AUTOFIELDS = [:isready, :isprocessing, :fileuploads] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin
   modes__::LittleDict{Symbol, Int} = LittleDict(:modes__ => PRIVATE, :channel__ => PRIVATE)
   channel__::Stipple.ChannelName = Stipple.channelfactory()
   isready::Stipple.R{Bool} = false
   isprocessing::Stipple.R{Bool} = false
+  channel_::String = "" # not sure what this does if it's empty
+  fileuploads::Stipple.R{Dict{AbstractString,AbstractString}} = Dict{AbstractString,AbstractString}()
 end
 
 @mix Stipple.@with_kw mutable struct old_reactive

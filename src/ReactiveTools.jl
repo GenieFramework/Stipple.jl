@@ -186,7 +186,7 @@ function delete_events(::Type{M}) where M
     end
   end
   nothing
- end
+end
 
 function delete_handlers!(m::Module)
   delete!(HANDLERS, m)
@@ -421,7 +421,7 @@ Declares a reactive variable that is public and can be written to from the UI.
 end
 ```
 """
-macro var"in" end
+macro in end
 
 """
 ```julia
