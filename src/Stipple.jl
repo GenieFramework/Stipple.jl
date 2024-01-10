@@ -443,7 +443,8 @@ function init(t::Type{M};
               channel::Union{Any,Nothing} = channeldefault(t),
               debounce::Int = JS_DEBOUNCE_TIME,
               transport::Module = Genie.WebChannels,
-              core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
+              core_theme::Bool = true,
+              always_register_channels::Bool = false)::M where {M<:ReactiveModel, S<:AbstractString}
 
   webtransport!(transport)
   AM = get_abstract_type(M)
@@ -470,7 +471,7 @@ function init(t::Type{M};
   PRECOMPILE[] || Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
 
   # register channels and routes only if within a request
-  if haskey(Genie.Router.params(), :CHANNEL) || haskey(Genie.Router.params(), :ROUTE)
+  if haskey(Genie.Router.params(), :CHANNEL) || haskey(Genie.Router.params(), :ROUTE) || always_register_channels
     if is_channels_webtransport()
       Genie.Assets.channels_subscribe(channel)
     else
@@ -490,8 +491,6 @@ function init(t::Type{M};
       catch ex
         @error ex
       end
-
-      @debug payload
 
       field = Symbol(payload["field"])
 
