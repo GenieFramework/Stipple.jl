@@ -16,6 +16,7 @@ existing Vue.js libraries.
 module Stipple
 
 const PRECOMPILE = Ref(false)
+const ALWAYS_REGISTER_CHANNELS = Ref(false)
 
 """
 @using_except(expr)
@@ -444,7 +445,7 @@ function init(t::Type{M};
               debounce::Int = JS_DEBOUNCE_TIME,
               transport::Module = Genie.WebChannels,
               core_theme::Bool = true,
-              always_register_channels::Bool = false)::M where {M<:ReactiveModel, S<:AbstractString}
+              always_register_channels::Bool = ALWAYS_REGISTER_CHANNELS[])::M where {M<:ReactiveModel, S<:AbstractString}
 
   webtransport!(transport)
   AM = get_abstract_type(M)
