@@ -16,7 +16,7 @@ existing Vue.js libraries.
 module Stipple
 
 const PRECOMPILE = Ref(false)
-const ALWAYS_REGISTER_CHANNELS = Ref(false)
+const ALWAYS_REGISTER_CHANNELS = Ref(true)
 
 """
 @using_except(expr)
