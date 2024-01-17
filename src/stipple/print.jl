@@ -14,7 +14,11 @@ function print_object(io, obj::T, omit = nothing, compact = false) where T <: Re
     omit !== nothing && setdiff!(fields, omit)
     internal_or_auto = true
 
-    println(io, "Instance of '" * match(r"^#*([^!]+)", String(T.name.name)).captures[1] * "'")
+    app = match(r"^#*([^!]+)", String(T.name.name)).captures[1]
+    if app == "Main_ReactiveModel" && parentmodule(T) != Main
+        app = String(nameof(parentmodule(T)))
+    end
+    println(io, "Instance of '$app'")
     for fieldname in fields
         field = getproperty(obj, fieldname)
         fieldmode = isprivate(fieldname, obj) ? "private" : isreadonly(fieldname, obj) ? "out" : "in"
