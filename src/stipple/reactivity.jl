@@ -172,6 +172,7 @@ function setchannel(m::M, value) where {M<:ReactiveModel}
 end
 
 const AUTOFIELDS = [:isready, :isprocessing, :fileuploads] # not DRY but we need a reference to the auto-set fields
+const INTERNALFIELDS = [CHANNELFIELDNAME, :channel_, :modes__] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin
   modes__::LittleDict{Symbol, Int} = LittleDict(:modes__ => PRIVATE, :channel__ => PRIVATE)
@@ -201,7 +202,7 @@ function model_to_storage(::Type{T}, prefix = "", postfix = "") where T# <: Reac
   values = getfield.(Ref(M()), fields)
   storage = LittleDict{Symbol, Expr}()
   for (f, type, v) in zip(fields, fieldtypes(M), values)
-    f = f in [:channel__, :modes__, AUTOFIELDS...] ? f : Symbol(prefix, f, postfix)
+    f = f in vcat(INTERNALFIELDS, AUTOFIELDS) ? f : Symbol(prefix, f, postfix)
     storage[f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = Stipple._deepcopy($v))
   end
   # fix channel field, which is not reconstructed properly by the code above
@@ -491,7 +492,8 @@ end
 
 macro define_mixin(mixin_name, expr)
   storage = @eval(__module__, Stipple.@var_storage($expr))
-  delete!.(Ref(storage),  [:channel__, Stipple.AUTOFIELDS...])
+  # delete internal fields and autofields except :modes__
+  delete!.(Ref(storage),  setdiff(vcat(INTERNALFIELDS, AUTOFIELDS), [:modes__]))
 
   quote
       Base.@kwdef struct $mixin_name

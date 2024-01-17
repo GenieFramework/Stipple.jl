@@ -836,7 +836,7 @@ function get_known_vars(M::Module)
   reactive_vars = Symbol[]
   non_reactive_vars = Symbol[]
   for (k, v) in REACTIVE_STORAGE[M]
-    k in [:channel__, :modes__] && continue
+    k in INTERNALFIELDS && continue
     is_reactive = startswith(string(Stipple.split_expr(v)[2]), r"(Stipple\.)?R(eactive)?($|{)")
     push!(is_reactive ? reactive_vars : non_reactive_vars, k)
   end
@@ -848,7 +848,7 @@ function get_known_vars(::Type{M}) where M<:ReactiveModel
   reactive_vars = Symbol[]
   non_reactive_vars = Symbol[]
   for (k, v) in zip(fieldnames(CM), fieldtypes(CM))
-    k in [:channel__, :modes__] && continue
+    k in INTERNALFIELDS && continue
     push!(v <: Reactive ? reactive_vars : non_reactive_vars, k)
   end
   reactive_vars, non_reactive_vars

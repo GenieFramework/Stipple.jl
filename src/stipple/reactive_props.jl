@@ -4,7 +4,7 @@
 isprivate(field::Reactive) = field.r_mode == PRIVATE
 
 function isprivate(fieldname::Symbol, model::M)::Bool where {M<:ReactiveModel}
-  fieldname in [Stipple.CHANNELFIELDNAME, :modes__] && return true
+  fieldname in INTERNALFIELDS && return true
 
   field = getfield(model, fieldname)
   field isa Reactive ? isprivate(field) : get(model.modes__, fieldname, 0) == PRIVATE
