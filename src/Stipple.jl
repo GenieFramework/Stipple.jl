@@ -402,12 +402,11 @@ function init_storage()
   ch = channelfactory()
 
   LittleDict{Symbol, Expr}(
-    CHANNELFIELDNAME =>
-      :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = $ch),
+    :channel_ => :(channel_::String = $ch),
+    CHANNELFIELDNAME => :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = $ch),
     :modes__ => :(modes__::Stipple.LittleDict{Symbol,Int} = Stipple.LittleDict{Symbol,Int}()),
     :isready => :(isready::Stipple.R{Bool} = false),
-    :isprocessing => :(isprocessing::Stipple.R{Bool} = false),
-    :channel_ => :(channel_::String = $ch),
+    :isprocessing => :(isprocessing::Stipple.R{Bool} = (false, READONLY)),
     :fileuploads => :(fileuploads::Stipple.R{Dict{AbstractString,AbstractString}} = Dict{AbstractString,AbstractString}())
   )
 end
