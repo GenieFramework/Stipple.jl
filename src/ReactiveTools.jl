@@ -39,7 +39,7 @@ const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
 const HANDLERS_FUNCTIONS = LittleDict{Type{<:ReactiveModel},Function}()
 
 function DEFAULT_LAYOUT(; title::String = "Genie App",
-                          meta::D = Dict()) where {D <:AbstractDict}
+                          meta::D = Dict(), head_content::Union{AbstractString, Vector} = "") where {D <:AbstractDict}
   tags = Genie.Renderers.Html.for_each(x -> """<meta name="$(string(x.first))" content="$(string(x.second))">\n""", meta)
   """
 <!DOCTYPE html>
@@ -64,6 +64,7 @@ function DEFAULT_LAYOUT(; title::String = "Genie App",
       }
       ._genie .row .col-12 { width:50%;margin:auto; }
     </style>
+    $(join(head_content, "\n    "))
   </head>
   <body>
     <div class='container'>
