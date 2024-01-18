@@ -401,8 +401,7 @@ function init_storage()
   ch = channelfactory()
 
   LittleDict{Symbol, Expr}(
-    CHANNELFIELDNAME =>
-      :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = $ch),
+    CHANNELFIELDNAME => :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = $ch),
     :modes__ => :(modes__::Stipple.LittleDict{Symbol,Int} = Stipple.LittleDict{Symbol,Int}()),
     :isready => :(isready::Stipple.R{Bool} = false),
     :isprocessing => :(isprocessing::Stipple.R{Bool} = false),
@@ -455,13 +454,8 @@ function init(t::Type{M};
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
   ok_response = "OK"
 
-  channel = if channel !== nothing
-    setchannel(model, channel)
-  elseif hasproperty(model, CHANNELFIELDNAME)
-    getchannel(model)
-  else
-    setchannel(model, channel)
-  end
+  channel === nothing && (channel = channelfactory())
+  setchannel(model, channel)
 
   # make sure we store the channel name in the model
   Stipple.ModelStorage.Sessions.store(model)
