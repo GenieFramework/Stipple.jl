@@ -172,10 +172,11 @@ function setchannel(m::M, value) where {M<:ReactiveModel}
 end
 
 const AUTOFIELDS = [:isready, :isprocessing, :fileuploads] # not DRY but we need a reference to the auto-set fields
+const INTERNALFIELDS = [CHANNELFIELDNAME, :modes__] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin
-  modes__::LittleDict{Symbol, Int} = LittleDict(:modes__ => PRIVATE, :channel__ => PRIVATE)
   channel__::Stipple.ChannelName = Stipple.channelfactory()
+  modes__::LittleDict{Symbol, Int} = LittleDict(:modes__ => PRIVATE, :channel__ => PRIVATE)
   isready::Stipple.R{Bool} = false
   isprocessing::Stipple.R{Bool} = false
   channel_::String = "" # not sure what this does if it's empty
