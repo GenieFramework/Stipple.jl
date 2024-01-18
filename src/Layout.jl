@@ -39,7 +39,7 @@ julia> layout([
 ```
 """
 function layout(output::Union{S,Vector}, m::M;
-                partial::Bool = false, title::String = "", class::String = "", style::String = "", head_content::String = "",
+                partial::Bool = false, title::String = "", class::String = "", style::String = "", head_content::Union{AbstractString, Vector{<:AbstractString}} = "",
                 channel::String = Stipple.channel_js_name,
                 core_theme::Bool = true)::ParsedHTMLString where {M<:ReactiveModel, S<:AbstractString}
 
@@ -58,7 +58,7 @@ function layout(output::Union{S,Vector}, m::M;
       Genie.Renderer.Html.head([
         Genie.Renderer.Html.title(title)
         Genie.Renderer.Html.meta(name="viewport", content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no")
-        head_content
+        join(head_content)
       ])
       Genie.Renderer.Html.body(content, class=class, style=style)
     ])
@@ -83,7 +83,7 @@ julia> page(:elemid, [
 """
 function page(model::M, args...;
               partial::Bool = false, title::String = "", class::String = "container", style::String = "",
-              channel::String = Genie.config.webchannels_default_route, head_content::String = "",
+              channel::String = Genie.config.webchannels_default_route, head_content::Union{AbstractString, Vector{<:AbstractString}} = "",
               prepend::Union{S,Vector} = "", append::Union{T,Vector} = [],
               core_theme::Bool = true, kwargs...)::ParsedHTMLString where {M<:Stipple.ReactiveModel, S<:AbstractString,T<:AbstractString}
 
