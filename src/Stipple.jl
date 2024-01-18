@@ -96,6 +96,7 @@ include("stipple/json.jl")
 include("stipple/undefined.jl")
 include("stipple/assets.jl")
 include("stipple/converters.jl")
+include("stipple/print.jl")
 
 using .NamedTuples
 
