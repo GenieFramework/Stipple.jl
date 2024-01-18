@@ -1004,6 +1004,8 @@ Registers a new page with source in `view` to be rendered at the route `url`.
 
 ```julia
 @page("/", "view.html")
+
+@page("/", ui; model = MyApp) # for specifying an explicit app 
 ```
 """
 macro page(expressions...)
