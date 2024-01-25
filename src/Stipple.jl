@@ -17,6 +17,15 @@ module Stipple
 
 const PRECOMPILE = Ref(false)
 const ALWAYS_REGISTER_CHANNELS = Ref(true)
+const USE_MODEL_STORAGE = Ref(true)
+
+"""
+Disables the automatic storage and retrieval of the models in the session.
+Useful for large models.
+"""
+def disable_model_storage()
+  USE_MODEL_STORAGE[] = false
+end
 
 """
 @using_except(expr)
@@ -356,6 +365,9 @@ function channeldefault(::Type{M}) where M<:ReactiveModel
   end
 
   model_id = Symbol(Stipple.routename(M))
+
+  ! USE_MODEL_STORAGE[] && return nothing
+
   stored_model = Stipple.ModelStorage.Sessions.GenieSession.get(model_id, nothing)
   stored_model === nothing ? nothing : getfield(stored_model, Stipple.CHANNELFIELDNAME)
 end
@@ -464,7 +476,7 @@ function init(t::Type{M};
   end
 
   # make sure we store the channel name in the model
-  Stipple.ModelStorage.Sessions.store(model)
+  USE_MODEL_STORAGE[] && Stipple.ModelStorage.Sessions.store(model)
 
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
   LAST_ACTIVITY[Symbol(getchannel(model))] = now()
@@ -486,7 +498,7 @@ function init(t::Type{M};
       client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
 
       try
-        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) &&
+        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) && USE_MODEL_STORAGE[] &&
           Genie.Router.params!(Stipple.ModelStorage.Sessions.GenieSession.PARAMS_SESSION_KEY,
                                 Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
       catch ex
