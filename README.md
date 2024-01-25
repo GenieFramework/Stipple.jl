@@ -152,7 +152,9 @@ end
 Genie.isrunning(:webserver) || up()
 ```
 <img src="docs/content/img/Example2.png">
+
 ## Choosing the transport layer: WebSockets or HTTP
+
 
 By default Stipple will attempt to use WebSockets for real time data sync between backend and frontend.
 However, in some cases WebSockets support might not be available on the host. In this case, Stipple can be
