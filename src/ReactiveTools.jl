@@ -290,7 +290,12 @@ end
 
     @debounce App fieldname ms
 
-Set field-specific debounce time in ms
+Set field-specific debounce time in ms.
+### Parameters
+
+- `APP`: a subtype of ReactiveModel, e.g. `MyApp`
+- `fieldname`: fieldname òr fieldnames as written in the declaration, e.g. `x`, `(x, y, z)`
+- `ms`: debounce time in ms
 
 ### Example
 #### Implicit apps
@@ -305,7 +310,7 @@ end
 @debounce quick 0
 
 # long debouncing for long-running tasks
-@debounce slow 1000
+@debounce (slow1, slow2) 1000
 ```
 #### Explicit apps
 
