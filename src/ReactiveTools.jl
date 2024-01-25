@@ -588,7 +588,7 @@ macro init(args...)
     local new_handlers = false
 
     local initfn =
-    if isdefined($__module__, :init_from_storage)
+    if isdefined($__module__, :init_from_storage) && Stipple.USE_MODEL_STORAGE[]
       $__module__.init_from_storage
     else
       Stipple.init

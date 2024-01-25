@@ -23,8 +23,8 @@ const USE_MODEL_STORAGE = Ref(true)
 Disables the automatic storage and retrieval of the models in the session.
 Useful for large models.
 """
-def disable_model_storage()
-  USE_MODEL_STORAGE[] = false
+function enable_model_storage(enable::Bool = true)
+  USE_MODEL_STORAGE[] = enable
 end
 
 """
@@ -97,7 +97,7 @@ export setchannel, getchannel
 isempty(methods(notify, Observables)) && (Base.notify(observable::AbstractObservable) = Observables.notify!(observable))
 
 include("ParsingTools.jl")
-include("ModelStorage.jl")
+USE_MODEL_STORAGE[] && include("ModelStorage.jl")
 include("NamedTuples.jl")
 
 include("stipple/reactivity.jl")
@@ -367,7 +367,7 @@ function channeldefault(::Type{M}) where M<:ReactiveModel
 
   model_id = Symbol(Stipple.routename(M))
 
-  ! USE_MODEL_STORAGE[] && return nothing
+  USE_MODEL_STORAGE[] || return nothing
 
   stored_model = Stipple.ModelStorage.Sessions.GenieSession.get(model_id, nothing)
   stored_model === nothing ? nothing : getfield(stored_model, Stipple.CHANNELFIELDNAME)
