@@ -1,15 +1,5 @@
-function print_object(io, obj::T, omit = nothing, compact = false) where T
-    # currently no different printing for compact = true ...
-    fields = [p for p in propertynames(obj)]
-    omit !== nothing && setdiff!(fields, omit)
-
-    println(io, match(r"^#*([^!]+)", String(T.name.name)).captures[1])
-    for field in fields
-        println(io, "    $field: ", Observables.to_value(getproperty(obj, field)))
-    end
-end
-
 function print_object(io, obj::T, omit = nothing, compact = false) where T <: ReactiveModel
+    # currently no different printing for compact = true ...
     fields = [p for p in propertynames(obj)]
     omit !== nothing && setdiff!(fields, omit)
     internal_or_auto = true
