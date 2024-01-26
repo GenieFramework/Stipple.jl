@@ -17,6 +17,15 @@ module Stipple
 
 const PRECOMPILE = Ref(false)
 const ALWAYS_REGISTER_CHANNELS = Ref(true)
+const USE_MODEL_STORAGE = Ref(true)
+
+"""
+Disables the automatic storage and retrieval of the models in the session.
+Useful for large models.
+"""
+function enable_model_storage(enable::Bool = true)
+  USE_MODEL_STORAGE[] = enable
+end
 
 """
 @using_except(expr)
@@ -88,7 +97,7 @@ export setchannel, getchannel
 isempty(methods(notify, Observables)) && (Base.notify(observable::AbstractObservable) = Observables.notify!(observable))
 
 include("ParsingTools.jl")
-include("ModelStorage.jl")
+USE_MODEL_STORAGE[] && include("ModelStorage.jl")
 include("NamedTuples.jl")
 
 include("stipple/reactivity.jl")
@@ -114,6 +123,40 @@ const LAST_ACTIVITY = Dict{Symbol, DateTime}()
 const PURGE_TIME_LIMIT = Ref{Period}(Day(1))
 const PURGE_NUMBER_LIMIT = Ref(1000)
 const PURGE_CHECK_DELAY = Ref(60)
+
+const DEBOUNCE = LittleDict{Type{<:ReactiveModel}, LittleDict{Symbol, Any}}()
+
+"""
+    debounce(M::Type{<:ReactiveModel}, fieldnames::Union{Symbol, Vector{Symbol}}, debounce::Union{Int, Nothing} = nothing)
+
+Add field-specific debounce times.
+"""
+function debounce(M::Type{<:ReactiveModel}, fieldnames::Union{Symbol, Vector{Symbol}, NTuple{N, Symbol} where N}, debounce::Union{Int, Nothing} = nothing)
+  if debounce === nothing
+    haskey(DEBOUNCE, M) || return
+    d = DEBOUNCE[M]
+    if fieldnames isa Symbol
+      delete!(d, fieldnames)
+    else
+      for v in fieldnames
+        delete!(d, v)
+      end
+    end
+    isempty(d) && delete!(DEBOUNCE, M)
+  else
+    d = get!(LittleDict{Symbol, Any}, DEBOUNCE, M)
+    if fieldnames isa Symbol
+      d[fieldnames] = debounce
+    else
+      for v in fieldnames
+        d[v] = debounce
+      end
+    end
+  end
+  return
+end
+
+debounce(M::Type{<:ReactiveModel}, ::Nothing) = delete!(DEBOUNCE, M)
 
 """
 `function sorted_channels()`
@@ -302,20 +345,29 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
   isempty(jsfunction) &&
     (jsfunction = "Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal, 'sesstoken': document.querySelector(\"meta[name='sesstoken']\")?.getAttribute('content')}});")
 
+  output = IOBuffer()
   if fieldname == :isready
-    output = """
+    print(output, """
       $vue_app_name.\$watch(function(){return this.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true});
-    """
+    """)
   else
-    output = """
-      $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true});
-    """
+    AM = get_abstract_type(M)
+    debounce = get(get(DEBOUNCE, AM, Dict{Symbol, Any}()), fieldname, debounce)
+    print(output, debounce == 0 ?
+      """
+        $vue_app_name.\$watch(function(){return this.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true});
+      """ : 
+      """
+        $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true});
+      """
+    )
   end
   # in production mode vue does not fill `this.expression` in the watcher, so we do it manually
   Genie.Configuration.isprod() &&
-    (output *= "$vue_app_name._watchers[$vue_app_name._watchers.length - 1].expression = 'function(){return this.$fieldname}'")
+    print(output, "$vue_app_name._watchers[$vue_app_name._watchers.length - 1].expression = 'function(){return this.$fieldname}'")
 
-  output *= "\n\n"
+  print(output, "\n\n")
+  String(take!(output))
 end
 
 #===#
@@ -357,6 +409,9 @@ function channeldefault(::Type{M}) where M<:ReactiveModel
   end
 
   model_id = Symbol(Stipple.routename(M))
+
+  USE_MODEL_STORAGE[] || return nothing
+
   stored_model = Stipple.ModelStorage.Sessions.GenieSession.get(model_id, nothing)
   stored_model === nothing ? nothing : getfield(stored_model, Stipple.CHANNELFIELDNAME)
 end
@@ -458,7 +513,7 @@ function init(t::Type{M};
   setchannel(model, channel)
 
   # make sure we store the channel name in the model
-  Stipple.ModelStorage.Sessions.store(model)
+  USE_MODEL_STORAGE[] && Stipple.ModelStorage.Sessions.store(model)
 
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
   LAST_ACTIVITY[Symbol(getchannel(model))] = now()
@@ -480,7 +535,7 @@ function init(t::Type{M};
       client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
 
       try
-        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) &&
+        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) && USE_MODEL_STORAGE[] &&
           Genie.Router.params!(Stipple.ModelStorage.Sessions.GenieSession.PARAMS_SESSION_KEY,
                                 Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
       catch ex

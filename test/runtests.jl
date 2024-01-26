@@ -118,6 +118,13 @@ end
     # check reactivity
     @eval model.i[] = 20
     @test model.s[] == "20"
+
+    @eval @debounce TestApp i 101
+    @eval @debounce TestApp (a, b, c) 101
+    @test Stipple.DEBOUNCE[TestApp][:i] == 101
+    
+    @eval @clear_debounce TestApp
+    @test haskey(Stipple.DEBOUNCE, TestApp) == false
 end
 
 @testset "Reactive API (implicit)" begin
@@ -142,6 +149,14 @@ end
     # check reactivity
     @eval model.i2[] = 20
     @test model.s2[] == "20"
+
+    # check field-specific debouncing
+    @eval @debounce i3 101
+    @eval @debounce (a, b, c) 101
+    @test Stipple.DEBOUNCE[Stipple.@type()][:i3] == 101
+    
+    @eval @clear_debounce
+    @test haskey(Stipple.DEBOUNCE, Stipple.@type()) == false
 end
 
 @testset "Reactive API (implicit) with mixins and handlers" begin
