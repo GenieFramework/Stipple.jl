@@ -42,7 +42,7 @@ end
 
     # channels have to be different
     @test model.channel__ != model2.channel__
-    
+
     # check whether fields are correctly defined
     @test propertynames(model) == tuple(Stipple.INTERNALFIELDS..., Stipple.AUTOFIELDS..., :i, :s)
 
@@ -132,7 +132,7 @@ end
 
     @eval model = @init
     @eval model2 = @init
-    
+
     # channels have to be different
     @eval @test model.channel__ != model2.channel__
 
@@ -244,7 +244,7 @@ end
     s1 = string_get("http://localhost:$port/")
     s2 = string_get("http://localhost:$port/")
     s3 = string_get("http://localhost:$port/", cookies = false)
-    
+
     s4 = string_get("http://localhost:$port/static")
     s5 = string_get("http://localhost:$port/static")
     s6 = string_get("http://localhost:$port/static", cookies = false)
@@ -304,7 +304,7 @@ end
     s1 = string_get("http://localhost:$port/")
     s2 = string_get("http://localhost:$port/")
     s3 = string_get("http://localhost:$port/", cookies = false)
-    
+
     s4 = string_get("http://localhost:$port/static")
     s5 = string_get("http://localhost:$port/static")
     s6 = string_get("http://localhost:$port/static", cookies = false)
@@ -312,7 +312,7 @@ end
     @test get_channel(s2) == get_channel(s1)
     @test get_channel(s3) != get_channel(s1)
     @test get_channel(s4) == get_channel(s5) == get_channel(s6)
-    
+
     @clear_cache MyApp
     down()
 end
@@ -340,7 +340,7 @@ end
 
     el = row(col = 2, sm = 9, class = :myclass)
     @test contains(el, ":class=\"[myclass,'row','col-2','col-sm-9']\"")
-    
+
     el = row(col = 2, sm = 9, class! = "myclass")
     @test contains(el, ":class=\"[myclass,'row','col-2','col-sm-9']\"")
 
@@ -481,15 +481,15 @@ end
     end
 
     add_css(my_css)
-    @test Stipple.Layout.THEMES[end] == my_css
+    @test Stipple.Layout.THEMES[][end] == my_css
 
-    n = length(Stipple.Layout.THEMES)
+    n = length(Stipple.Layout.THEMES[])
     remove_css(my_css)
-    @test length(Stipple.Layout.THEMES) == n - 1
-    @test findfirst(==(my_css), Stipple.Layout.THEMES) === nothing
+    @test length(Stipple.Layout.THEMES[]) == n - 1
+    @test findfirst(==(my_css), Stipple.Layout.THEMES[]) === nothing
 
     add_css(my_css)
-    @test Stipple.Layout.THEMES[end] == my_css
+    @test Stipple.Layout.THEMES[][end] == my_css
     remove_css(my_css, byname = true)
-    @test findfirst(==(my_css), Stipple.Layout.THEMES) === nothing
+    @test findfirst(==(my_css), Stipple.Layout.THEMES[]) === nothing
 end
