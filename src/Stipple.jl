@@ -181,6 +181,15 @@ end
 
 function isendoflive(@nospecialize(m::ReactiveModel))
   channel = Symbol(getchannel(m))
+
+  for client in get(Genie.WebChannels.SUBSRIPTIONS, channel, UInt[])
+    Genie.WebChannels.delete_queue!(Genie.WebChannels.MESSAGE_QUEUE, client)
+  end
+
+  for client in get(Genie.WebThreads.SUBSRIPTIONS, channel, UInt[])
+    delete!(Genie.WebThreads.MESSAGE_QUEUE, client)
+  end
+
   last_activity = get!(now, LAST_ACTIVITY, channel)
   limit_reached = now() - last_activity > PURGE_TIME_LIMIT[] ||
     length(LAST_ACTIVITY) > PURGE_NUMBER_LIMIT[] &&
