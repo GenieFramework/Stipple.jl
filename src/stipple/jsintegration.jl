@@ -5,14 +5,14 @@ Checks whether the string is a valid js function and returns a `Dict` from which
 in the backend can construct a function.
 """
 function parse_jsfunction(s::AbstractString)
-    # look for classical function definition
-    m = match( r"function\s*\(([^)]*)\)\s*{(.*)}"s, s)
+    # look for classical function definition (not a full syntax check, though)
+    m = match( r"^\s*function\s*\(([^)]*)\)\s*{(.*)}\s*$"s, s)
     !isnothing(m) && length(m.captures) == 2 && return opts(arguments=m[1], body=m[2])
-
-    # look for pure function definition
-    m = match( r"\s*\(?([^=)]*?)\)?\s*=>\s*({*.*?}*)\s*$"s , s )
+    
+    # look for pure function definition including unbracketed single parameter
+    m = match( r"^\s*\(?([^=<>:;.(){}\[\]]*?)\)?\s*=>\s*({*.*?}*)\s*$"s , s )
     (isnothing(m) || length(m.captures) != 2) && return nothing
-
+    
     # if pure function body is without curly brackets, add a `return`, otherwise strip the brackets
     # Note: for utf-8 strings m[2][2:end-1] will fail if the string ends with a wide character, e.g. ϕ
     body = startswith(m[2], "{") ? m[2][2:prevind(m[2], lastindex(m[2]))] : "return " * m[2]
