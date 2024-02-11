@@ -1,28 +1,17 @@
 const watcherMixin = {
   methods: {
-    $withoutWatchers: function (cb, filter) {
-      let ww = (filter === null) ? this._watchers : [];
+    $withoutWatchers (cb) {
+      const watchers = this._.type.watch;
 
-      if (typeof(filter) == "string") {
-        this._watchers.forEach((w) => { if (w.expression == filter) {ww.push(w)} } )
-      } else { // if it is a true regex
-        this._watchers.forEach((w) => { if (w.expression.match(filter)) {ww.push(w)} } )
+      for (let index in this._.type.watch) {
+          this._.type.watch[index] = Object.assign(this._.type.watch[index], { cb: () => null, sync: true })
       }
 
-      const watchers = ww.map((watcher) => ({ cb: watcher.cb, sync: watcher.sync }));
+      cb()
 
-      for (let index in ww) {
-        ww[index].cb = () => null;
-        ww[index].sync = true;
+      for (let index in this._.type.watch) {
+          this._.type.watch[index] = Object.assign(this._.type.watch[index], watchers[index])
       }
-
-      cb();
-
-      for (let index in ww) {
-        ww[index].cb = watchers[index].cb;
-        ww[index].sync = watchers[index].sync;
-      }
-
     },
 
     updateField: function (field, newVal) {

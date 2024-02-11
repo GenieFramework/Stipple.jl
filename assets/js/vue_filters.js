@@ -1,5 +1,5 @@
-Vue.filter('numberformat', function (value, locale = 'en-US', options = {}) {
-  if ( ! value ) value = 0;
+// Vue.filter('numberformat', function (value, locale = 'en-US', options = {}) {
+//   if ( ! value ) value = 0;
 
-  return Intl.NumberFormat(locale, options).format(value);
-});
+//   return Intl.NumberFormat(locale, options).format(value);
+// });

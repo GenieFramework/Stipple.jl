@@ -814,7 +814,7 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
         Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="underscore-min")), :javascript) |> Genie.Renderer.respond
     end
 
-    VUEJS = Genie.Configuration.isprod() ? "vue.min" : "vue"
+    VUEJS = Genie.Configuration.isprod() ? "vue.global.prod" : "vue.global"
     Genie.Router.route(
       Genie.Assets.asset_route(assets_config, :js, file=VUEJS), named = :get_vuejs) do
         Genie.Renderer.WebRenderable(
@@ -890,7 +890,7 @@ function deps(m::M; core_theme::Bool = true) :: Vector{String} where {M<:Reactiv
     channelscript(channel),
     (is_channels_webtransport() ? Genie.Assets.channels_script_tag(channel) : Genie.Assets.webthreads_script_tag(channel)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="underscore-min")),
-    Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.min" : "vue"))),
+    Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.global.prod" : "vue.global"))),
     core_theme && Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="stipplecore")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), defer=true),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="watchers")),
