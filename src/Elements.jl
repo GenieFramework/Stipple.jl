@@ -13,9 +13,29 @@ import Genie.Renderer.Html: HTMLString, normal_element
 
 export root, elem, vm, @if, @else, @elseif, @for, @text, @bind, @data, @on, @click, @showif
 export stylesheet, kw_to_str
+export add_plugins, remove_plugins
 
-# deprecated
-export @iif, @elsiif, @els, @recur
+const PLUGINS = String[]
+
+
+function add_plugins(plugins::Function)
+  append!(PLUGINS, plugins()) |> union!
+end
+
+function add_plugins(plugins::Union{String, Vector{String}})
+  append!(PLUGINS, plugins isa String ? [plugins] : plugins) |> union!
+end
+
+function remove_plugins(plugins::Union{String, Vector{String}})
+  for p in (plugins isa String ? [plugins] : plugins)
+    index = findfirst(==(p), PLUGINS)
+    index === nothing || deleteat!(PLUGINS, index)
+  end
+  PLUGINS
+end
+
+remove_plugins(plugins::Function) = remove_plugins(plugins())
+
 
 #===#
 
@@ -71,6 +91,7 @@ function vue_integration(::Type{M};
       // console.log(key, value);
       app.component(key, value)
     });
+    $(join(["app.use($p);" for p in PLUGINS], "  \n"))
     window.$vue_app_name = window.GENIEMODEL = app.mount(rootSelector);
   } // end of initStipple
 

@@ -50,7 +50,11 @@ const watcherMixin = {
       if (field=='js_app') { newVal(); return }
 
       try {
-        this['_ignore_' + field](()=>{this[field] = newVal});
+        if (this['_ignore_' + field]) {
+          this['_ignore_' + field](()=>{this[field] = newVal});
+        } else {
+          this[field] = newVal
+        }
         if (field=='js_model' && typeof(this[field])=='function') { 
           this[field]()
           this[field] = null
