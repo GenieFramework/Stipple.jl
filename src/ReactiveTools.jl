@@ -73,7 +73,7 @@ function DEFAULT_LAYOUT(; title::String = "Genie App",
     <div class='container'>
       <div class='row'>
         <div class='col-12'>
-          <% page(model, partial = true, v__cloak = true, [@yield], @iif(:isready)) %>
+          <% page(model, partial = true, v__cloak = true, [@yield], @if(:isready)) %>
         </div>
       </div>
     </div>
