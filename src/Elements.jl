@@ -65,10 +65,13 @@ function vue_integration(::Type{M};
     "
 
   function initStipple(rootSelector){
-    Stipple.init($( core_theme ? "{theme: '$theme'}" : "" ));
-    window.$vue_app_name = window.GENIEMODEL = Vue.createApp($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) )).mount(rootSelector);
-    // window.GENIEMODEL.component('StDashboard', c);
-    // window.GENIEMODEL.component('StBigNumber', a);
+    components = Stipple.init($( core_theme ? "{theme: '$theme'}" : "" ));
+    const app = Vue.createApp($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ))
+    Object.entries(components).forEach(([key, value]) => {
+      // console.log(key, value);
+      app.component(key, value)
+    });
+    window.$vue_app_name = window.GENIEMODEL = app.mount(rootSelector);
   } // end of initStipple
 
     "

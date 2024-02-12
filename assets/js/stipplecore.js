@@ -136,9 +136,9 @@
         var t;
         if (!Vue) throw "Stipple requires Vue";
         e = Object.assign({}, e);
-        // Vue.component("StDashboard", c);
-        // Vue.component("StBigNumber", a);
+        const components = {StDashboard: c, StBigNumber: a};
         (t = document.querySelector("html").classList).add.apply(t, ["stipple-core", e.theme ? e.theme : "stipple-blue"]);
+        return components
       },
     };
   },
