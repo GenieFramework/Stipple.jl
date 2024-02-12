@@ -1,16 +1,48 @@
 const watcherMixin = {
   methods: {
-    $withoutWatchers (cb) {
-      const watchers = this._.type.watch;
-
-      for (let index in this._.type.watch) {
-          this._.type.watch[index] = Object.assign(this._.type.watch[index], { cb: () => null, sync: true })
+    // Acknowledgement: copied watchIgnorable from VueUse
+    watchIgnorable: function (source,cb,options) {
+      const ignoreCount = Vue.ref(0)
+      const syncCount = Vue.ref(0)
+      const syncStop = Vue.watch(
+        source,
+        () => {
+          syncCount.value++
+        },
+        { ...options, flush: 'sync' },
+      )
+      const stop = Vue.watch( source,
+        (...args) => {
+          const ignore = ignoreCount.value > 0 && 
+            ignoreCount.value === syncCount.value
+    
+          ignoreCount.value = 0
+          syncCount.value = 0
+    
+          if (!ignore) {
+            cb(...args)
+          }
+        }, 
+        options 
+      )
+      const ignoreUpdates = (updater) => {
+        const prev = syncCount.value
+        updater()
+        const changes = syncCount.value - prev
+        // Add sync changes done in updater
+        ignoreCount.value += changes
       }
-
-      cb()
-
-      for (let index in this._.type.watch) {
-          this._.type.watch[index] = Object.assign(this._.type.watch[index], watchers[index])
+      const ignorePrevAsyncUpdates = () => {
+        // All sync changes til are ignored
+        ignoreCount.value = syncCount.value
+      }
+      return { 
+        ignoreUpdates,
+        ignorePrevAsyncUpdates,
+        stop: () => {
+          syncStop()
+          stop()
+        }
       }
     },
 
@@ -18,7 +50,7 @@ const watcherMixin = {
       if (field=='js_app') { newVal(); return }
 
       try {
-        this.$withoutWatchers(()=>{this[field]=newVal},"function(){return this." + field + "}");
+        this['_ignore_' + field](()=>{this[field] = newVal});
         if (field=='js_model' && typeof(this[field])=='function') { 
           this[field]()
           this[field] = null

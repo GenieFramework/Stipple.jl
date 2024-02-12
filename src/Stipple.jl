@@ -348,17 +348,18 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
   output = IOBuffer()
   if fieldname == :isready
     print(output, """
-      $vue_app_name.\$watch(function(){return this.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true});
-    """)
+      if ($vue_app_name.\$my_dummy_value) console.log('Due to a bug we need to have a \$-sign in this function');
+      ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true}));
+      """)
   else
     AM = get_abstract_type(M)
     debounce = get(get(DEBOUNCE, AM, Dict{Symbol, Any}()), fieldname, debounce)
     print(output, debounce == 0 ?
       """
-        $vue_app_name.\$watch(function(){return this.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true});
+        ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true}));
       """ : 
       """
-        $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true});
+        ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true}));
       """
     )
   end
