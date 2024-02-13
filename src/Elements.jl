@@ -15,27 +15,62 @@ export root, elem, vm, @if, @else, @elseif, @for, @text, @bind, @data, @on, @cli
 export stylesheet, kw_to_str
 export add_plugins, remove_plugins
 
-const PLUGINS = String[]
+const Plugins = Dict{String, AbstractDict}
+PLUGINS = LittleDict{Union{Module, Type{<:ReactiveModel}}, Plugins}()
 
 
-function add_plugins(plugins::Function)
-  append!(PLUGINS, plugins()) |> union!
+function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Function)
+  add_plugins(parent, plugins())
 end
 
-function add_plugins(plugins::Union{String, Vector{String}})
-  append!(PLUGINS, plugins isa String ? [plugins] : plugins) |> union!
-end
-
-function remove_plugins(plugins::Union{String, Vector{String}})
-  for p in (plugins isa String ? [plugins] : plugins)
-    index = findfirst(==(p), PLUGINS)
-    index === nothing || deleteat!(PLUGINS, index)
+function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::AbstractDict)
+  if haskey(PLUGINS, parent)
+    @show PLUGINS[parent]
+    merge!(PLUGINS[parent], plugins)
+    @show PLUGINS[parent]
+  else
+    PLUGINS[parent] = plugins
   end
   PLUGINS
 end
 
-remove_plugins(plugins::Function) = remove_plugins(plugins())
+add_plugins(plugins) = add_plugins(Stipple, plugins)
 
+function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Union{String, Vector{String}})
+  plugins isa String && (plugins = [plugins])
+  PLUGINS[parent] = LittleDict(p => Dict() for p in plugins)
+  PLUGINS
+end
+
+function remove_plugins(parent::Union{Module, Type{<:ReactiveModel}})
+  delete!(PLUGINS, parent)
+end
+
+function remove_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Union{String, Vector{String}})
+  haskey(PLUGINS, parent) || return PLUGINS
+  for plugin in (plugins isa String ? [plugins] : plugins)
+    delete!(PLUGINS[parent], plugin)
+  end
+  isempty(PLUGINS[parent]) && delete!(PLUGINS, parent)
+  PLUGINS
+end
+
+add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Union{Pair, AbstractVector{Pair}}) = add_plugins(parent, Dict(plugins))
+remove_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::AbstractDict) = remove_plugins(parent, collect(keys(plugins)))
+remove_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Function) = remove_plugins(parent, plugins())
+
+function plugins(::Type{M}) where M <: ReactiveModel
+  plugins = reduce(merge, values(filter(x -> x[1] isa Module, PLUGINS)))
+  app_plugins = get(PLUGINS, M, nothing)
+  app_plugins === nothing || merge!(plugins, app_plugins)
+  io = IOBuffer()
+  for (plugin, options) in plugins
+    print(io, isempty(options) ? "\n  app.use($plugin);" : "\n  app.use($plugin, $(js_attr(options)));")
+  end
+  String(take!(io))
+end
+
+plugins() = plugins(ReactiveModel)
 
 #===#
 
@@ -91,7 +126,7 @@ function vue_integration(::Type{M};
       // console.log(key, value);
       app.component(key, value)
     });
-    $(join(["app.use($p);" for p in PLUGINS], "  \n"))
+    $(plugins(M))
     window.$vue_app_name = window.GENIEMODEL = app.mount(rootSelector);
   } // end of initStipple
 
