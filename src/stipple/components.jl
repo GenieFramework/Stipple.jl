@@ -32,7 +32,8 @@ JSON representation of the Vue.js components registered for the `ReactiveModel` 
 function components(m::Type{M})::String where {M<:ReactiveModel}
   haskey(COMPONENTS, m) || return ""
 
-  json(Dict(k => JSONText(v) for (k, v) in COMPONENTS[m]))[2:end - 1]
+  # change to LittleDict as the order of components can be essential
+  json(LittleDict(k => JSONText(v) for (k, v) in COMPONENTS[m]))[2:end - 1]
 end
 
 function components(app::M)::String where {M<:ReactiveModel}

@@ -138,7 +138,7 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
     :mixins => JSONText("[watcherMixin, reviveMixin, eventMixin, filterMixin]"),
     :data => JSONText("() => ($data)")
   )
-  for (f, field) in ((components, :components), (js_methods, :methods), (js_computed, :computed), (js_watch, :watch))
+  for (f, field) in ((js_methods, :methods), (js_computed, :computed), (js_watch, :watch))
     js = join_js(f(app), ",\n    "; pre = strip)
     isempty(js) || push!(vue, field => JSONText("{\n    $js\n}"))
   end

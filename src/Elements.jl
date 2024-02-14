@@ -34,8 +34,6 @@ function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Abst
   PLUGINS
 end
 
-add_plugins(plugins) = add_plugins(Stipple, plugins)
-
 function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Union{String, Vector{String}})
   plugins isa String && (plugins = [plugins])
   PLUGINS[parent] = LittleDict(p => Dict() for p in plugins)
@@ -59,8 +57,13 @@ add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Union{Pair, A
 remove_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::AbstractDict) = remove_plugins(parent, collect(keys(plugins)))
 remove_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Function) = remove_plugins(parent, plugins())
 
+add_plugins(plugins) = add_plugins(Stipple, plugins)
+remove_plugins(plugins) = remove_plugins(Stipple, plugins)
+
 function plugins(::Type{M}) where M <: ReactiveModel
-  plugins = reduce(merge, values(filter(x -> x[1] isa Module, PLUGINS)))
+  pplugins = values(filter(x -> x[1] isa Module, PLUGINS))
+  isempty(pplugins) && return ""
+  plugins = reduce(merge, pplugins)
   app_plugins = get(PLUGINS, M, nothing)
   app_plugins === nothing || merge!(plugins, app_plugins)
   io = IOBuffer()
@@ -111,10 +114,21 @@ function vue_integration(::Type{M};
                           transport::Module = Genie.WebChannels)::String where {M<:ReactiveModel}
   model = Base.invokelatest(M)
 
-  vue_app = replace(json(model |> Stipple.render), "\"{" => " {")
-  vue_app = replace(vue_app, "}\"" => "} ")
+  vue_app = json(model |> Stipple.render)
+  # vue_app = replace(vue_app, "\"{" => " {")
+  # vue_app = replace(vue_app, "}\"" => "} ")
   vue_app = replace(vue_app, "\"$(getchannel(model))\"" => Stipple.channel_js_name)
 
+  # determine global components (registered under ReactiveModel)
+  comps = Stipple.components(M)
+  if !isempty(comps)
+    comps = """
+      components = {$comps}
+      Object.entries(components).forEach(([key, value]) => {
+        app.component(key, value)
+      });
+    """
+  end
   output =
   string(
     "
@@ -123,9 +137,9 @@ function vue_integration(::Type{M};
     components = Stipple.init($( core_theme ? "{theme: '$theme'}" : "" ));
     const app = Vue.createApp($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ))
     Object.entries(components).forEach(([key, value]) => {
-      // console.log(key, value);
       app.component(key, value)
     });
+    $comps
     $(plugins(M))
     window.$vue_app_name = window.GENIEMODEL = app.mount(rootSelector);
   } // end of initStipple
