@@ -793,11 +793,7 @@ Registers the `routes` for all the required JavaScript dependencies (scripts).
 function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool = true) :: Nothing
   if ! Genie.Assets.external_assets(assets_config)
 
-    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, file="stipplecore")) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", file="stipplecore")),
-        :css) |> Genie.Renderer.respond
-    end
+    Genie.Assets.add_fileroute(assets_config, "stipplecore.css"; basedir = normpath(joinpath(@__DIR__, "..")))
 
     if is_channels_webtransport()
       Genie.Assets.channels_route(Genie.Assets.jsliteral(channel))
@@ -805,42 +801,20 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
       Genie.Assets.webthreads_route(Genie.Assets.jsliteral(channel))
     end
 
-    Genie.Router.route(
-      Genie.Assets.asset_route(assets_config, :js, file="underscore-min"), named = :get_underscorejs) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="underscore-min")), :javascript) |> Genie.Renderer.respond
-    end
+    Genie.Assets.add_fileroute(assets_config, "underscore-min.js"; basedir = normpath(joinpath(@__DIR__, "..")))
 
-    VUEJS = Genie.Configuration.isprod() ? "vue.global.prod" : "vue.global"
-    Genie.Router.route(
-      Genie.Assets.asset_route(assets_config, :js, file=VUEJS), named = :get_vuejs) do
-        Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file=VUEJS)), :javascript) |> Genie.Renderer.respond
-    end
+    VUEJS = Genie.Configuration.isprod() ? "vue.global.prod.js" : "vue.global.js"
+    Genie.Assets.add_fileroute(assets_config, VUEJS; basedir = normpath(joinpath(@__DIR__, "..")))
 
     if core_theme
-      Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="stipplecore"), named = :get_stipplecorejs) do
-        Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="stipplecore")), :javascript) |> Genie.Renderer.respond
-    end
+      Genie.Assets.add_fileroute(assets_config, "stipplecore.js"; basedir = normpath(joinpath(@__DIR__, "..")))
     end
 
-    Genie.Router.route(
-      Genie.Assets.asset_route(assets_config, :js, file="vue_filters"), named = :get_vuefiltersjs) do
-        Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="vue_filters")), :javascript) |> Genie.Renderer.respond
-    end
-
-    Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="watchers"), named = :get_watchersjs) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="watchers")), :javascript) |> Genie.Renderer.respond
-    end
+    Genie.Assets.add_fileroute(assets_config, "vue_filters.js"; basedir = normpath(joinpath(@__DIR__, "..")))
+    Genie.Assets.add_fileroute(assets_config, "watchers.js"; basedir = normpath(joinpath(@__DIR__, "..")))
 
     if Genie.config.webchannels_keepalive_frequency > 0 && is_channels_webtransport()
-      Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="keepalive"), named = :get_keepalivejs) do
-        Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="keepalive")), :javascript) |> Genie.Renderer.respond
-      end
+      Genie.Assets.add_fileroute(assets_config, "keepalive.js"; basedir = normpath(joinpath(@__DIR__, "..")))
     end
 
     Genie.Assets.add_fileroute(assets_config, "vue2compat.js"; basedir = normpath(joinpath(@__DIR__, "..")))
