@@ -12,16 +12,20 @@ This is usually needed for registering components provided by Stipple plugins.
 Stipple.register_components(HelloPie, StippleCharts.COMPONENTS)
 ```
 """
-function register_components(model::Type{M}, keysvals::AbstractVector) where {M<:ReactiveModel}
-  haskey(COMPONENTS, model) || (COMPONENTS[model] = Any[])
-  push!(COMPONENTS[model], keysvals...)
+function register_components(model::Type{M}, keysvals::Union{AbstractVector, AbstractDict}; legacy::Bool = false) where {M<:ReactiveModel}
+  haskey(COMPONENTS, model) || (COMPONENTS[model] = LittleDict())
+  for kv in keysvals
+    (k, v) = kv isa Pair ? kv : (kv, kv)
+    legacy && (v = "window.vueLegacyComponents['$v']")
+    delete!(COMPONENTS[model], k)
+    push!(COMPONENTS[model], k => v)
+  end
+  # COMPONENTS[model] |> reverse! |> unique! |> reverse!
 end
 
-function register_components(model::Type{M}, args...) where {M<:ReactiveModel}
-  for a in args
-    register_components(model, a)
-  end
-end
+register_components(model::Type{<:ReactiveModel}, args...; legacy::Bool = false) = register_components(model, collect(args); legacy)
+
+register_global_components(args...; legacy) = register_components(ReactiveModel; legacy)
 
 """
     function components(m::Type{M})::String where {M<:ReactiveModel}

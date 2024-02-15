@@ -822,7 +822,7 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
       Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="stipplecore"), named = :get_stipplecorejs) do
         Genie.Renderer.WebRenderable(
           Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="stipplecore")), :javascript) |> Genie.Renderer.respond
-      end
+    end
     end
 
     Genie.Router.route(
@@ -843,6 +843,7 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
       end
     end
 
+    Genie.Assets.add_fileroute(assets_config, "vue2compat.js"; basedir = normpath(joinpath(@__DIR__, "..")))
   end
 
   nothing
@@ -891,6 +892,7 @@ function deps(m::M; core_theme::Bool = true) :: Vector{String} where {M<:Reactiv
     core_theme && Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="stipplecore")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), defer=true),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="watchers")),
+    Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue2compat")),
 
     (
       (Genie.config.webchannels_keepalive_frequency > 0 && is_channels_webtransport()) ?

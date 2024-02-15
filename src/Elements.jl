@@ -15,28 +15,45 @@ export root, elem, vm, @if, @else, @elseif, @for, @text, @bind, @data, @on, @cli
 export stylesheet, kw_to_str
 export add_plugins, remove_plugins
 
-const Plugins = Dict{String, AbstractDict}
+const Plugins = Dict{String, Union{JSONText, AbstractDict}}
 PLUGINS = LittleDict{Union{Module, Type{<:ReactiveModel}}, Plugins}()
 
 
-function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Function)
-  add_plugins(parent, plugins())
+function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Function; legacy::Bool = false)
+  add_plugins(parent, plugins(); legacy)
 end
 
-function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::AbstractDict)
+function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::AbstractDict; legacy::Bool = false)
+  if legacy
+    d = LittleDict()
+    for (plugin, options) in plugins
+      push!(d, "window.vueLegacyPlugins['$plugin'].plugin" => options)
+    end
+    plugins = d
+  end
   if haskey(PLUGINS, parent)
-    @show PLUGINS[parent]
     merge!(PLUGINS[parent], plugins)
-    @show PLUGINS[parent]
   else
     PLUGINS[parent] = plugins
   end
   PLUGINS
 end
 
-function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Union{String, Vector{String}})
+function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Union{String, Vector{String}}; legacy::Bool = false)
   plugins isa String && (plugins = [plugins])
-  PLUGINS[parent] = LittleDict(p => Dict() for p in plugins)
+  plugin_dict = if legacy
+    d = LittleDict()
+    for plugin in plugins
+      p = """window.vueLegacyPlugins["$plugin"]"""
+      plugin = "$p.plugin"
+      options = JSONText("($p.options) ? $p.options : {}")
+      push!(d, plugin => options)
+    end
+    d
+  else
+    LittleDict(p => Dict() for p in plugins)
+  end
+  PLUGINS[parent] = plugin_dict
   PLUGINS
 end
 
@@ -68,7 +85,7 @@ function plugins(::Type{M}) where M <: ReactiveModel
   app_plugins === nothing || merge!(plugins, app_plugins)
   io = IOBuffer()
   for (plugin, options) in plugins
-    print(io, isempty(options) ? "\n  app.use($plugin);" : "\n  app.use($plugin, $(js_attr(options)));")
+    print(io, options isa AbstractDict && isempty(options) ? "\n  app.use($plugin);" : "\n  app.use($plugin, $(js_attr(options)));")
   end
   String(take!(io))
 end
@@ -129,6 +146,17 @@ function vue_integration(::Type{M};
       });
     """
   end
+
+  globalcomps = Stipple.components(ReactiveModel)
+  if !isempty(globalcomps)
+    globalcomps = """
+      components = {$globalcomps}
+      Object.entries(components).forEach(([key, value]) => {
+        app.component(key, value)
+      });
+    """
+  end
+
   output =
   string(
     "
@@ -139,8 +167,15 @@ function vue_integration(::Type{M};
     Object.entries(components).forEach(([key, value]) => {
       app.component(key, value)
     });
+    $globalcomps
     $comps
+    // gather legacy global options
+    app.prototype = {}
     $(plugins(M))
+    // apply legacy global options
+    Object.entries(app.prototype).forEach(([key, value]) => {
+      app.config.globalProperties[key] = value
+    });
     window.$vue_app_name = window.GENIEMODEL = app.mount(rootSelector);
   } // end of initStipple
 
