@@ -25,7 +25,7 @@ end
 
 register_components(model::Type{<:ReactiveModel}, args...; legacy::Bool = false) = register_components(model, collect(args); legacy)
 
-register_global_components(args...; legacy) = register_components(ReactiveModel; legacy)
+register_global_components(args...; legacy) = register_components(ReactiveModel, args...; legacy)
 
 """
     function components(m::Type{M})::String where {M<:ReactiveModel}
