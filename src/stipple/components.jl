@@ -16,7 +16,7 @@ function register_components(model::Type{M}, keysvals::Union{AbstractVector, Abs
   haskey(COMPONENTS, model) || (COMPONENTS[model] = LittleDict())
   for kv in keysvals
     (k, v) = kv isa Pair ? kv : (kv, kv)
-    legacy && (v = "window.vueLegacyComponents['$v']")
+    legacy && (v = "window.vueLegacy.components['$v']")
     delete!(COMPONENTS[model], k)
     push!(COMPONENTS[model], k => v)
   end

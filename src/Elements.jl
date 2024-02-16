@@ -27,7 +27,7 @@ function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Abst
   if legacy
     d = LittleDict()
     for (plugin, options) in plugins
-      push!(d, "window.vueLegacyPlugins['$plugin'].plugin" => options)
+      push!(d, "window.vueLegacy.plugins['$plugin'].plugin" => options)
     end
     plugins = d
   end
@@ -44,7 +44,7 @@ function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Unio
   plugin_dict = if legacy
     d = LittleDict()
     for plugin in plugins
-      p = """window.vueLegacyPlugins["$plugin"]"""
+      p = """window.vueLegacy.plugins["$plugin"]"""
       plugin = "$p.plugin"
       options = JSONText("($p.options) ? $p.options : {}")
       push!(d, plugin => options)
