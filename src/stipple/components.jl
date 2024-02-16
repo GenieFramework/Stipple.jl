@@ -20,12 +20,12 @@ function register_components(model::Type{M}, keysvals::Union{AbstractVector, Abs
     delete!(COMPONENTS[model], k)
     push!(COMPONENTS[model], k => v)
   end
-  # COMPONENTS[model] |> reverse! |> unique! |> reverse!
+  COMPONENTS
 end
 
 register_components(model::Type{<:ReactiveModel}, args...; legacy::Bool = false) = register_components(model, collect(args); legacy)
 
-register_global_components(args...; legacy) = register_components(ReactiveModel; legacy)
+register_global_components(args...; legacy) = register_components(ReactiveModel, args...; legacy)
 
 """
     function components(m::Type{M})::String where {M<:ReactiveModel}
