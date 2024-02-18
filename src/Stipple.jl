@@ -1235,7 +1235,7 @@ using Stipple.ReactiveTools
       # they belong to your package or not (on Julia 1.8 and higher)
       ui() = [cell("hello"), row("world"), htmldiv("Hello World")]
 
-      @app Demo begin
+      @app PrecompileApp begin
         @in demo_i = 1
         @out demo_s = "Hi"
 
@@ -1245,14 +1245,16 @@ using Stipple.ReactiveTools
       end
 
       route("/") do 
-        model = @init Demo
+        model = @init PrecompileApp
         page(model, ui) |> html
       end
       up()
         
       HTTP.get("http://localhost:8000")
-      # HTTP.get("http://127.0.0.1:8000/genie.jl/v5.23.6/assets/js/channels.js")
-      # HTTP.get("http://localhost:8000/stipple.jl/v0.27.26/assets/js/stipplecore.js")
+      # The following lines (still) produce an error although
+      # they pass at the repl. Not very important though.
+      # HTTP.get("http://localhost:8000$(Genie.Assets.asset_path(Genie.assets_config, :js, file = "channels"))")
+      # HTTP.get("http://localhost:8000$(Genie.Assets.asset_path(assets_config, :js, file = "stipplecore"))")
       down()
   end
 end
