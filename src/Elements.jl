@@ -54,7 +54,6 @@ function vue_integration(::Type{M};
                           core_theme::Bool = true,
                           debounce::Int = Stipple.JS_DEBOUNCE_TIME,
                           transport::Module = Genie.WebChannels)::String where {M<:ReactiveModel}
-
   model = Base.invokelatest(M)
 
   vue_app = replace(json(model |> Stipple.render), "\"{" => " {")
@@ -66,7 +65,7 @@ function vue_integration(::Type{M};
     "
 
   function initStipple(rootSelector){
-    Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));
+    Stipple.init($( core_theme ? "{theme: '$theme'}" : "" ));
     window.$vue_app_name = window.GENIEMODEL = new Vue($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ));
   } // end of initStipple
 
@@ -102,6 +101,7 @@ function vue_integration(::Type{M};
   }
 
   function app_ready() {
+      $vue_app_name.channel_ = window.CHANNEL;
       $vue_app_name.isready = true;
       Genie.Revivers.addReviver(window.$(vue_app_name).revive_jsfunction);
       $(transport == Genie.WebChannels &&

@@ -16,6 +16,9 @@ export @onchange, @onbutton, @event, @notify
 # definition of dependencies
 export @deps, @clear_deps
 
+# definition of field-specific debounce times
+export @debounce, @clear_debounce
+
 # deletion
 export @clear, @clear_vars, @clear_handlers
 
@@ -39,7 +42,7 @@ const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
 const HANDLERS_FUNCTIONS = LittleDict{Type{<:ReactiveModel},Function}()
 
 function DEFAULT_LAYOUT(; title::String = "Genie App",
-                          meta::D = Dict()) where {D <:AbstractDict}
+                          meta::D = Dict(), head_content::Union{AbstractString, Vector} = "") where {D <:AbstractDict}
   tags = Genie.Renderers.Html.for_each(x -> """<meta name="$(string(x.first))" content="$(string(x.second))">\n""", meta)
   """
 <!DOCTYPE html>
@@ -64,6 +67,7 @@ function DEFAULT_LAYOUT(; title::String = "Genie App",
       }
       ._genie .row .col-12 { width:50%;margin:auto; }
     </style>
+    $(join(head_content, "\n    "))
   </head>
   <body>
     <div class='container'>
@@ -186,7 +190,7 @@ function delete_events(::Type{M}) where M
     end
   end
   nothing
- end
+end
 
 function delete_handlers!(m::Module)
   delete!(HANDLERS, m)
@@ -266,6 +270,142 @@ end
 import Stipple.@clear_route
 macro clear_route()
   :(Stipple.clear_route(Stipple.@type)) |> esc
+end
+
+function _prepare(fieldname)
+  if fieldname isa Symbol
+    fieldname = QuoteNode(fieldname)
+  else
+    if fieldname isa Expr && fieldname.head == :tuple
+      for (i, x) in enumerate(fieldname.args)
+        x isa Symbol && (fieldname.args[i] = QuoteNode(x))
+      end
+    end
+  end
+  fieldname
+end
+
+"""
+    @debounce fieldname ms
+
+    @debounce App fieldname ms
+
+Set field-specific debounce time in ms.
+### Parameters
+
+- `APP`: a subtype of ReactiveModel, e.g. `MyApp`
+- `fieldname`: fieldname òr fieldnames as written in the declaration, e.g. `x`, `(x, y, z)`
+- `ms`: debounce time in ms
+
+### Example
+#### Implicit apps
+```
+@app begin
+  @out quick = 12
+  @out slow = 12
+  @in s = "Hello"
+end
+
+# no debouncing for fast messaging
+@debounce quick 0
+
+# long debouncing for long-running tasks
+@debounce (slow1, slow2) 1000
+```
+#### Explicit apps
+
+```
+@app MyApp begin
+  @out quick = 12
+  @out slow = 12
+  @in s = "Hello"
+end
+
+# no debouncing for fast messaging
+@debounce MyApp quick 0
+
+# long debouncing for long-running tasks
+@debounce MyApp slow 1000
+```
+"""
+macro debounce(M, fieldname, ms)
+  fieldname = _prepare(fieldname)
+  :(Stipple.debounce($M, $fieldname, $ms)) |> esc
+end
+
+macro debounce(fieldname, ms)
+  fieldname = _prepare(fieldname)
+  :(Stipple.debounce(Stipple.@type(),$fieldname, $ms)) |> esc
+end
+
+"""
+    @clear_debounce 
+
+    @clear_debounce fieldname
+    
+    @clear_debounce App
+    
+    @clear_debounce App fieldname
+
+Clear field-specific debounce time, for setting see `@debounce`.
+After calling `@clear debounce` the field will be debounced by the value given in the
+`@init` macro.
+
+
+### Example
+#### Implicit apps
+```
+@app begin
+  @out quick = 12
+  @out slow = 12
+  @in s = "Hello"
+end
+
+# no debouncing for fast messaging
+@debounce quick 0
+@debounce slow 1000
+
+# reset to standard value of the app
+@clear_debounce quick
+
+# clear all field-specific debounce times
+@clear_debounce
+```
+#### Explicit apps
+
+```
+@app MyApp begin
+  @out quick = 12
+  @out slow = 12
+  @in s = "Hello"
+end
+
+# no debouncing for fast messaging
+@debounce MyApp quick 0
+
+@clear_debounce MyApp quick
+
+# clear all field-specific debounce times
+@clear_debounce MyApp
+```
+"""
+macro clear_debounce(M, fieldname)
+  fieldname = _prepare(fieldname)
+  :(Stipple.debounce($M, $fieldname, nothing)) |> esc
+end
+
+macro clear_debounce(expr)
+  quote
+    if $expr isa DataType && $expr <: Stipple.ReactiveModel
+      Stipple.debounce($expr, nothing)
+    else
+      Stipple.debounce(Stipple.@type(), $(_prepare(expr)), nothing)
+    end
+  end |> esc
+end
+
+macro clear_debounce()
+  :(Stipple.debounce(Stipple.@type(), nothing)) |> esc
 end
 
 function update_storage(m::Module)
@@ -587,7 +727,7 @@ macro init(args...)
     local new_handlers = false
 
     local initfn =
-    if isdefined($__module__, :init_from_storage)
+    if isdefined($__module__, :init_from_storage) && Stipple.USE_MODEL_STORAGE[]
       $__module__.init_from_storage
     else
       Stipple.init
@@ -612,7 +752,7 @@ macro init(args...)
     end
 
     instance = let model = initfn($(init_args...))
-      new_handlers ? Base.invokelatest(handlersfn, model) : handlersfn(model)
+        new_handlers ? Base.invokelatest(handlersfn, model) : handlersfn(model)
     end
     for p in Stipple.Pages._pages
       p.context == $__module__ && (p.model = instance)
@@ -836,7 +976,7 @@ function get_known_vars(M::Module)
   reactive_vars = Symbol[]
   non_reactive_vars = Symbol[]
   for (k, v) in REACTIVE_STORAGE[M]
-    k in [:channel__, :modes__] && continue
+    k in Stipple.INTERNALFIELDS && continue
     is_reactive = startswith(string(Stipple.split_expr(v)[2]), r"(Stipple\.)?R(eactive)?($|{)")
     push!(is_reactive ? reactive_vars : non_reactive_vars, k)
   end
@@ -848,7 +988,7 @@ function get_known_vars(::Type{M}) where M<:ReactiveModel
   reactive_vars = Symbol[]
   non_reactive_vars = Symbol[]
   for (k, v) in zip(fieldnames(CM), fieldtypes(CM))
-    k in [:channel__, :modes__] && continue
+    k in Stipple.INTERNALFIELDS && continue
     push!(v <: Reactive ? reactive_vars : non_reactive_vars, k)
   end
   reactive_vars, non_reactive_vars
@@ -1004,6 +1144,8 @@ Registers a new page with source in `view` to be rendered at the route `url`.
 
 ```julia
 @page("/", "view.html")
+
+@page("/", ui; model = MyApp) # for specifying an explicit app 
 ```
 """
 macro page(expressions...)

@@ -5,8 +5,8 @@ using Test
 
 version = Genie.Assets.package_version(Stipple)
 
-function string_get(x)
-    String(HTTP.get(x, retries = 0, status_exception = false).body)
+function string_get(x; kwargs...)
+    String(HTTP.get(x, retries = 0, status_exception = false; kwargs...).body)
 end
 
 function get_channel(s::String)
@@ -44,7 +44,7 @@ end
     @test model.channel__ != model2.channel__
 
     # check whether fields are correctly defined
-    @test propertynames(model) == (:channel__, :modes__, :isready, :isprocessing, :i, :s)
+    @test propertynames(model) == tuple(Stipple.INTERNALFIELDS..., Stipple.AUTOFIELDS..., :i, :s)
 
     # check reactivity
     model.i[] = 20
@@ -69,7 +69,7 @@ end
     end
 
     model = TestApp |> init |> handlers
-    @test propertynames(model) == (:channel__, :modes__, :isready, :isprocessing, :i, :s, :j, :t, :mixin_j, :mixin_t, :pre_j_post, :pre_t_post)
+    @test propertynames(model) == tuple(Stipple.INTERNALFIELDS..., Stipple.AUTOFIELDS..., :i, :s, :j, :t, :mixin_j, :mixin_t, :pre_j_post, :pre_t_post)
 end
 
 using Stipple.ReactiveTools
@@ -84,14 +84,14 @@ using Stipple.ReactiveTools
         end
     end
 
-    model = TestApp2 |> init |> handlers
-    model2 = TestApp2 |> init |> handlers
+    model = @init TestApp2
+    model2 = @init TestApp2
 
     # channels have to be different
     @test model.channel__ != model2.channel__
 
     # check whether fields are correctly defined
-    @test propertynames(model) == (:channel__, :modes__, :isready, :isprocessing, :i, :s)
+    @test propertynames(model) == tuple(Stipple.INTERNALFIELDS..., Stipple.AUTOFIELDS..., :i, :s)
 
     # check reactivity
     model.i[] = 20
@@ -113,11 +113,18 @@ end
     end
 
     @eval model = TestApp |> init |> handlers
-    @test propertynames(model) == (:channel__, :modes__, :isready, :isprocessing, :i, :s, :j, :t, :mixin_j, :mixin_t, :pre_j_post, :pre_t_post)
+    @test propertynames(model) ==  tuple(Stipple.INTERNALFIELDS..., Stipple.AUTOFIELDS..., :i, :s, :j, :t, :mixin_j, :mixin_t, :pre_j_post, :pre_t_post)
 
     # check reactivity
     @eval model.i[] = 20
     @test model.s[] == "20"
+
+    @eval @debounce TestApp i 101
+    @eval @debounce TestApp (a, b, c) 101
+    @test Stipple.DEBOUNCE[TestApp][:i] == 101
+    
+    @eval @clear_debounce TestApp
+    @test haskey(Stipple.DEBOUNCE, TestApp) == false
 end
 
 @testset "Reactive API (implicit)" begin
@@ -137,11 +144,19 @@ end
     @eval @test model.channel__ != model2.channel__
 
     # check whether fields are correctly defined
-    @eval @test propertynames(model) == (:channel__, :modes__, :isready, :isprocessing, :i2, :s2)
+    @eval @test propertynames(model) ==  tuple(Stipple.INTERNALFIELDS..., Stipple.AUTOFIELDS..., :i2, :s2)
 
     # check reactivity
     @eval model.i2[] = 20
     @test model.s2[] == "20"
+
+    # check field-specific debouncing
+    @eval @debounce i3 101
+    @eval @debounce (a, b, c) 101
+    @test Stipple.DEBOUNCE[Stipple.@type()][:i3] == 101
+    
+    @eval @clear_debounce
+    @test haskey(Stipple.DEBOUNCE, Stipple.@type()) == false
 end
 
 @testset "Reactive API (implicit) with mixins and handlers" begin
@@ -159,7 +174,7 @@ end
     end
 
     @eval model = @init
-    @eval @test propertynames(model) == (:channel__, :modes__, :isready, :isprocessing, :i3, :s3, :j, :t, :mixin_j, :mixin_t, :pre_j_post, :pre_t_post)
+    @eval @test propertynames(model) ==  tuple(Stipple.INTERNALFIELDS..., Stipple.AUTOFIELDS..., :i3, :s3, :j, :t, :mixin_j, :mixin_t, :pre_j_post, :pre_t_post)
 
     @eval model.i3[] = 20
     @test model.s3[] == "20"
@@ -243,12 +258,15 @@ end
 
     s1 = string_get("http://localhost:$port/")
     s2 = string_get("http://localhost:$port/")
+    s3 = string_get("http://localhost:$port/", cookies = false)
 
-    s3 = string_get("http://localhost:$port/static")
     s4 = string_get("http://localhost:$port/static")
+    s5 = string_get("http://localhost:$port/static")
+    s6 = string_get("http://localhost:$port/static", cookies = false)
 
-    @test get_channel(s2) != get_channel(s1)
-    @test get_channel(s3) == get_channel(s4)
+    @test get_channel(s2) == get_channel(s1)
+    @test get_channel(s3) != get_channel(s1)
+    @test get_channel(s4) == get_channel(s5) == get_channel(s6)
 
     @clear_cache
     down()
@@ -300,12 +318,15 @@ end
 
     s1 = string_get("http://localhost:$port/")
     s2 = string_get("http://localhost:$port/")
+    s3 = string_get("http://localhost:$port/", cookies = false)
 
-    s3 = string_get("http://localhost:$port/static1")
-    s4 = string_get("http://localhost:$port/static1")
+    s4 = string_get("http://localhost:$port/static")
+    s5 = string_get("http://localhost:$port/static")
+    s6 = string_get("http://localhost:$port/static", cookies = false)
 
-    @test get_channel(s2) != get_channel(s1)
-    @test get_channel(s3) == get_channel(s4)
+    @test get_channel(s2) == get_channel(s1)
+    @test get_channel(s3) != get_channel(s1)
+    @test get_channel(s4) == get_channel(s5) == get_channel(s6)
 
     @clear_cache MyApp
     down()
@@ -334,7 +355,7 @@ end
 
     el = row(col = 2, sm = 9, class = :myclass)
     @test contains(el, ":class=\"[myclass,'row','col-2','col-sm-9']\"")
-    
+
     el = row(col = 2, sm = 9, class! = "myclass")
     @test contains(el, ":class=\"[myclass,'row','col-2','col-sm-9']\"")
 
@@ -475,15 +496,15 @@ end
     end
 
     add_css(my_css)
-    @test Stipple.Layout.THEMES[end] == my_css
+    @test Stipple.Layout.THEMES[][end] == my_css
 
-    n = length(Stipple.Layout.THEMES)
+    n = length(Stipple.Layout.THEMES[])
     remove_css(my_css)
-    @test length(Stipple.Layout.THEMES) == n - 1
-    @test findfirst(==(my_css), Stipple.Layout.THEMES) === nothing
+    @test length(Stipple.Layout.THEMES[]) == n - 1
+    @test findfirst(==(my_css), Stipple.Layout.THEMES[]) === nothing
 
     add_css(my_css)
-    @test Stipple.Layout.THEMES[end] == my_css
+    @test Stipple.Layout.THEMES[][end] == my_css
     remove_css(my_css, byname = true)
-    @test findfirst(==(my_css), Stipple.Layout.THEMES) === nothing
+    @test findfirst(==(my_css), Stipple.Layout.THEMES[]) === nothing
 end

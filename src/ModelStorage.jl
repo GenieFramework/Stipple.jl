@@ -8,12 +8,20 @@ import GenieSessionFileSession
 
 export init_from_storage
 
+function model_id(::Type{M}) where M
+  Symbol(Stipple.routename(M))
+end
+
+function store(model::M) where M
+  GenieSession.set!(model_id(M), model)
+  nothing
+end
+
 function init_from_storage( t::Type{M};
                             channel::Union{Any,Nothing} = Stipple.channeldefault(t),
                             kwargs...) where M
-  model_id = Symbol(Stipple.routename(M))
   model = Stipple.init(M; channel, kwargs...)
-  stored_model = GenieSession.get(model_id, nothing)
+  stored_model = GenieSession.get(model_id(M), nothing)
 
   CM = Stipple.get_concrete_type(M)
   for f in fieldnames(CM)
@@ -28,7 +36,7 @@ function init_from_storage( t::Type{M};
       # register reactive handlers to automatically save model on session when model changes
       if f ∉ [Stipple.AUTOFIELDS...]
         on(field) do _
-          GenieSession.set!(model_id, model)
+          GenieSession.set!(model_id(M), model)
         end
       end
     else

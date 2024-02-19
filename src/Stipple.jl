@@ -17,6 +17,16 @@ module Stipple
 
 using PrecompileTools
 const PRECOMPILE = Ref(false)
+const ALWAYS_REGISTER_CHANNELS = Ref(true)
+const USE_MODEL_STORAGE = Ref(true)
+
+"""
+Disables the automatic storage and retrieval of the models in the session.
+Useful for large models.
+"""
+function enable_model_storage(enable::Bool = true)
+  USE_MODEL_STORAGE[] = enable
+end
 
 """
 @using_except(expr)
@@ -88,7 +98,7 @@ export setchannel, getchannel
 isempty(methods(notify, Observables)) && (Base.notify(observable::AbstractObservable) = Observables.notify!(observable))
 
 include("ParsingTools.jl")
-include("ModelStorage.jl")
+USE_MODEL_STORAGE[] && include("ModelStorage.jl")
 include("NamedTuples.jl")
 
 include("stipple/reactivity.jl")
@@ -96,6 +106,7 @@ include("stipple/json.jl")
 include("stipple/undefined.jl")
 include("stipple/assets.jl")
 include("stipple/converters.jl")
+include("stipple/print.jl")
 
 using .NamedTuples
 
@@ -113,6 +124,40 @@ const LAST_ACTIVITY = Dict{Symbol, DateTime}()
 const PURGE_TIME_LIMIT = Ref{Period}(Day(1))
 const PURGE_NUMBER_LIMIT = Ref(1000)
 const PURGE_CHECK_DELAY = Ref(60)
+
+const DEBOUNCE = LittleDict{Type{<:ReactiveModel}, LittleDict{Symbol, Any}}()
+
+"""
+    debounce(M::Type{<:ReactiveModel}, fieldnames::Union{Symbol, Vector{Symbol}}, debounce::Union{Int, Nothing} = nothing)
+
+Add field-specific debounce times.
+"""
+function debounce(M::Type{<:ReactiveModel}, fieldnames::Union{Symbol, Vector{Symbol}, NTuple{N, Symbol} where N}, debounce::Union{Int, Nothing} = nothing)
+  if debounce === nothing
+    haskey(DEBOUNCE, M) || return
+    d = DEBOUNCE[M]
+    if fieldnames isa Symbol
+      delete!(d, fieldnames)
+    else
+      for v in fieldnames
+        delete!(d, v)
+      end
+    end
+    isempty(d) && delete!(DEBOUNCE, M)
+  else
+    d = get!(LittleDict{Symbol, Any}, DEBOUNCE, M)
+    if fieldnames isa Symbol
+      d[fieldnames] = debounce
+    else
+      for v in fieldnames
+        d[v] = debounce
+      end
+    end
+  end
+  return
+end
+
+debounce(M::Type{<:ReactiveModel}, ::Nothing) = delete!(DEBOUNCE, M)
 
 """
 `function sorted_channels()`
@@ -301,20 +346,29 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
   isempty(jsfunction) &&
     (jsfunction = "Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal, 'sesstoken': document.querySelector(\"meta[name='sesstoken']\")?.getAttribute('content')}});")
 
+  output = IOBuffer()
   if fieldname == :isready
-    output = """
+    print(output, """
       $vue_app_name.\$watch(function(){return this.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true});
-    """
+    """)
   else
-    output = """
-      $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true});
-    """
+    AM = get_abstract_type(M)
+    debounce = get(get(DEBOUNCE, AM, Dict{Symbol, Any}()), fieldname, debounce)
+    print(output, debounce == 0 ?
+      """
+        $vue_app_name.\$watch(function(){return this.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true});
+      """ : 
+      """
+        $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true});
+      """
+    )
   end
   # in production mode vue does not fill `this.expression` in the watcher, so we do it manually
   Genie.Configuration.isprod() &&
-    (output *= "$vue_app_name._watchers[$vue_app_name._watchers.length - 1].expression = 'function(){return this.$fieldname}'")
+    print(output, "$vue_app_name._watchers[$vue_app_name._watchers.length - 1].expression = 'function(){return this.$fieldname}'")
 
-  output *= "\n\n"
+  print(output, "\n\n")
+  String(take!(output))
 end
 
 #===#
@@ -356,6 +410,9 @@ function channeldefault(::Type{M}) where M<:ReactiveModel
   end
 
   model_id = Symbol(Stipple.routename(M))
+
+  USE_MODEL_STORAGE[] || return nothing
+
   stored_model = Stipple.ModelStorage.Sessions.GenieSession.get(model_id, nothing)
   stored_model === nothing ? nothing : getfield(stored_model, Stipple.CHANNELFIELDNAME)
 end
@@ -398,12 +455,14 @@ function deletemode!(modes, fieldnames::Symbol...)
 end
 
 function init_storage()
+  ch = channelfactory()
+
   LittleDict{Symbol, Expr}(
-    CHANNELFIELDNAME =>
-      :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = Stipple.channelfactory()),
-    :modes__ => :(modes__::Stipple.LittleDict{Symbol, Int} = Stipple.LittleDict{Symbol, Int}()),
+    CHANNELFIELDNAME => :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = $ch),
+    :modes__ => :(modes__::Stipple.LittleDict{Symbol,Int} = Stipple.LittleDict{Symbol,Int}()),
     :isready => :(isready::Stipple.R{Bool} = false),
-    :isprocessing => :(isprocessing::Stipple.R{Bool} = false)
+    :isprocessing => :(isprocessing::Stipple.R{Bool} = false),
+    :fileuploads => :(fileuploads::Stipple.R{Dict{AbstractString,AbstractString}} = Dict{AbstractString,AbstractString}())
   )
 end
 
@@ -440,7 +499,8 @@ function init(t::Type{M};
               channel::Union{Any,Nothing} = channeldefault(t),
               debounce::Int = JS_DEBOUNCE_TIME,
               transport::Module = Genie.WebChannels,
-              core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
+              core_theme::Bool = true,
+              always_register_channels::Bool = ALWAYS_REGISTER_CHANNELS[])::M where {M<:ReactiveModel, S<:AbstractString}
 
   webtransport!(transport)
   AM = get_abstract_type(M)
@@ -450,13 +510,11 @@ function init(t::Type{M};
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
   ok_response = "OK"
 
-  channel = if channel !== nothing
-    setchannel(model, channel)
-  elseif hasproperty(model, CHANNELFIELDNAME)
-    getchannel(model)
-  else
-    setchannel(model, channel)
-  end
+  channel === nothing && (channel = channelfactory())
+  setchannel(model, channel)
+
+  # make sure we store the channel name in the model
+  USE_MODEL_STORAGE[] && Stipple.ModelStorage.Sessions.store(model)
 
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
   LAST_ACTIVITY[Symbol(getchannel(model))] = now()
@@ -464,7 +522,7 @@ function init(t::Type{M};
   PRECOMPILE[] || Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
 
   # register channels and routes only if within a request
-  if haskey(Genie.Router.params(), :CHANNEL) || haskey(Genie.Router.params(), :ROUTE)
+  if haskey(Genie.Router.params(), :CHANNEL) || haskey(Genie.Router.params(), :ROUTE) || always_register_channels
     if is_channels_webtransport()
       Genie.Assets.channels_subscribe(channel)
     else
@@ -478,14 +536,12 @@ function init(t::Type{M};
       client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
 
       try
-        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) &&
+        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) && USE_MODEL_STORAGE[] &&
           Genie.Router.params!(Stipple.ModelStorage.Sessions.GenieSession.PARAMS_SESSION_KEY,
                                 Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
       catch ex
         @error ex
       end
-
-      @debug payload
 
       field = Symbol(payload["field"])
 
@@ -558,30 +614,31 @@ function init(t::Type{M};
     if ! Genie.Router.ischannel(Router.channelname(ch))
       Genie.Router.channel(ch, named = Router.channelname(ch)) do
         LAST_ACTIVITY[Symbol(channel)] = now()
+
         ok_response
       end
     end
 
     ch = "/$channel/events"
-    if ! Genie.Router.ischannel(Router.channelname(ch))
-      Genie.Router.channel(ch, named = Router.channelname(ch)) do
-        # get event name
-        event = Genie.Requests.payload(:payload)["event"]
-        # form handler parameter & call event notifier
-        handler = Symbol(get(event, "name", nothing))
-        event_info = get(event, "event", nothing)
+    Genie.Router.channel(ch, named = Router.channelname(ch)) do
+      # get event name
+      event = Genie.Requests.payload(:payload)["event"]
+      # form handler parameter & call event notifier
+      handler = Symbol(get(event, "name", nothing))
+      event_info = get(event, "event", nothing)
 
-        # add client id if requested
-        if event_info isa Dict && get(event_info, "_addclient", false)
-          client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
-          push!(event_info, "_client" => client)
-        end
-
-        isempty(methods(notify, (M, Val{handler}))) || notify(model, Val(handler))
-        isempty(methods(notify, (M, Val{handler}, Any))) || notify(model, Val(handler), event_info)
-        LAST_ACTIVITY[Symbol(channel)] = now()
-        ok_response
+      # add client id if requested
+      if event_info isa Dict && get(event_info, "_addclient", false)
+        client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
+        push!(event_info, "_client" => client)
       end
+
+      isempty(methods(notify, (M, Val{handler}))) || notify(model, Val(handler))
+      isempty(methods(notify, (M, Val{handler}, Any))) || notify(model, Val(handler), event_info)
+
+      LAST_ACTIVITY[Symbol(channel)] = now()
+
+      ok_response
     end
   end
 
@@ -589,10 +646,6 @@ function init(t::Type{M};
 
   setup(model, channel)
 end
-function init(m::M; kwargs...)::M where {M<:ReactiveModel}
-  error("This method has been removed -- please use `init($M; kwargs...)` instead")``
-end
-
 
 function routename(::Type{M}) where M<:ReactiveModel
   AM = get_abstract_type(M)
@@ -669,6 +722,17 @@ function Base.push!(app::M, vals::Pair{Symbol,T};
                     channel::String = getchannel(app),
                     except::Union{Nothing,UInt,Vector{UInt}} = nothing,
                     restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T,M<:ReactiveModel}
+  try
+    _push!(vals, channel; except, restrict)
+  catch ex
+    @debug ex
+    false
+  end
+end
+
+function _push!(vals::Pair{Symbol,T}, channel::String;
+                except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T}
   try
     webtransport().broadcast(channel, json(Dict("key" => julia_to_vue(vals[1]), "value" => Stipple.render(vals[2], vals[1]))); except, restrict)
   catch ex
