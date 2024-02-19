@@ -11,7 +11,7 @@ export layout, add_css, remove_css
 export page, app, row, column, cell, container, flexgrid_kwargs, htmldiv
 
 export theme
-const THEMES = Function[]
+const THEMES = Ref(Function[])
 
 """
     function layout(output::Union{String,Vector}; partial::Bool = false, title::String = "", class::String = "", style::String = "",
@@ -39,7 +39,7 @@ julia> layout([
 ```
 """
 function layout(output::Union{S,Vector}, m::M;
-                partial::Bool = false, title::String = "", class::String = "", style::String = "", head_content::String = "",
+                partial::Bool = false, title::String = "", class::String = "", style::String = "", head_content::Union{AbstractString, Vector{<:AbstractString}} = "",
                 channel::String = Stipple.channel_js_name,
                 core_theme::Bool = true)::ParsedHTMLString where {M<:ReactiveModel, S<:AbstractString}
 
@@ -58,7 +58,7 @@ function layout(output::Union{S,Vector}, m::M;
       Genie.Renderer.Html.head([
         Genie.Renderer.Html.title(title)
         Genie.Renderer.Html.meta(name="viewport", content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no")
-        head_content
+        join(head_content)
       ])
       Genie.Renderer.Html.body(content, class=class, style=style)
     ])
@@ -83,9 +83,10 @@ julia> page(:elemid, [
 """
 function page(model::M, args...;
               partial::Bool = false, title::String = "", class::String = "container", style::String = "",
-              channel::String = Genie.config.webchannels_default_route, head_content::String = "",
+              channel::String = Genie.config.webchannels_default_route, head_content::Union{AbstractString, Vector{<:AbstractString}} = "",
               prepend::Union{S,Vector} = "", append::Union{T,Vector} = [],
-              core_theme::Bool = true, kwargs...)::ParsedHTMLString where {M<:Stipple.ReactiveModel, S<:AbstractString,T<:AbstractString}
+              core_theme::Bool = true,
+              kwargs...)::ParsedHTMLString where {M<:Stipple.ReactiveModel, S<:AbstractString,T<:AbstractString}
 
   layout(
     [
@@ -149,7 +150,7 @@ function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = tr
       join(pushfirst!(classes, class), ' ')
     end
   end
-  
+
   (class isa Symbol || class isa String && length(class) > 0) && (kwargs[:class] = class)
 
   if ! symbol_class && class isa Symbol || class isa Vector || class isa AbstractDict
@@ -181,7 +182,7 @@ end
     function row(args...; size=-1, xs=-1, sm=-1, md=-1, lg=-1, xl=-1, kwargs...)
 
 Creates a `div` HTML element with Quasar's Flexgrid CSS class `row`. Such rows typically contain elements created with
-[`cell`](@ref), `row`, [`column`](@ref) or other elements that manually receive grid classes, e.g. `"col"`, `"col-sm-5"`. 
+[`cell`](@ref), `row`, [`column`](@ref) or other elements that manually receive grid classes, e.g. `"col"`, `"col-sm-5"`.
 
 The grid size kwargs `size`, `xs`, etc. are explained in more detail in the docs of [`cell`](@ref).
 ### Example
@@ -191,7 +192,7 @@ julia> row(span("Hello"))
 "<div class=\"row\"><span>Hello</span></div>"
 ```
 """
-function row(args...; 
+function row(args...;
   col::Union{Int,AbstractString,Symbol,Nothing} = -1,
   xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
   lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, size::Union{Int,AbstractString,Symbol,Nothing} = -1,
@@ -211,7 +212,7 @@ end
     function column(args...; size=-1, xs=-1, sm=-1, md=-1, lg=-1, xl=-1, kwargs...)
 
 Creates a `div` HTML element with Quasar's Flexgrid CSS class `column`. Such columns typically contain elements created with
-[`cell`](@ref), [`row`](@ref), `column`, or other elements that manually receive grid classes, e.g. `"col"`, `"col-sm-5"`. 
+[`cell`](@ref), [`row`](@ref), `column`, or other elements that manually receive grid classes, e.g. `"col"`, `"col-sm-5"`.
 
 The grid size kwargs `size`, `xs`, etc. are explained in more detail in the docs of [`cell`](@ref).
 
@@ -272,7 +273,7 @@ function cell(args...;
 )
   # for backward compatibility with `size` kwarg
   col == 0 && size != 0 && (col = size)
-  
+
   # class = class isa Symbol ? Symbol("$class + ' st-col'") : join(push!(split(class), "st-col"), " ")
   class = append_class(class, "st-col")
   kwargs = Stipple.attributes(flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...))
@@ -311,7 +312,7 @@ end
     function theme() :: String
 
 Provides theming support for Stipple apps and pages. It includes Stipple's default CSS files and additional elements,
-  in the form of HTML tags, can be injected by pushing to the `Stipple.Layout.THEMES` collection.
+  in the form of HTML tags, can be injected by pushing to the `Stipple.Layout.THEMES[][]` collection.
 
 ### Example
 
@@ -322,20 +323,23 @@ julia> theme()
 julia> StippleUI.theme()
 "<link href=\"/css/stipple/quasar.min.css\" rel=\"stylesheet\" />"
 
-julia> push!(Stipple.Layout.THEMES, StippleUI.theme)
+julia> push!(Stipple.Layout.THEMES[], StippleUI.theme)
 ```
 """
 function theme(; core_theme::Bool = true) :: Vector{String}
   output = String[]
 
   if core_theme
-    push!(output,
-      stylesheet("https://fonts.googleapis.com/css?family=Material+Icons"),
-      stylesheet(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore"))
+    push!(THEMES[], () -> begin
+        stylesheet("https://fonts.googleapis.com/css?family=Material+Icons"),
+        stylesheet(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore"))
+      end
     )
   end
 
-  for f in THEMES
+  unique!(THEMES[])
+
+  for f in THEMES[]
     push!(output, f()...)
   end
 
@@ -345,7 +349,7 @@ end
 """
     add_css(css::Function; update = true)
 
-Add a css function to the `THEMES`.
+Add a css function to the `THEMES[]`.
 
 ### Params
 * `css::Function` - a function that results in a vector of style elements
@@ -371,18 +375,58 @@ add_css(mycss)
 function add_css(css::Function; update = true)
   # removal can only be done by name, as the old function has already been overwritten
   update && remove_css(css::Function, byname = true)
-  push!(Stipple.Layout.THEMES, css)
+  push!(THEMES[], css)
+  unique!(THEMES[])
+end
+
+"""
+    add_css(css...; update = false)
+
+Adds a css file to the layout.
+
+### Example
+```julia
+Stipple.Layout.add_css("froop.css", "bootstrap.css", "https://cdn.tailwindcss.com/tailwind.css")
+```
+"""
+function add_css(css...; update = false)
+  css = [Stipple.Elements.stylesheet(c) for c in css]
+  add_css(() -> css; update = update)
+end
+
+"""
+    add_script(script...; update = false)
+
+Adds a script file to the layout.
+
+### Example
+```julia
+Stipple.Layout.add_script("froop.js", "bootstrap.js", "https://cdn.tailwindcss.com/tailwind.js")
+```
+"""
+function add_script(script...; update = false)
+  script = [Stipple.Elements.script(src=s) for s in script]
+  add_css(() -> script; update = update)
 end
 
 """
     remove_css(css::Function, byname::Bool = false)
 
-Remove a stylesheet function from the stack (`Stipple.Layout.THEMES`)
+Remove a stylesheet function from the stack (`THEMES[]`)
 If called with `byname = true`, the function will be identified by name rather than by the function itself.
 """
 function remove_css(css::Function; byname::Bool = false)
-  inds = byname ? nameof.(Stipple.Layout.THEMES) .== nameof(css) : Stipple.Layout.THEMES .== css
-  deleteat!(Stipple.Layout.THEMES, inds)
+  inds = byname ? nameof.(THEMES[]) .== nameof(css) : THEMES[] .== css
+  deleteat!(THEMES[], inds)
+end
+
+"""
+    theme!(css::Function)
+
+Replace the current themes with new ones.
+"""
+function theme!(css::Function)
+  THEMES[] = [css]
 end
 
 end
