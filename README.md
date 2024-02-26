@@ -61,6 +61,7 @@ In StippleUI syntax `v-if` corresponds to `@if("...")`and `v-for`  corresponds t
 
 ### More Migration Support 
 ... can be found at the Quasar site: https://quasar.dev/start/upgrade-guide/
+and at the Vue site: https://v3-migration.vuejs.org/
 
 ## Installation
 
