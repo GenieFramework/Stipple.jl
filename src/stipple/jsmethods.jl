@@ -230,3 +230,7 @@ end
 function js_created_auto(x)
 ""
 end
+
+function js_watch_auto(x)
+""
+end

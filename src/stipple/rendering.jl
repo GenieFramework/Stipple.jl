@@ -140,6 +140,10 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
   )
   for (f, field) in ((js_methods, :methods), (js_computed, :computed), (js_watch, :watch))
     js = join_js(f(app), ",\n    "; pre = strip)
+    if field == :watch
+      watch_auto = join_js(Stipple.js_watch_auto(app), "\n\n    "; pre = strip)
+      watch_auto == "" || (js = "$js\n\n    $watch_auto")
+    end
     isempty(js) || push!(vue, field => JSONText("{\n    $js\n}"))
   end
   
@@ -150,8 +154,8 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
 
     js = join_js(f(app), "\n\n    "; pre = strip)
     if field == :created
-      auto_created = Stipple.js_created_auto(app)
-      auto_created == "" || (js *= auto_created)
+      created_auto = join_js(Stipple.js_created_auto(app), "\n\n    "; pre = strip)
+      created_auto == "" || (js = "$js\n\n    $created_auto")
     end
     isempty(js) || push!(vue, field => JSONText("function(){\n    $js\n}"))
   end
