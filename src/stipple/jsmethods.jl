@@ -226,3 +226,7 @@ function js_initscript(initscript::String)
   });
   """
 end
+
+function js_created_auto(x)
+""
+end

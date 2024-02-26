@@ -149,6 +149,10 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
     (js_before_destroy, :beforeDestroy), (js_destroyed, :destroyed), (js_error_captured, :errorCaptured),)
 
     js = join_js(f(app), "\n\n    "; pre = strip)
+    if field == :created
+      auto_created = Stipple.js_created_auto(app)
+      auto_created == "" || (js *= auto_created)
+    end
     isempty(js) || push!(vue, field => JSONText("function(){\n    $js\n}"))
   end
 
