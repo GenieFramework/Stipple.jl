@@ -375,7 +375,7 @@ macro var_storage(expr, new_inputmode = :auto)
           end
 
           mixin_storage = @eval __module__ Stipple.model_to_storage($(e.args[2]), $prefix, $postfix)
-          storage = merge_storage(storage, mixin_storage)
+          storage = merge_storage(storage, mixin_storage; context = __module__)
         end
         :modes__, e
       end
@@ -482,7 +482,7 @@ macro add_vars(modelname, expr, new_inputmode = :auto)
   storage = @eval(__module__, Stipple.@var_storage($expr, $new_inputmode))
   new_storage = if isdefined(__module__, modelname)
     old_storage = @eval(__module__, Stipple.model_to_storage($modelname))
-    ReactiveTools.merge_storage(old_storage, storage)
+    ReactiveTools.merge_storage(old_storage, storage; context = __module__)
   else
     storage
   end
