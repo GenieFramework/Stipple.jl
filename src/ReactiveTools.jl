@@ -430,7 +430,7 @@ end
 
 macro add_vars(expr)
   init_storage(__module__)
-  REACTIVE_STORAGE[__module__] = Stipple.merge_storage(REACTIVE_STORAGE[__module__], @eval(__module__, Stipple.@var_storage($expr)))
+  REACTIVE_STORAGE[__module__] = Stipple.merge_storage(REACTIVE_STORAGE[__module__], @eval(__module__, Stipple.@var_storage($expr)); context = __module__)
 
   update_storage(__module__)
 end
@@ -666,7 +666,7 @@ macro mixin(location, expr, prefix, postfix)
     M = $x isa DataType ? $x : typeof($x) # really needed?
     local mixin_storage = Stipple.model_to_storage(M, $(QuoteNode(prefix)), $postfix)
 
-    merge!(storage, Stipple.merge_storage(storage, mixin_storage))
+    merge!(storage, Stipple.merge_storage(storage, mixin_storage; context = @__MODULE__))
     location isa DataType || location isa Symbol ? eval(:(Stipple.@type($$loc, $storage))) : location
     mixin_storage
   end |> esc

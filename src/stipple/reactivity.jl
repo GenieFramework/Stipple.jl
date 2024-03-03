@@ -211,9 +211,9 @@ function model_to_storage(::Type{T}, prefix = "", postfix = "") where T# <: Reac
   storage
 end
 
-function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict; keep_channel = true)
-  m1 = eval(haskey(storage_1, :modes__) ? storage_1[:modes__].args[end] : LittleDict{Symbol, Int}())
-  m2 = eval(haskey(storage_2, :modes__) ? storage_2[:modes__].args[end] : LittleDict{Symbol, Int}())
+function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict; keep_channel = true, context::Module)
+  m1 = haskey(storage_1, :modes__) ? Core.eval(context, storage_1[:modes__].args[end]) : LittleDict{Symbol, Int}()
+  m2 = haskey(storage_2, :modes__) ? Core.eval(context, storage_2[:modes__].args[end]) : LittleDict{Symbol, Int}()
   modes = merge(m1, m2)
 
   keep_channel && haskey(storage_2, :channel__) && (storage_2 = delete!(copy(storage_2), :channel__))
