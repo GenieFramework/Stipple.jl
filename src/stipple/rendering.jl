@@ -1,4 +1,12 @@
 """
+    js_print(io::IO, x)
+
+Stipple internal print routine for join_js.
+Mainly used to allow for printing of JSON.JSONText
+"""
+js_print(io::IO, x) = print(io, x)
+
+"""
     join_js(xx, delim = ""; skip_empty = true, pre::Function = identity,
       strip_delimiter = true, pre_delim::Union{Function,Nothing} = nothing)
 
@@ -42,8 +50,10 @@ function join_js(xx, delim = ""; skip_empty = true, pre::Function = identity, st
     if x isa Union{AbstractDict, Pair, Base.Iterators.Pairs, Vector{<:Pair}}
       s = json(Dict(k => JSONText(v) for (k, v) in (x isa Pair ? [x] : x)))[2:end - 1]
       print(io2, s)
+    elseif x isa JSONText
+      print(io2, x.s)
     else
-      print(io2, x)
+      js_print(io2, x)
     end
     s = String(take!(io2))
     hasdelimiter = strip_delimiter && endswith(s, delim)
