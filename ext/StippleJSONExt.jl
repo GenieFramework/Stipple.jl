@@ -18,4 +18,5 @@ Stipple.JSONText(json::JSON.JSONText) = Stipple.JSONText(json.s)
 @inline StructTypes.construct(::Type{JSON.JSONText}, json::JSON3.RawValue) = JSON.JSONText(string(json))
 @inline JSON3.rawbytes(json::JSON.JSONText) = codeunits(json.s)
 
+Stipple.js_print(io::IO, js::JSON.JSONText) = print(io, js.s)
 end
