@@ -54,3 +54,13 @@ end
 function stipple_parse(::Type{T}, value::String) where T<:AbstractFloat
   Base.parse(T, value)
 end
+
+# Union with Nothing
+function stipple_parse(::Type{Union{Nothing, T}}, ::Nothing) where T
+  nothing
+end
+
+# Union with Nothing
+function stipple_parse(::Type{Union{Nothing, T}}, value) where T
+  stipple_parse(T, value)
+end
