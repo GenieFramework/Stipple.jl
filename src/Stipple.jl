@@ -1297,6 +1297,7 @@ using Stipple.ReactiveTools
       # HTTP.get("http://localhost:$port$(Genie.Assets.asset_path(assets_config, :js, file = "stipplecore"))")
       down()
   end
+  PRECOMPILE[] = false
 end
 
 end
