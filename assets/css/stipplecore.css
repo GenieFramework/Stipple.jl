@@ -41,6 +41,15 @@
   border-radius: 5px;
   box-shadow: 0 1px 3px 0 rgba(0,0,0,.1),0 1px 2px -1px rgba(0,0,0,.1);
 }
+.stipple-core header {
+    padding-top:5px;
+    padding-left: 5px;
+  }
+
+.stipple-core a {
+    color: steelblue;
+}
+
 .container { margin-bottom: 20px; }
 .stipple-core .st-module > h1,
 .stipple-core .st-module > h2,
@@ -87,7 +96,9 @@
 .stipple-core .text-h1,
 .stipple-core h1 {
   line-height: 2.5rem;
+  font-size: 4rem;
 }
+
 .stipple-core .text-h2,
 .stipple-core h2 {
   line-height: 2rem;
@@ -264,6 +275,10 @@
 .stipple-core .q-field--standout .text-white .q-field__marginal,
 .stipple-core .q-field--standout .text-white .q-field__native {
   color: var(--q-color-white);
+}
+.stipple-core .q-field__control-container .material-icons {
+    margin-top: auto;
+    margin-bottom: auto;
 }
 .stipple-core .q-badge {
   font-weight: 700;

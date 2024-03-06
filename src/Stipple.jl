@@ -15,6 +15,7 @@ existing Vue.js libraries.
 """
 module Stipple
 
+using PrecompileTools
 const PRECOMPILE = Ref(false)
 const ALWAYS_REGISTER_CHANNELS = Ref(true)
 const USE_MODEL_STORAGE = Ref(true)
@@ -619,27 +620,25 @@ function init(t::Type{M};
     end
 
     ch = "/$channel/events"
-    if ! Genie.Router.ischannel(Router.channelname(ch))
-      Genie.Router.channel(ch, named = Router.channelname(ch)) do
-        # get event name
-        event = Genie.Requests.payload(:payload)["event"]
-        # form handler parameter & call event notifier
-        handler = Symbol(get(event, "name", nothing))
-        event_info = get(event, "event", nothing)
+    Genie.Router.channel(ch, named = Router.channelname(ch)) do
+      # get event name
+      event = Genie.Requests.payload(:payload)["event"]
+      # form handler parameter & call event notifier
+      handler = Symbol(get(event, "name", nothing))
+      event_info = get(event, "event", nothing)
 
-        # add client id if requested
-        if event_info isa Dict && get(event_info, "_addclient", false)
-          client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
-          push!(event_info, "_client" => client)
-        end
-
-        isempty(methods(notify, (M, Val{handler}))) || notify(model, Val(handler))
-        isempty(methods(notify, (M, Val{handler}, Any))) || notify(model, Val(handler), event_info)
-
-        LAST_ACTIVITY[Symbol(channel)] = now()
-
-        ok_response
+      # add client id if requested
+      if event_info isa Dict && get(event_info, "_addclient", false)
+        client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
+        push!(event_info, "_client" => client)
       end
+
+      isempty(methods(notify, (M, Val{handler}))) || notify(model, Val(handler))
+      isempty(methods(notify, (M, Val{handler}, Any))) || notify(model, Val(handler), event_info)
+
+      LAST_ACTIVITY[Symbol(channel)] = now()
+
+      ok_response
     end
   end
 
@@ -1286,5 +1285,46 @@ include("Layout.jl")
 @reexport using .Typography
 @reexport using .Elements
 @reexport using .Layout
+
+# precompilation ...
+
+using Stipple.ReactiveTools
+@setup_workload begin
+  # Putting some things in `setup` can reduce the size of the
+  # precompile file and potentially make loading faster.
+  using Genie.HTTPUtils.HTTP
+  PRECOMPILE[] = true
+  @compile_workload begin
+      # all calls in this block will be precompiled, regardless of whether
+      # they belong to your package or not (on Julia 1.8 and higher)
+      ui() = [cell("hello"), row("world"), htmldiv("Hello World")]
+
+      @app PrecompileApp begin
+        @in demo_i = 1
+        @out demo_s = "Hi"
+
+        @onchange demo_i begin
+          println(demo_i)
+        end
+      end
+
+      route("/") do 
+        model = Stipple.ReactiveTools.@init PrecompileApp
+        page(model, ui) |> html
+      end
+      port = tryparse(Int, get(ENV, "STIPPLE_PRECOMPILE_PORT", ""))
+      port === nothing && (port = rand(8081:8999))
+      up(port)
+        
+      precompile_get = tryparse(Bool, get(ENV, "STIPPLE_PRECOMPILE_GET", "1"))
+      precompile_get === true && HTTP.get("http://localhost:$port")
+      # The following lines (still) produce an error although
+      # they pass at the repl. Not very important though.
+      # HTTP.get("http://localhost:$port$(Genie.Assets.asset_path(Genie.assets_config, :js, file = "channels"))")
+      # HTTP.get("http://localhost:$port$(Genie.Assets.asset_path(assets_config, :js, file = "stipplecore"))")
+      down()
+  end
+  PRECOMPILE[] = false
+end
 
 end

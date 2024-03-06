@@ -443,8 +443,8 @@ julia> stylesheet("https://fonts.googleapis.com/css?family=Material+Icons")
 "<link href=\"https://fonts.googleapis.com/css?family=Material+Icons\" rel=\"stylesheet\" />"
 ```
 """
-function stylesheet(href::String; args...) :: ParsedHTMLString
-  Genie.Renderer.Html.link(href=href, rel="stylesheet", args...)
+function stylesheet(href::String; kwargs...) :: ParsedHTMLString
+  Genie.Renderer.Html.link(href=href, rel="stylesheet"; kwargs...)
 end
 
 end
