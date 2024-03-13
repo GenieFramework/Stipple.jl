@@ -162,11 +162,12 @@ function vue_integration(::Type{M};
     "
 
   function initStipple(rootSelector){
-    components = Stipple.init($( core_theme ? "{theme: '$theme'}" : "" ));
+    // components = Stipple.init($( core_theme ? "{theme: '$theme'}" : "" ));
     const app = Vue.createApp($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ))
-    Object.entries(components).forEach(([key, value]) => {
+    /* Object.entries(components).forEach(([key, value]) => {
       app.component(key, value)
-    });
+    }); */
+    Stipple.init( app, $( core_theme ? "{theme: '$theme'}" : "" ));
     $globalcomps
     $comps
     // gather legacy global options
