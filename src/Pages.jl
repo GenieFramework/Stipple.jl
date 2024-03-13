@@ -42,9 +42,9 @@ function Page(  route::Union{Route,String};
             Core.eval(context, model)
           elseif isa(model, Module)
             context = model
-            @eval(context, Stipple.ReactiveTools.@init(debounce = $debounce, transport = $transport, core_theme = $core_theme))
+            () -> @eval(context, Stipple.ReactiveTools.@init(debounce = $debounce, transport = $transport, core_theme = $core_theme))
           elseif model isa DataType
-            @eval(context, Stipple.ReactiveTools.@init($model; debounce = $debounce, transport = $transport, core_theme = $core_theme))
+            () -> @eval(context, Stipple.ReactiveTools.@init($model; debounce = $debounce, transport = $transport, core_theme = $core_theme))
           else
             model
           end
