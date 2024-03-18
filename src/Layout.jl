@@ -119,6 +119,10 @@ function iscontainer(class::Vector)
   length(class) > 0 && class[end] in ("row", "column")
 end
 
+function iscontainer(class)
+    false
+end
+
 function flexgrid_class(tag::Symbol, value::Union{String,Int,Nothing,Symbol} = -1, container = false)
   gutter = container ? "q-col-gutter" : "q-gutter"
   (value == -1 || value === nothing) && return ""
