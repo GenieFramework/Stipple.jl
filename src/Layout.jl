@@ -283,9 +283,9 @@ function extract_kwargs!(args::Vector, kwarg_names)
   params = []
   inds = Int[]
   for n in length(args):-1:1
-      if args[n] isa Expr && args[n].head == :kw && args[n].args[1] in kwarg_names
-          pushfirst!(kwargs.args, popat!(args, n))
-      end
+    if args[n] isa Expr && args[n].head == :kw && args[n].args[1] in kwarg_names
+      pushfirst!(kwargs.args, popat!(args, n))
+    end
   end
   n = length(args)
   pos = n > 0 && args[1] isa Expr && args[1].head == :parameters ? 1 : n > 1 && args[2] isa Expr && args[2].head == :parameters ? 2 : 0
@@ -294,11 +294,11 @@ function extract_kwargs!(args::Vector, kwarg_names)
 
   parameters = args[pos].args
   for n in length(parameters):-1:1
-      println("parameters[$n]", parameters[n])
-      if parameters[n] isa Expr && parameters[n].head == :kw && parameters[n].args[1] in kwarg_names ||
-          parameters[n] isa Symbol && parameters[n] in kwarg_names
-          push!(params, popat!(parameters, n))
-      end
+    println("parameters[$n]", parameters[n])
+    if parameters[n] isa Expr && parameters[n].head == :kw && parameters[n].args[1] in kwarg_names ||
+      parameters[n] isa Symbol && parameters[n] in kwarg_names
+      push!(params, popat!(parameters, n))
+    end
   end
   append!(kwargs.args, reverse(params))
   kwargs
@@ -306,12 +306,17 @@ end
 
 function _wrap_expression(expr)
   new_expr = if expr isa Expr && expr.head == :call
-      kwargs = extract_kwargs!(expr.args, FLEXGRID_KWARGS)
-      new_expr = :(Stipple.htmldiv())
-      push!(new_expr.args, kwargs, expr)
-      new_expr
+    kwargs = extract_kwargs!(expr.args, FLEXGRID_KWARGS[1:6])
+    # extra treatment for cell(), because col = 0 is default:
+    # So if not set explicitly then add col = 0 to the wrapper kwargs
+    if expr.args[1] == :cell && :col ∉ [kwarg isa Expr ? kwarg.args[1] : kwarg for kwarg in kwargs.args]
+      push!(kwargs.args, Expr(:kw, :col, 0))
+    end
+    new_expr = :(Stipple.htmldiv())
+    push!(new_expr.args, kwargs, expr)
+    new_expr
   else
-      :(Stipple.htmldiv($expr))
+    :(Stipple.htmldiv($expr))
   end
 
   new_expr
