@@ -8,10 +8,13 @@ module Layout
 using Genie, Stipple
 
 export layout, add_css, remove_css
-export page, app, row, column, cell, container, flexgrid_kwargs, htmldiv
+export page, app, row, column, cell, container, flexgrid_kwargs, htmldiv, @wrap
 
 export theme
 const THEMES = Ref(Function[])
+
+const FLEXGRID_KWARGS = [:col, :xs, :sm, :md, :lg, :xl, :gutter, :xgutter, :ygutter]
+const AT_MASK = "__vue-on__"
 
 """
     function layout(output::Union{String,Vector}; partial::Bool = false, title::String = "", class::String = "", style::String = "",
@@ -108,7 +111,42 @@ function container(args...; fluid = false, kwargs...)
   Genie.Renderer.Html.div(args...; kwargs...)
 end
 
+function iscontainer(class::String)
+  !isempty(intersect(split(class), ("row", "column")))
+end
+
+function iscontainer(class::Vector)
+  length(class) > 0 && class[end] in ("row", "column")
+end
+
+function flexgrid_class(tag::Symbol, value::Union{String,Int,Nothing,Symbol} = -1, container = false)
+  gutter = container ? "q-col-gutter" : "q-gutter"
+  (value == -1 || value === nothing) && return ""
+  out = String[]
+  if tag in (:col, :xs, :sm, :md, :lg, :xl)
+    tag == :col || push!(out, "col")
+    push!(out, "$tag")
+  elseif tag == :gutter
+    push!(out, gutter)
+  elseif tag == :xgutter
+    push!(out, "$gutter-x")
+  elseif tag == :ygutter
+    push!(out, "$gutter-y")
+  else
+    push!(out, "$tag")
+  end
+
+  if value isa Int
+    value > 0 && push!(out, "$value")
+  else
+    value isa Symbol && (value = String(value))
+    length(value) > 0 && value != "col" && push!(out, value)
+  end
+  return join(out, '-')
+end
+
 function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = true, flexgrid_mappings::Dict{Symbol,Symbol} = Dict{Symbol,Symbol}(), kwargs...)
+  container = iscontainer(class)
   kwargs = Dict{Symbol,Any}(kwargs...)
 
   # support all different types of classes that vue supports: String, Expressions (Symbols), Arrays, Dicts
@@ -129,10 +167,10 @@ function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = tr
   end
 
   classes = String[]
-  for key in (:col, :xs, :sm, :md, :lg, :xl)
+  for key in FLEXGRID_KWARGS
     newkey = get(flexgrid_mappings, key, key)
     if haskey(kwargs, newkey)
-      colclass = sizetocol(kwargs[newkey], key)
+      colclass = flexgrid_class(key, kwargs[newkey], container)
       length(colclass) > 0 && push!(classes, colclass)
       delete!(kwargs, newkey)
     end
@@ -147,7 +185,8 @@ function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = tr
     elseif class isa Vector
       vcat(class, classes)
     else
-      join(pushfirst!(classes, class), ' ')
+      isempty(class) || pushfirst!(classes, class)
+      join(classes, ' ')
     end
   end
 
@@ -178,6 +217,155 @@ function append_class(class, subclass)
   end
 end
 
+# Utilities for element function definition
+"""
+        @flexgrid
+
+Macro to add the flexgrid kwargs (`:col`, `:xs`, `:gutter`, ...) to the funtion definition
+
+To be used together with `@flexgrid_kwargs`
+
+### Example
+```
+@flexgrid function f(x = "hello"; options = [1, 2], kwargs...)
+  println(x)
+  kwargs = @flexgrid_kwargs(; options, kwargs...)
+  println(kwargs)
+end
+
+f(col = 8, gutter = :md)
+#
+# hello
+# Pair{Symbol, Any}[:options => [1, 2], :col => 8, :xs => -1, :sm => -1, :md => -1, :lg => -1, :xl => -1, :gutter => :md, :xgutter => nothing, :ygutter => nothing]
+```
+"""
+macro flexgrid(expr)
+  isdefmode = expr.head == :function || expr.head == Symbol("=") && expr.args[1].head == :call
+
+  ar = isdefmode ? expr.args[1].args : expr.args
+  extra_kwargs = isdefmode ? [
+    Expr(:kw, :(class::Union{AbstractString,Symbol,Vector{<:AbstractString},AbstractDict,Nothing}), ""),
+    Expr(:kw, :(col::Union{Int,AbstractString,Symbol,Nothing}), -1),
+    Expr(:kw, :(xs::Union{Int,AbstractString,Symbol,Nothing}), -1),
+    Expr(:kw, :(sm::Union{Int,AbstractString,Symbol,Nothing}), -1),
+    Expr(:kw, :(md::Union{Int,AbstractString,Symbol,Nothing}), -1),
+    Expr(:kw, :(lg::Union{Int,AbstractString,Symbol,Nothing}), -1),
+    Expr(:kw, :(xl::Union{Int,AbstractString,Symbol,Nothing}), -1),
+    Expr(:kw, :(gutter::Union{AbstractString,Symbol,Nothing}), nothing),
+    Expr(:kw, :(xgutter::Union{AbstractString,Symbol,Nothing}), nothing),
+    Expr(:kw, :(ygutter::Union{AbstractString,Symbol,Nothing}), nothing),
+  ] : [:class, FLEXGRID_KWARGS...]
+
+  (length(ar) == 1 || length(ar) > 1 && ar[2].head != :parameters) && insert!(ar, 2, Expr(:parameters))
+  ar = ar[2].args
+  index = length(ar)
+  while index > 0 && ar[index] isa Expr && ar[index].head == :...
+      index -= 1
+  end
+  splice!(ar, index + 1:index, extra_kwargs)
+  expr |> esc
+end
+
+macro flexgrid_kwargs(expr...)
+  expr = Stipple.expressions_to_args(expr)
+  :(Stipple.Layout.@flexgrid Stipple.Layout.flexgrid_kwargs($(expr...))) |> esc
+end
+
+
+"""
+    extract_kwargs!(args::Vector, kwarg_names)
+
+Low-level function that finds all kwargs in kwargs names from an expression if the expression is a function call and returns them as an expression that
+can be plugged in a function expression.
+"""
+function extract_kwargs!(args::Vector, kwarg_names)
+  kwargs = Expr(:parameters)
+  params = []
+  inds = Int[]
+  for n in length(args):-1:1
+      if args[n] isa Expr && args[n].head == :kw && args[n].args[1] in kwarg_names
+          pushfirst!(kwargs.args, popat!(args, n))
+      end
+  end
+  n = length(args)
+  pos = n > 0 && args[1] isa Expr && args[1].head == :parameters ? 1 : n > 1 && args[2] isa Expr && args[2].head == :parameters ? 2 : 0
+  
+  pos == 0 && return kwargs
+
+  parameters = args[pos].args
+  for n in length(parameters):-1:1
+      println("parameters[$n]", parameters[n])
+      if parameters[n] isa Expr && parameters[n].head == :kw && parameters[n].args[1] in kwarg_names ||
+          parameters[n] isa Symbol && parameters[n] in kwarg_names
+          push!(params, popat!(parameters, n))
+      end
+  end
+  append!(kwargs.args, reverse(params))
+  kwargs
+end
+
+function _wrap_expression(expr)
+  new_expr = if expr isa Expr && expr.head == :call
+      kwargs = extract_kwargs!(expr.args, FLEXGRID_KWARGS)
+      new_expr = :(Stipple.htmldiv())
+      push!(new_expr.args, kwargs, expr)
+      new_expr
+  else
+      :(Stipple.htmldiv($expr))
+  end
+
+  new_expr
+end
+
+"""
+    @wrap(expr)
+
+Wraps a subsequent expression in a div-element. If the expression is function call with flexgrid kwargs, the flexgrid kwargs are removed and passed to the wrapping div-element.
+If the expression is a Vector, the elements of the vector are wrapped.
+
+This is handy for defining content that goes into a `row()` or `column()` with `q-col-gutter` settings (e.g. via `gutter = :md`), because most elements need a wrapping div in that case.
+
+### Example 1
+```julia
+julia> @wrap [
+         cell(1, sm = 12, lg = 4)
+         cell(2, sm = 12, md = 8)
+       ]
+2-element Vector{ParsedHTMLString}:
+ "<div class=\"col-sm-12 col-lg-4\"><div class=\"st-col col\">1</div></div>"
+ "<div class=\"col-sm-12 col-md-8\"><div class=\"st-col col\">2</div></div>"
+```
+
+### Example 2
+With `prettify()` from StippleUI for better readability
+```
+julia> row(gutter = :md, @wrap [
+         cell(1, sm = 12, md = 8, lg = 4, xl = 12)
+         cell(2, sm = 12, md = 8, lg = 4, xl = 12)
+       ]) |> prettify |> println
+<div class="row q-col-gutter-md">
+    <div class="col-sm-12 col-md-8 col-lg-4 col-xl-12">
+        <div class="st-col col">
+            1
+        </div>
+    </div>
+    <div class="col-sm-12 col-md-8 col-lg-4 col-xl-12">
+        <div class="st-col col">
+            2
+        </div>
+    </div>
+</div>
+```
+"""
+macro wrap(expr)
+  if expr isa Expr && expr.head ∈ (:vcat, :vect)
+      expr.args = _wrap_expression.(expr.args)
+  else
+      expr = _wrap_expression(expr)
+  end
+  expr |> esc
+end
+
 """
     function row(args...; size=-1, xs=-1, sm=-1, md=-1, lg=-1, xl=-1, kwargs...)
 
@@ -192,18 +380,14 @@ julia> row(span("Hello"))
 "<div class=\"row\"><span>Hello</span></div>"
 ```
 """
-function row(args...;
-  col::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, size::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  class = "", kwargs...)
+@flexgrid function row(args...; size::Union{Int,AbstractString,Symbol,Nothing} = -1, kwargs...)
 
   # for backward compatibility with `size` kwarg
   col == -1 && size != -1 && (col = size)
 
   # class = class isa Symbol ? Symbol("$class + ' row'") : class isa Vector ? push!(class, "row") : join(push!(split(class), "row"), " ")
   class = append_class(class, "row")
-  kwargs = Stipple.attributes(flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...))
+  kwargs = Stipple.attributes(@flexgrid_kwargs(; symbol_class = false, kwargs...))
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
@@ -223,16 +407,12 @@ julia> column(span("Hello"))
 "<div class=\"column\"><span>Hello</span></div>"
 ```
 """
-function column(args...;
-  col::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, size::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  class = "", kwargs...)
+@flexgrid function column(args...; size = -1, kwargs...)
 
   # for backward compatibility with `size` kwarg
   col == -1 && size != -1 && (col = size)
   class = append_class(class, "column")
-  kwargs = Stipple.attributes(flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...))
+  kwargs = Stipple.attributes(@flexgrid_kwargs(; symbol_class = false, kwargs...))
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
@@ -268,44 +448,28 @@ julia> row(cell(size = 2, md = 6, sm = 12, span("Hello")))
 function cell(args...;
   col::Union{Int,AbstractString,Symbol,Nothing} = 0,
   xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, size::Union{Int,AbstractString,Symbol,Nothing} = 0,
-  class = "", kwargs...
+  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1,
+  gutter::Union{AbstractString,Symbol,Nothing} = nothing, xgutter::Union{AbstractString,Symbol,Nothing} = nothing, ygutter::Union{AbstractString,Symbol,Nothing} = nothing,
+  class = "", size::Union{Int,AbstractString,Symbol,Nothing} = 0, kwargs...
 )
   # for backward compatibility with `size` kwarg
   col == 0 && size != 0 && (col = size)
 
   # class = class isa Symbol ? Symbol("$class + ' st-col'") : join(push!(split(class), "st-col"), " ")
   class = append_class(class, "st-col")
-  kwargs = Stipple.attributes(flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...))
+  kwargs = Stipple.attributes(@flexgrid_kwargs(; symbol_class = false, kwargs...))
 
   Genie.Renderer.Html.div(args...; kwargs...)
 end
 
-function htmldiv(args...;
-  col::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1, size::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  class = "", kwargs...)
+@flexgrid function htmldiv(args...; size::Union{Int,AbstractString,Symbol,Nothing} = -1, kwargs...)
 
   # for backward compatibility with `size` kwarg
   col == -1 && size != -1 && (col = size)
 
-  kwargs = Stipple.attributes(flexgrid_kwargs(; class, col, xs, sm, md, lg, xl, symbol_class = false, kwargs...))
+  kwargs = Stipple.attributes(@flexgrid_kwargs(; symbol_class = false, kwargs...))
 
   Genie.Renderer.Html.div(args...; kwargs...)
-end
-
-function sizetocol(size::Union{String,Int,Nothing,Symbol} = -1, tag::Symbol = :col)
-  (size == -1 || size === nothing) && return ""
-  out = ["col"]
-  tag != :col && push!(out, String(tag))
-  if size isa Int
-    size > 0 && push!(out, "$size")
-  else
-    size isa Symbol && (size = String(size))
-    length(size) > 0 && size != "col" && push!(out, size)
-  end
-  return join(out, '-')
 end
 
 """
