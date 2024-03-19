@@ -180,6 +180,56 @@ end
     @test model.s3[] == "20"
 end
 
+module App1
+
+using Stipple, Stipple.ReactiveTools
+@app begin
+    @in i1 = 101
+end
+
+@app MyApp begin
+    @in i1 = 101
+end
+
+end
+
+module App2
+using Stipple, Stipple.ReactiveTools
+    
+@app begin
+    @in i2 = 102
+end
+
+@app MyApp begin
+    @in i2 = 102
+end
+
+end
+    
+@testset "Multipage Reactive API (implicit)" begin
+    @eval p1 = @page("/app1", "hello", model = App1)
+    @eval p2 = @page("/app2", "world", model = App2)
+    channel1a = get_channel(String(p1.route.action().body))
+    channel1b = get_channel(String(p1.route.action().body))
+    channel2a = get_channel(String(p2.route.action().body))
+    channel2b = get_channel(String(p2.route.action().body))
+
+    # channels have to be different
+    @test channel1a != channel1b != channel2a != channel2b
+end
+
+@testset "Multipage Reactive API (explicit)" begin
+    @eval p1 = @page("/app1", "hello", model = App1.MyApp)
+    @eval p2 = @page("/app2", "world", model = App2.MyApp)
+    channel1a = get_channel(String(p1.route.action().body))
+    channel1b = get_channel(String(p1.route.action().body))
+    channel2a = get_channel(String(p2.route.action().body))
+    channel2b = get_channel(String(p2.route.action().body))
+
+    # channels have to be different
+    @test channel1a != channel1b != channel2a != channel2b
+end
+
 using DataFrames
 @testset "Extensions" begin
     d = Dict(:a => [1, 2, 3], :b => ["a", "b", "c"])

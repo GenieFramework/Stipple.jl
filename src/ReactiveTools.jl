@@ -62,10 +62,14 @@ function DEFAULT_LAYOUT(; title::String = "Genie App",
     <% end %>
     <style>
       ._genie_logo {
-        background:url('https://genieframework.com/logos/genie/logo-simple-with-padding.svg') no-repeat;background-size:40px;
-        padding-top:22px;padding-right:10px;color:transparent;font-size:9pt;
+        background:url('https://genieframework.com/logos/genie/logo-simple-with-padding.svg') no-repeat;
+        background-size:40px;
+        padding-top:22px;
+        padding-right:10px;
+        color:transparent !important;
+        font-size:9pt;
       }
-      ._genie .row .col-12 { width:50%;margin:auto; }
+      ._genie .row .col-12 { width:50%; margin:auto; }
     </style>
     $(join(head_content, "\n    "))
   </head>
@@ -339,12 +343,12 @@ macro debounce(fieldname, ms)
 end
 
 """
-    @clear_debounce 
+    @clear_debounce
 
     @clear_debounce fieldname
-    
+
     @clear_debounce App
-    
+
     @clear_debounce App fieldname
 
 Clear field-specific debounce time, for setting see `@debounce`.
@@ -1145,7 +1149,7 @@ Registers a new page with source in `view` to be rendered at the route `url`.
 ```julia
 @page("/", "view.html")
 
-@page("/", ui; model = MyApp) # for specifying an explicit app 
+@page("/", ui; model = MyApp) # for specifying an explicit app
 ```
 """
 macro page(expressions...)
