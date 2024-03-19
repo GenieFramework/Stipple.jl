@@ -64,3 +64,8 @@ end
 function stipple_parse(::Type{Union{Nothing, T}}, value) where T
   stipple_parse(T, value)
 end
+
+# define an explicit function for Type{Any} to avoid ambiguities between Type{Union{Nothing, T}} and Type{T} (line 35 and line 64) in case of T == Any
+function stipple_parse(::Type{Any}, v::T) where {T}
+  v::T
+end
