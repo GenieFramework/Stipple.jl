@@ -386,7 +386,7 @@ function row(args...;
   xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
   lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1,
   gutter::Union{AbstractString,Symbol,Nothing} = nothing, xgutter::Union{AbstractString,Symbol,Nothing} = nothing, ygutter::Union{AbstractString,Symbol,Nothing} = nothing,
-  class::Union{AbstractString,Symbol,AbstractDict,Vector} = "", size::Union{Int,AbstractString,Symbol,Nothing} = 0, kwargs...)
+  class::Union{AbstractString,Symbol,AbstractDict,Vector} = "", size::Union{Int,AbstractString,Symbol,Nothing} = -1, kwargs...)
 
   # for backward compatibility with `size` kwarg
   col == -1 && size != -1 && (col = size)
@@ -418,7 +418,7 @@ function column(args...;
   xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
   lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1,
   gutter::Union{AbstractString,Symbol,Nothing} = nothing, xgutter::Union{AbstractString,Symbol,Nothing} = nothing, ygutter::Union{AbstractString,Symbol,Nothing} = nothing,
-  class::Union{AbstractString,Symbol,AbstractDict,Vector} = "", size::Union{Int,AbstractString,Symbol,Nothing} = 0, kwargs...)
+  class::Union{AbstractString,Symbol,AbstractDict,Vector} = "", size::Union{Int,AbstractString,Symbol,Nothing} = -1, kwargs...)
   # for backward compatibility with `size` kwarg
   col == -1 && size != -1 && (col = size)
   class = append_class(class, "column")
@@ -477,7 +477,7 @@ function htmldiv(args...;
   xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
   lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1,
   gutter::Union{AbstractString,Symbol,Nothing} = nothing, xgutter::Union{AbstractString,Symbol,Nothing} = nothing, ygutter::Union{AbstractString,Symbol,Nothing} = nothing,
-  class::Union{AbstractString,Symbol,AbstractDict,Vector} = "", size::Union{Int,AbstractString,Symbol,Nothing} = 0, kwargs...)
+  class::Union{AbstractString,Symbol,AbstractDict,Vector} = "", size::Union{Int,AbstractString,Symbol,Nothing} = -1, kwargs...)
 
   # for backward compatibility with `size` kwarg
   col == -1 && size != -1 && (col = size)
