@@ -229,7 +229,6 @@ can be plugged in a function expression.
 function extract_kwargs!(args::Vector, kwarg_names)
   kwargs = Expr(:parameters)
   params = []
-  inds = Int[]
   for n in length(args):-1:1
     if args[n] isa Expr && args[n].head == :kw && args[n].args[1] in kwarg_names
       pushfirst!(kwargs.args, popat!(args, n))
@@ -242,9 +241,8 @@ function extract_kwargs!(args::Vector, kwarg_names)
 
   parameters = args[pos].args
   for n in length(parameters):-1:1
-    println("parameters[$n]", parameters[n])
-    if parameters[n] isa Expr && parameters[n].head == :kw && parameters[n].args[1] in kwarg_names ||
-      parameters[n] isa Symbol && parameters[n] in kwarg_names
+    p = parameters[n]
+    if p isa Expr && p.head == :kw && p.args[1] in kwarg_names || p isa Symbol && p in kwarg_names
       push!(params, popat!(parameters, n))
     end
   end
@@ -256,9 +254,10 @@ function _wrap_expression(expr)
   new_expr = if expr isa Expr && expr.head == :call
     kwargs = extract_kwargs!(expr.args, FLEXGRID_KWARGS[1:6])
     # extra treatment for cell(), because col = 0 is default:
-    # So if not set explicitly then add col = 0 to the wrapper kwargs
+    # So if not set explicitly then add col = 0 to the wrapper kwargs and col = -1 in the child kwargs
     if expr.args[1] == :cell && :col ∉ [kwarg isa Expr ? kwarg.args[1] : kwarg for kwarg in kwargs.args]
       push!(kwargs.args, Expr(:kw, :col, 0))
+      push!(expr.args, Expr(:kw, :col, -1))
     end
     new_expr = :(Stipple.htmldiv())
     push!(new_expr.args, kwargs, expr)
