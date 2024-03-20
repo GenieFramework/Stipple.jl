@@ -364,7 +364,7 @@ row(gutter = :md, [
 ```
 """
 macro gutter(size, expr)
-  :((; gutter = $size, inner = @gutter($expr))...) |> esc
+  Expr(:parameters, Expr(:kw, :gutter, size), Expr(:kw, :inner, :(@gutter($expr)))) |> esc
 end
 
 """
