@@ -77,12 +77,12 @@ function DEFAULT_LAYOUT(; title::String = "Genie App",
     <div class='container'>
       <div class='row'>
         <div class='col-12'>
-          <% page(model, partial = true, v__cloak = true, [@yield], @iif(:isready)) %>
+          <% Stipple.page(model, partial = true, v__cloak = true, [Stipple.Genie.Renderer.Html.@yield], Stipple.@if(:isready)) %>
         </div>
       </div>
     </div>
     <% if isfile(joinpath(Genie.config.server_document_root, "js", "genieapp.js")) %>
-    <script src='$(Genie.Configuration.basepath())/js/genieapp.js'></script>
+    <script src='$(Stipple.Genie.Configuration.basepath())/js/genieapp.js'></script>
     <% else %>
     <% end %>
     <footer class='_genie container'>
@@ -478,7 +478,7 @@ macro app(expr)
   quote
     $expr
 
-    @handlers
+    Stipple.ReactiveTools.@handlers
   end |> esc
 end
 
@@ -1181,7 +1181,7 @@ macro page(expressions...)
       end
 
       # modify the entry of the :model keyword by an init function with respective init_kwargs
-      model_parent[model_ind] = :($(Expr(:kw, :model, () -> @eval(__module__, @init($(init_kwargs...))))))
+      model_parent[model_ind] = :($(Expr(:kw, :model, () -> @eval(__module__, Stipple.ReactiveTools.@init($(init_kwargs...))))))
     else
       nothing
     end
