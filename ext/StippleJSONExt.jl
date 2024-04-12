@@ -2,7 +2,7 @@ module StippleJSONExt
 
 using Stipple
 
-isdefined(Base, :get_extension) ? using JSON : using ..JSON
+isdefined(Base, :get_extension) ? (using JSON) : (using ..JSON)
 
 # garantee interoperability of different JSONTText definitions in Stipple and JSON
 # for both JSON3 and JSON
