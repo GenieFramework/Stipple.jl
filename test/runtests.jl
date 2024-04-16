@@ -232,11 +232,13 @@ end
 
 using DataFrames
 @testset "Extensions" begin
-    d = Dict(:a => [1, 2, 3], :b => ["a", "b", "c"])
-    df = DataFrame(:a => [1, 2, 3], :b => ["a", "b", "c"])
-
-    @test Stipple.stipple_parse(DataFrame, [d]) == df
-    @test render(df) == OrderedDict("a" => [1, 2, 3], "b" => ["a", "b", "c"])
+    d1 = Dict(:a => [1, 2, 3], :b => ["a", "b", "c"])
+    d2 = Dict(:a => [2, 3, 4], :b => ["b", "c", "d"])
+    df1 = DataFrame(d1)
+    df2 = DataFrame(:a => [[1, 2, 3], [2, 3, 4]], :b => [["a", "b", "c"], ["b", "c", "d"]])
+    @test Stipple.stipple_parse(DataFrame, d1) == df1
+    @test Stipple.stipple_parse(DataFrame, [d1, d2]) == df2
+    @test render(df1) == OrderedDict("a" => [1, 2, 3], "b" => ["a", "b", "c"])
 
     using OffsetArrays
     @test Stipple.convertvalue(R(OffsetArray([1, 2, 3], -2)), [2, 3, 4]) == OffsetArray([2, 3, 4], -2)

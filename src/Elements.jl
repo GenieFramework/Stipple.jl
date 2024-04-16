@@ -11,7 +11,7 @@ using MacroTools
 
 import Genie.Renderer.Html: HTMLString, normal_element
 
-export root, elem, vm, @if, @else, @elseif, @for, @text, @bind, @data, @on, @click, @showif
+export root, elem, vm, @if, @else, @elseif, @for, @text, @bind, @data, @on, @click, @showif, @slot
 export stylesheet, kw_to_str
 export add_plugins, remove_plugins
 
@@ -538,6 +538,65 @@ julia> h1("Hello!", @showif(:ok))
 """
 macro showif(expr)
   Expr(:kw, Symbol("v-show"), esc_expr(expr))
+end
+
+
+"""
+    hyphenate(expr)
+
+Convert minus operations in expressions into join-operations with '-'
+
+### Example
+```julia
+julia> :(a-b-c) |> hyphenate
+Symbol("a-b-c")
+```
+"""
+function hyphenate(@nospecialize expr)
+  if expr isa Expr && expr.head == :call && expr.args[1] == :-
+    x = expr.args[2]
+    Symbol(x isa Expr ? hyphenate(x) : x isa QuoteNode ? x.value : x, '-', join(expr.args[3:end], '-'))
+  else
+    expr
+  end
+end
+
+hyphenate(expr...) = hyphenate.(expr)
+
+"""
+    @slot(slotname)
+
+Add a v-slot attribute to a template.
+
+### Example
+
+```julia
+julia> template(@slot(:header), [cell("Header")])
+"<template v-slot:header><div class=\"st-col col\">Header</div></template>"
+```
+"""
+macro slot(slotname)
+  slotname isa Expr && (slotname = hyphenate(slotname))
+  slotname isa QuoteNode && (slotname = slotname.value)
+  Expr(:kw, Symbol("v-slot:$slotname"), "") |> esc
+end
+
+"""
+    @slot(slotname, varname)
+
+Add a v-slot attribute with a variable name to a template.
+
+### Example
+
+```julia
+julia> template(@slot(:body, :props), ["{{ props.value }}"])
+"<template v-slot:body=\"props\">{{ props.value }}</template>"
+```
+"""
+macro slot(slotname, varname)
+  slotname isa Expr && (slotname = hyphenate(slotname))
+  slotname isa QuoteNode && (slotname = slotname.value)
+  Expr(:kw, Symbol("v-slot:$slotname"), varname) |> esc
 end
 
 #===#

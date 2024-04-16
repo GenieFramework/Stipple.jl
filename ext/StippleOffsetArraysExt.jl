@@ -2,7 +2,7 @@ module StippleOffsetArraysExt
 
 using Stipple
 
-isdefined(Base, :get_extension) ? using OffsetArrays : using ..OffsetArrays
+isdefined(Base, :get_extension) ? (using OffsetArrays) : (using ..OffsetArrays)
 
 function Stipple.convertvalue(targetfield::Union{Ref{T}, Reactive{T}}, value) where T <: OffsetArrays.OffsetArray
   a = Stipple.stipple_parse(eltype(targetfield), value)

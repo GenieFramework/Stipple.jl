@@ -1057,12 +1057,13 @@ function attributes(kwargs::Union{Vector{<:Pair}, Base.Iterators.Pairs, Dict},
     v === nothing && continue
     mapped = false
 
-    k_str = string(k)
+    k_str = "$k"
 
     if haskey(mappings, k_str)
       k_str = mappings[k_str]
     end
 
+    k_str == "inner" && (v = join(v))
     v_isa_jsexpr = v isa Symbol || !isa(v, Union{AbstractString, Bool, Number})
     attr_key = string((v_isa_jsexpr && ! startswith(k_str, ":") &&
                 ! (endswith(k_str, "!") || startswith(k_str, "v-") || startswith(k_str, "v" * Genie.config.html_parser_char_dash)) ? ":" : ""), k_str) |> Symbol
