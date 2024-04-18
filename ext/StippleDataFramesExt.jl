@@ -6,7 +6,7 @@ isdefined(Base, :get_extension) ? (using DataFrames) : (using ..DataFrames)
 
 # DataFrame(d::Dict) will generate multiple rows if a field contains a Vector
 # to prevent this we need to wrap vectors in a Ref()
-function dataframe(d::Dict)
+function dataframe(d::AbstractDict)
   DataFrame([p[1] => p[2] isa Vector ? Ref(p[2]) : p[2] for p in d])
 end
 
