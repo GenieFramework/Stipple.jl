@@ -1,23 +1,103 @@
 :root.stipple-core {
-  --q-color-primary: #1b1f3b;
+  /* ----------- background colors ------------ */
+  --st-background-color-1: #ffffff;
+  --st-background-color-2: #efefef;
+  --st-background-color-3: #c4c4c4;
+
+  /* ----------- foreground colors ------------ */
+  --st-foreground-color-1: #000000;
+  --st-foreground-color-2: #393939;
+  --st-foreground-color-3: #747474;
+
+  /* =========== border colors =========== */
+  --st-border-color-1: #cccccc80;
+  --st-border-color-2: #cccccc40;
+  --st-border-color-3: #cccccc20;
+
+  /* =========== text colors =========== */
+  --st-head-color: #111827;
+
+  /* =========== framework colors =========== */
+  --q-color-primary: #38bdf8;
   --q-color-secondary: #8ea8c3;
   --q-color-accent: #bea7e5;
-  --q-color-dark: #022a50;
   --q-color-info: #373b44;
-  --q-color-white: #ffffff;
-  --q-color-black: #302f2f;
-  --st-text-1: #302f2f;
-  --st-text-2: #575454;
-  --st-text-3: #5a6460;
-  --st-dashboard-module: #fcfcfc;
-  --st-dashboard-line: #e2e2e2;
-  --st-dashboard-bg: #fff;
-  --st-slider--track: #cad2d2;
-  --st-skeleton: #e1e5ee;
   --q-color-positive: #72c8a9;
   --q-color-negative: #c10015;
   --q-color-warning: #f2c037;
+
+  /* =========== dashboard colors =========== */
+  --st-dashboard-line: #e2e2e2;
+  --st-dashboard-module: #fcfcfc;
+  --st-skeleton: #e1e5ee;
+
+  /* =========== actionable =========== */
+  --st-action-color: #38bdf8;
+  --st-action-color-hover: #09d1f9;
+
+  /* =========== font sizes =========== */
+  --st-font-size-normal: 13px;
+
+  /* =========== decorations =========== */
+  --st-box-shadow-color: #00000020;
+  --st-scrollbar-thumb: #619abd;
 }
+:root.stipple-core.dark {
+  /* ----------- background colors ------------ */
+  --st-background-color-1: #101827;
+  --st-background-color-2: #162134;
+  --st-background-color-3: #202f47;
+
+  /* ----------- foreground colors ------------ */
+  --st-foreground-color-1: #e6e6e6;
+  --st-foreground-color-2: #575454;
+  --st-foreground-color-3: #5a6460;
+
+  /* =========== border colors =========== */
+  --st-border-color-1: #cccccc80;
+  --st-border-color-2: #cccccc40;
+  --st-border-color-3: #cccccc20;
+
+  /* =========== text colors =========== */
+  --st-head-color: #38bdf8;
+
+  /* =========== framework colors =========== */
+  --q-color-primary: #38bdf8;
+  --q-color-secondary: #8ea8c3;
+  --q-color-accent: #bea7e5;
+  --q-color-info: #373b44;
+  --q-color-positive: #72c8a9;
+  --q-color-negative: #c10015;
+  --q-color-warning: #f2c037;
+
+  /* =========== dashboard colors =========== */
+  --st-dashboard-line: #e2e2e2;
+  --st-dashboard-module: #fcfcfc;
+  --st-skeleton: #e1e5ee;
+
+  /* =========== actionable =========== */
+  --st-action-color: #38bdf8;
+  --st-action-color-hover: #09d1f9;
+
+  /* =========== font sizes =========== */
+  --st-font-size-normal: 13px;
+
+  /* =========== decorations =========== */
+  --st-box-shadow-color: #2483ab70;
+  --st-scrollbar-thumb: #153f6c;
+}
+
+/* ===================== DERIVED ===================== */
+/* =========== Derived colors =========== */
+:root.stipple-core {
+  --st-text-1: var(--st-foreground-color-1);
+  --st-text-2: var(--st-foreground-color-2);
+  --st-text-3: var(--st-foreground-color-3);
+
+  --st-dashboard-bg: var(--st-background-color-1);
+  --q-color-white: var(--st-background-color-1);
+}
+
 .stipple-blue .q-field--standout.q-field--focused .q-field__control {
   background: var(--q-color-primary);
 }
@@ -35,22 +115,24 @@
   color: var(--q-color--white);
 }
 .stipple-core .st-module {
-  border: 1px solid rgba(0, 0, 0, 0.10);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   /* overflow: auto; */
   background: var(--q-color-white);
   border-radius: 5px;
-  box-shadow: 0 1px 3px 0 rgba(0,0,0,.1),0 1px 2px -1px rgba(0,0,0,.1);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
 }
 .stipple-core header {
-    padding-top:5px;
-    padding-left: 5px;
-  }
-
-.stipple-core a {
-    color: steelblue;
+  padding-top: 5px;
+  padding-left: 5px;
 }
 
-.container { margin-bottom: 20px; }
+.stipple-core a {
+  color: steelblue;
+}
+
+.container {
+  margin-bottom: 20px;
+}
 .stipple-core .st-module > h1,
 .stipple-core .st-module > h2,
 .stipple-core .st-module > h3,
@@ -61,7 +143,8 @@
   display: inline-block;
   padding: 5px 0;
 }
-.stipple-core, .stipple-core body {
+.stipple-core,
+.stipple-core body {
   font-weight: 400;
   font-size: 90%;
   background-color: var(--st-dashboard-bg);
@@ -127,7 +210,9 @@
 .stipple-core .st-dashboard > .row {
   padding: 2vh 2vw 0;
 }
-.st-col { box-sizing: border-box !important; }
+.st-col {
+  box-sizing: border-box !important;
+}
 .stipple-core .container > .row > .st-col,
 .stipple-core .st-dashboard > .row > .st-col {
   margin-right: 2vw;
@@ -253,7 +338,9 @@
 .stipple-core fieldset {
   border: none;
 }
-.stipple-core .q-field--float.q-field--focused.q-field--standout .q-field__control {
+.stipple-core
+  .q-field--float.q-field--focused.q-field--standout
+  .q-field__control {
   font-weight: 700;
 }
 .stipple-core .q-input .q-field__native,
@@ -277,8 +364,8 @@
   color: var(--q-color-white);
 }
 .stipple-core .q-field__control-container .material-icons {
-    margin-top: auto;
-    margin-bottom: auto;
+  margin-top: auto;
+  margin-bottom: auto;
 }
 .stipple-core .q-badge {
   font-weight: 700;
@@ -301,8 +388,12 @@
 .stipple-core .q-btn .q-btn__wrapper:before {
   box-shadow: none;
 }
-.stipple-core .q-btn.q-btn--active:enabled:not(.disabled):not(.q-btn--push):not(.q-btn--outline),
-.stipple-core .q-btn:active:enabled:not(.disabled):not(.q-btn--push):not(.q-btn--outline) {
+.stipple-core
+  .q-btn.q-btn--active:enabled:not(.disabled):not(.q-btn--push):not(
+    .q-btn--outline
+  ),
+.stipple-core
+  .q-btn:active:enabled:not(.disabled):not(.q-btn--push):not(.q-btn--outline) {
   box-shadow: inset 0 3px 0 rgba(0, 0, 0, 0.3);
 }
 .stipple-core .q-btn.q-btn--active .q-btn__wrapper:before,
@@ -555,4 +646,132 @@ body > .q-loading-bar {
   }
 }
 
-[v-cloak] { display: none; }
+/* ================ New theme rules ================ */
+
+/* ===================== Global Text ===================== */
+:root.stipple-core body {
+  color: var(--st-text-1);
+  font-size: var(--st-font-size-normal);
+}
+
+/* ===================== HEADERS ===================== */
+:root.stipple-core h1{
+  color: var(--st-head-color);
+  font-weight: bold;
+  font-size: 2.2rem;
+}
+:root.stipple-core h2{
+  color: var(--st-head-color);
+  font-weight: bold;
+  font-size: 1.8rem;
+}
+:root.stipple-core h3{
+  color: var(--st-head-color);
+  font-weight: bold;
+  font-size: 1.5rem;
+}
+:root.stipple-core h4{
+  color: var(--st-head-color);
+  font-weight: bold;
+  font-size: 1.3rem;
+}
+:root.stipple-core h5{
+  color: var(--st-head-color);
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+:root.stipple-core h6 {
+  color: var(--st-head-color);
+  font-weight: bold;
+  font-size: 1rem;
+}
+
+
+/* ===================== LINKS ===================== */
+.stipple-core a {
+  color: var(--st-action-color);
+}
+.stipple-core a:hover {
+  color: var(--st-action-color-hover);
+}
+
+/* ===================== Modules ===================== */
+.stipple-core .st-module {
+  padding-top: 10px !important;
+  border: 1px solid var(--st-border-color-3);
+}
+.container{
+  max-width: 100% !important;
+}
+
+/* ===================== Components ===================== */
+.stipple-core .q-btn {
+  color: var(--st-background-color-1) !important;
+}
+
+.q-field__input,
+.q-field__native,
+.q-field__prefix,
+.q-field__suffix {
+  color: var(--st-text-1) !important;
+}
+.q-field__label {
+  color: var(--st-text-1);
+  opacity: 0.6;
+}
+.q-field--standard .q-field__control:before {
+  border-bottom: 1px solid var(--st-border-color-2);
+}
+.q-field--standard .q-field__control:hover {
+  border-bottom: 1px solid var(--st-border-color-1);
+}
+
+.q-field__marginal {
+  color: var(--st-border-color-1) !important;
+}
+
+.q-menu {
+  background-color: var(--q-color-white) !important;
+  box-shadow: 1px 3px 10px 2px var(--st-box-shadow-color) !important;
+}
+
+.q-chip {
+  vertical-align: middle;
+  outline: 0;
+  position: relative;
+  max-width: 100%;
+  margin: 4px;
+  background: var(--q-color-primary) !important;
+  color: var(--st-background-color-1) !important;
+  padding: 3px 6px 3px 10px !important;
+  font-weight: normal !important;
+  font-size: 0.8em;
+}
+
+.stipple-core .q-time__clock-position, .stipple-core .q-date button, .stipple-core .q-date__calendar-item{
+  color: #000 !important;
+}
+
+
+/* ===================== Scrollbars ===================== */
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+*::-webkit-scrollbar-track {
+  border-radius: 5px;
+  background-color: var(--st-border-color-3);
+  border: none;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 5px;
+  background-color: var(--st-scrollbar-thumb);
+}
+
+/* ============ End of New theme rules ============= */
+
+[v-cloak] {
+  display: none;
+}
