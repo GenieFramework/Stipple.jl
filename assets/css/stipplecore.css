@@ -652,6 +652,7 @@ body > .q-loading-bar {
 :root.stipple-core body {
   color: var(--st-text-1);
   font-size: var(--st-font-size-normal);
+  font-family: DM Sans, DM Sans fallback, ui-sans-serif, system-ui, sans-serif;
 }
 
 /* ===================== HEADERS ===================== */
@@ -705,6 +706,13 @@ body > .q-loading-bar {
 }
 
 /* ===================== Components ===================== */
+.q-checkbox__bg{
+  border-color: var(--st-border-color-1) !important;
+}
+.q-radio__inner{
+  color: var(--st-border-color-1) !important;
+}
+
 .stipple-core .q-btn {
   color: var(--st-background-color-1) !important;
 }
