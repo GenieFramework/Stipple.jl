@@ -21,12 +21,31 @@
 
   [![Docs](https://img.shields.io/badge/stipple-docs-yellowgreen)](https://www.genieframework.com/docs/) [![current status](https://img.shields.io/badge/julia%20support-v1.6%20and%20up-dark%20green)](https://github.com/GenieFramework/Stipple.jl/blob/9530ccd4313d7a4e3da2351eb621152047bc5cbd/Project.toml#L32) [![Website](https://img.shields.io/website?url=https%3A%2F%2Fgenieframework.com&logo=genie)](https://www.genieframework.com/#stipple-section) [![Tests](https://img.shields.io/badge/build-passing-green)](https://github.com/GenieFramework/Stipple.jl/actions) [![Stipple Downloads](https://shields.io/endpoint?url=https://pkgs.genieframework.com/api/v1/badge/Stipple)](https://pkgs.genieframework.com?packages=Stipple) [![Tweet](https://img.shields.io/twitter/url?url=https%3A%2F%2Fgithub.com%2FGenieFramework%2FGenie.jl)](https://twitter.com/AppStipple)
 
-  
-  <p>Stipple is a reactive UI library for building interactive data applications in pure Julia.
-It uses <a href="https://github.com/GenieFramework/Genie.jl">Genie.jl</a> on the server side and <a href="https://vuejs.org/">Vue.js</a> on the client. Stipple uses a high performance MVVM architecture, which automatically synchronizes the state two-way
-(server -> client and client -> server) sending only JSON data over the wire. The Stipple package provides the fundamental communication layer, extending <i><b>Genie's</b></i> HTML API with a reactive component.</p>
+  <p>
+    <a href="https://www.genieframework.com/">
+      <img
+        src="https://github.com/GenieFramework/Genie.jl/raw/master/docs/content/img/genie.gif"
+        alt="Screenshot"
+        width="100%"
+      />
+    </a>
+  </p>
 </div>
 
+<p style="font-family:verdana;font-size:60%;margin-bottom:4%" align="center">
+<u>Julia data dashboard powered by Stipple and Genie. <a href="https://learn.genieframework.com/app-gallery">App gallery</a></u>
+</p>
+  
+Part of [Genie Framework](https://genieframework.com), Stipple is a reactive UI library for building interactive data applications in pure Julia.
+It uses <a href="https://github.com/GenieFramework/Genie.jl">Genie.jl</a> on the server side and <a href="https://vuejs.org/">Vue.js</a> on the client. Stipple uses a high performance architecture that automatically synchronizes the state two-way
+(server -> client and client -> server), sending only JSON data over the wire. The Stipple package provides the fundamental communication layer, extending <i><b>Genie's</b></i> HTML API with a reactive component.
+</div>
+
+
+To learn more about Stipple and Genie Framework, visit the [documentation](https://learn.genieframework.com/docs/guides), and the [app gallery](https://learn.genieframework.com/app-gallery).
+
+
+If you need help with anything, you can find us on [Discord](https://discord.com/invite/9zyZbD6J7H).
 
 ---
 
