@@ -579,7 +579,7 @@ end
     end
     
     t2 = T2(1, T1(2, 3))
-    t2_dict = JSON3.read(json(t2), Dict)
+    t2_dict = JSON3.read(Stipple.json(t2), Dict)
     
     Base.@kwdef struct T3
         c::Int = 1
