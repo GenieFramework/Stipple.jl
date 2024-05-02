@@ -115,7 +115,7 @@ export JSONParser, JSONText, json, @json, jsfunction, @jsfunction_str
 const config = Genie.config
 const channel_js_name = "window.CHANNEL"
 
-const OptDict = Dict{Symbol, Any}
+const OptDict = OrderedDict{Symbol, Any}
 opts(;kwargs...) = OptDict(kwargs...)
 
 const IF_ITS_THAT_LONG_IT_CANT_BE_A_FILENAME = 500
@@ -734,7 +734,7 @@ function _push!(vals::Pair{Symbol,T}, channel::String;
                 except::Union{Nothing,UInt,Vector{UInt}} = nothing,
                 restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T}
   try
-    webtransport().broadcast(channel, json(Dict("key" => julia_to_vue(vals[1]), "value" => Stipple.render(vals[2], vals[1]))); except, restrict)
+    webtransport().broadcast(channel, json(Dict("key" => vals[1], "value" => Stipple.render(vals[2], vals[1]))); except, restrict)
   catch ex
     @debug ex
     false
@@ -746,7 +746,7 @@ function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
                     except::Union{Nothing,UInt,Vector{UInt}} = nothing,
                     restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T,M<:ReactiveModel}
                     v = vals[2].r_mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
-  push!(app, Symbol(julia_to_vue(vals[1])) => v; channel, except, restrict)
+  push!(app, vals[1] => v; channel, except, restrict)
 end
 
 function Base.push!(app::M;
@@ -1091,17 +1091,12 @@ function attributes(kwargs::Union{Vector{<:Pair}, Base.Iterators.Pairs, Dict},
     end
 
     k_str == "inner" && (v = join(v))
-    v_isa_jsexpr = v isa Symbol || !isa(v, Union{AbstractString, Bool, Number})
-    attr_key = string((v_isa_jsexpr && ! startswith(k_str, ":") &&
-                ! (endswith(k_str, "!") || startswith(k_str, "v-") || startswith(k_str, "v" * Genie.config.html_parser_char_dash)) ? ":" : ""), k_str) |> Symbol
-    attr_val = if isa(v, Symbol) && ! startswith(k_str, ":")
-      Stipple.julia_to_vue(v)
-    elseif v isa Symbol || ! v_isa_jsexpr
-      v
-    else
-      js_attr(v)
-    end
-    attrs[attr_key] = attr_val
+
+    v_isa_jsexpr = !isa(v, Union{Symbol, AbstractString, Bool, Number})
+    attr_key = isa(v, Symbol) && !startswith(k_str, ":") && !endswith(k_str, "!") &&
+      !startswith(k_str, "v-") && !startswith(k_str, "v" * Genie.config.html_parser_char_dash) ? Symbol(":", k) : Symbol(k)
+
+    attrs[attr_key] = v_isa_jsexpr ? js_attr(v) : v
   end
 
   NamedTuple(attrs)
@@ -1113,10 +1108,6 @@ include("Pages.jl")
 
 #===#
 
-# function _deepcopy(r::R{T}) where T
-#   v_copy = deepcopy(r.o.val)
-#   :(R{$T}($v_copy, $(r.r_mode), $(r.no_backend_watcher), $(r.no_frontend_watcher), $(r.__source__)))
-# end
 _deepcopy(r::R{T}) where T = R(deepcopy(r.o.val), r.r_mode, r.no_backend_watcher, r.no_frontend_watcher)
 
 _deepcopy(x) = deepcopy(x)
