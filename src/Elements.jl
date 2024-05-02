@@ -56,8 +56,7 @@ function vue_integration(::Type{M};
                           transport::Module = Genie.WebChannels)::String where {M<:ReactiveModel}
   model = Base.invokelatest(M)
 
-  vue_app = replace(json(model |> Stipple.render), "\"{" => " {")
-  vue_app = replace(vue_app, "}\"" => "} ")
+  vue_app = json(model |> Stipple.render)
   vue_app = replace(vue_app, "\"$(getchannel(model))\"" => Stipple.channel_js_name)
 
   output =
