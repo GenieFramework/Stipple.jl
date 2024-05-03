@@ -141,11 +141,19 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
     result[field] = Stipple.jsrender(f, field)
   end
 
-  vue = Dict( :el => JSONText("rootSelector"),
-              :mixins => JSONText("[watcherMixin, reviveMixin, eventMixin]"),
-              :data => merge(result, client_data(app)))
-  for (f, field) in ((components, :components), (js_methods, :methods), (js_computed, :computed), (js_watch, :watch))
+  # convert :data to () => ({   })
+  data = JSON3.write(merge(result, client_data(app)))
+
+  vue = Dict(
+    :mixins => JSONText("[watcherMixin, reviveMixin, eventMixin, filterMixin]"),
+    :data => JSONText("() => ($data)")
+  )
+  for (f, field) in ((js_methods, :methods), (js_computed, :computed), (js_watch, :watch))
     js = join_js(f(app), ",\n    "; pre = strip)
+    if field == :watch
+      watch_auto = join_js(Stipple.js_watch_auto(app), ",\n    "; pre = strip)
+      watch_auto == "" || (js = join_js([js, watch_auto], ",\n    "))
+    end
     isempty(js) || push!(vue, field => JSONText("{\n    $js\n}"))
   end
   
@@ -155,6 +163,10 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
     (js_before_destroy, :beforeDestroy), (js_destroyed, :destroyed), (js_error_captured, :errorCaptured),)
 
     js = join_js(f(app), "\n\n    "; pre = strip)
+    if field == :created
+      created_auto = join_js(Stipple.js_created_auto(app), "\n\n    "; pre = strip)
+      created_auto == "" || (js = join_js([js, created_auto], "\n\n    "))
+    end
     isempty(js) || push!(vue, field => JSONText("function(){\n    $js\n}"))
   end
 

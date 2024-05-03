@@ -56,6 +56,37 @@ The Stipple ecosystem also includes:
 * [StipplePlotly.jl](https://github.com/GenieFramework/StipplePlotly.jl) - Plotting library for `Stipple.jl` based on [Plotly](https://plotly.com/javascript/)'s Graphing Library including event forwarding for interactive plots.
 * [StipplePlotlyExport.jl](https://github.com/GenieFramework/StipplePlotlyExport.jl) - add-on for `StipplePlotly.jl` to allow server side generation and exporting of plots. 
 * [StippleLatex.jl](https://github.com/GenieFramework/StippleLatex.jl) - support for reactive Latex content based on the [Vue-Katex](https://github.com/lucpotage/vue-katex) plugin. 
+## News: Vue 3 / Quasar 2
+
+From version 0.29 on Stipple has upgraded the front-end libraries to Vue3 / Quasar 2, as Vue-2 has reached its end-of-life.
+
+We have put lots of effort in making migration as easy as possible. Nevertheless, there are some places where advanced apps might need a little tweeking.
+
+## Main Changes for version >= v0.29
+
+First of all, basic applications continue to function properly without any changes.
+
+However, if you have developed applications with external plugins or components you might need to do some adaptations.
+We have introduced a vue2compat layer to make the migration as easy as possible.
+
+### Components
+- Components can no longer be registered in Vue, but rather in the app instance. If you are using legacy components, e.g. by including Vue libraries, you can verify whether they have been recognized by entering `vueLegacy` in the browser console once the page has been loaded (right-click -> 'Inspect'). Under the field "components" you will find the components to be registered. Registering is then done by adding `Stipple.register_global_component("<component name>", legacy = true)` to your app.
+- Vue-2 components often use `this.$set(this.field, key, value)` to set object fields, which is incompatible with Vue-3 syntax. Use a normal assignment instead, e.g. `field[key] = value`
+
+### Plugins
+If libraries install plugins, they need to be added to the app via `Stipple.add_plugin(MyApp, "<plugin name>")`.
+If you are using explicit models replace 'MyApp' by the model type, otherwise use the module's name.
+
+### Component Attributes
+Vue-2 syntax for synchronizing additional fields other than the v-model has changed from `<fieldname>.sync` to `v-model:<fieldname>`, e.g. from `:pagination.sync = "myvar` to `v-model:pagination = "myvar"`. In StippleUI we had offered "paginationsync = :myvar" which will be automatically translated to the new syntax. If want to explicitly enter the original form, you can do so by using the var"" syntax, " , e.g. `table(:mytable, var"v-model:pagination" = "test")`
+
+### Templates
+In Vue-3 `v-if` and `v-for` precedence have change. So if you use both attributes in one component make sure to split your component in a container with a `v-for` attribute and a component, e.g. `div` or `span` with a `v-if` attribute.
+In StippleUI syntax `v-if` corresponds to `@if("...")`and `v-for`  corresponds to `@for("...")`
+
+### More Migration Support 
+... can be found at the Quasar site: https://quasar.dev/start/upgrade-guide/
+and at the Vue site: https://v3-migration.vuejs.org/
 
 ## Installation
 
