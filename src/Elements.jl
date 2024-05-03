@@ -13,9 +13,84 @@ import Genie.Renderer.Html: HTMLString, normal_element
 
 export root, elem, vm, @if, @else, @elseif, @for, @text, @bind, @data, @on, @click, @showif, @slot
 export stylesheet, kw_to_str
+export add_plugins, remove_plugins
 
-# deprecated
-export @iif, @elsiif, @els, @recur
+const Plugins = Dict{String, Union{JSONText, AbstractDict}}
+PLUGINS = LittleDict{Union{Module, Type{<:ReactiveModel}}, Plugins}()
+
+
+function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Function; legacy::Bool = false)
+  add_plugins(parent, plugins(); legacy)
+end
+
+function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::AbstractDict; legacy::Bool = false)
+  if legacy
+    d = LittleDict()
+    for (plugin, options) in plugins
+      push!(d, "window.vueLegacy.plugins['$plugin'].plugin" => options)
+    end
+    plugins = d
+  end
+  if haskey(PLUGINS, parent)
+    merge!(PLUGINS[parent], plugins)
+  else
+    PLUGINS[parent] = plugins
+  end
+  PLUGINS
+end
+
+function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Union{String, Vector{String}}; legacy::Bool = false)
+  plugins isa String && (plugins = [plugins])
+  plugin_dict = if legacy
+    d = LittleDict()
+    for plugin in plugins
+      p = """window.vueLegacy.plugins["$plugin"]"""
+      plugin = "$p.plugin"
+      options = JSONText("($p.options) ? $p.options : {}")
+      push!(d, plugin => options)
+    end
+    d
+  else
+    LittleDict(p => Dict() for p in plugins)
+  end
+  PLUGINS[parent] = plugin_dict
+  PLUGINS
+end
+
+function remove_plugins(parent::Union{Module, Type{<:ReactiveModel}})
+  delete!(PLUGINS, parent)
+end
+
+function remove_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Union{String, Vector{String}})
+  haskey(PLUGINS, parent) || return PLUGINS
+  for plugin in (plugins isa String ? [plugins] : plugins)
+    delete!(PLUGINS[parent], plugin)
+  end
+  isempty(PLUGINS[parent]) && delete!(PLUGINS, parent)
+  PLUGINS
+end
+
+add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Union{Pair, AbstractVector{Pair}}) = add_plugins(parent, Dict(plugins))
+remove_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::AbstractDict) = remove_plugins(parent, collect(keys(plugins)))
+remove_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Function) = remove_plugins(parent, plugins())
+
+add_plugins(plugins) = add_plugins(Stipple, plugins)
+remove_plugins(plugins) = remove_plugins(Stipple, plugins)
+
+function plugins(::Type{M}) where M <: ReactiveModel
+  pplugins = values(filter(x -> x[1] isa Module, PLUGINS))
+  isempty(pplugins) && return ""
+  plugins = reduce(merge, pplugins)
+  app_plugins = get(PLUGINS, M, nothing)
+  app_plugins === nothing || merge!(plugins, app_plugins)
+  io = IOBuffer()
+  for (plugin, options) in plugins
+    print(io, options isa AbstractDict && isempty(options) ? "\n  app.use($plugin);" : "\n  app.use($plugin, $(js_attr(options)));")
+  end
+  String(take!(io))
+end
+
+plugins() = plugins(ReactiveModel)
 
 #===#
 
@@ -59,13 +134,48 @@ function vue_integration(::Type{M};
   vue_app = json(model |> Stipple.render)
   vue_app = replace(vue_app, "\"$(getchannel(model))\"" => Stipple.channel_js_name)
 
+  # determine global components (registered under ReactiveModel)
+  comps = Stipple.components(M)
+  if !isempty(comps)
+    comps = """
+      components = {$comps}
+      Object.entries(components).forEach(([key, value]) => {
+        app.component(key, value)
+      });
+    """
+  end
+
+  globalcomps = Stipple.components(ReactiveModel)
+  if !isempty(globalcomps)
+    globalcomps = """
+      components = {$globalcomps}
+      Object.entries(components).forEach(([key, value]) => {
+        app.component(key, value)
+      });
+    """
+  end
+
   output =
   string(
     "
 
   function initStipple(rootSelector){
-    Stipple.init($( core_theme ? "{theme: '$theme'}" : "" ));
-    window.$vue_app_name = window.GENIEMODEL = new Vue($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ));
+    // components = Stipple.init($( core_theme ? "{theme: '$theme'}" : "" ));
+    const app = Vue.createApp($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ))
+    /* Object.entries(components).forEach(([key, value]) => {
+      app.component(key, value)
+    }); */
+    Stipple.init( app, $( core_theme ? "{theme: '$theme'}" : "" ));
+    $globalcomps
+    $comps
+    // gather legacy global options
+    app.prototype = {}
+    $(plugins(M))
+    // apply legacy global options
+    Object.entries(app.prototype).forEach(([key, value]) => {
+      app.config.globalProperties[key] = value
+    });
+    window.$vue_app_name = window.GENIEMODEL = app.mount(rootSelector);
   } // end of initStipple
 
     "
