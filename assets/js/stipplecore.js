@@ -141,5 +141,29 @@
         (t = document.querySelector("html").classList).add.apply(t, ["stipple-core", e.theme ? e.theme : "stipple-blue"]);
       },
     };
+    function createThemeToggleButton(){
+      // Declare toggle function
+      window.toggleThemeMode = ()=>{
+          let htmlEl = document.querySelector("html");
+          let icon = document.querySelector("#theme-switch-icon");
+          let isDark = htmlEl.classList.contains('dark');
+          // swap theme class and icon
+          if( isDark ){
+              htmlEl.classList.remove("dark")
+              icon.innerHTML = "dark_mode"
+          }else{
+              htmlEl.classList.add("dark")
+              icon.innerHTML = "light_mode"
+          }
+      }
+      // Create ui element
+      let elementString = `<div onclick="toggleThemeMode()" class="theme-switch" style="position: absolute; right: 10px; top: 10px;font-size: 24px; cursor: pointer;">
+          <span id="theme-switch-icon" class="material-icons">dark_mode</span>
+      </div>`;
+      // Append to body
+      document.body.insertAdjacentHTML('beforeend', elementString);
+  }
+  createThemeToggleButton()
+
   },
 ]);
