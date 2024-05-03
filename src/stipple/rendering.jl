@@ -130,7 +130,7 @@ jsrender(r::Reactive, args...) = jsrender(getfield(getfield(r,:o), :val), args..
 Renders the Julia `ReactiveModel` `app` as the corresponding Vue.js JavaScript code.
 """
 function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
-  result = Dict{String,Any}()
+  result = OptDict()
 
   for field in fieldnames(typeof(app))
     f = getfield(app, field)
@@ -138,7 +138,7 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
     occursin(SETTINGS.private_pattern, String(field)) && continue
     f isa Reactive && f.r_mode == PRIVATE && continue
 
-    result[julia_to_vue(field)] = Stipple.jsrender(f, field)
+    result[field] = Stipple.jsrender(f, field)
   end
 
   # convert :data to () => ({   })

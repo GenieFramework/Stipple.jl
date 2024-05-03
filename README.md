@@ -21,12 +21,32 @@
 
   [![Docs](https://img.shields.io/badge/stipple-docs-yellowgreen)](https://www.genieframework.com/docs/) [![current status](https://img.shields.io/badge/julia%20support-v1.6%20and%20up-dark%20green)](https://github.com/GenieFramework/Stipple.jl/blob/9530ccd4313d7a4e3da2351eb621152047bc5cbd/Project.toml#L32) [![Website](https://img.shields.io/website?url=https%3A%2F%2Fgenieframework.com&logo=genie)](https://www.genieframework.com/#stipple-section) [![Tests](https://img.shields.io/badge/build-passing-green)](https://github.com/GenieFramework/Stipple.jl/actions) [![Stipple Downloads](https://shields.io/endpoint?url=https://pkgs.genieframework.com/api/v1/badge/Stipple)](https://pkgs.genieframework.com?packages=Stipple) [![Tweet](https://img.shields.io/twitter/url?url=https%3A%2F%2Fgithub.com%2FGenieFramework%2FGenie.jl)](https://twitter.com/AppStipple)
 
-  
-  <p>Stipple is a reactive UI library for building interactive data applications in pure Julia.
-It uses <a href="https://github.com/GenieFramework/Genie.jl">Genie.jl</a> on the server side and <a href="https://vuejs.org/">Vue.js</a> on the client. Stipple uses a high performance MVVM architecture, which automatically synchronizes the state two-way
-(server -> client and client -> server) sending only JSON data over the wire. The Stipple package provides the fundamental communication layer, extending <i><b>Genie's</b></i> HTML API with a reactive component.</p>
+  <p>
+    <a href="https://www.genieframework.com/">
+      <img
+        src="https://github.com/GenieFramework/Genie.jl/raw/master/docs/content/img/genie.gif"
+        alt="Screenshot"
+        width="100%"
+      />
+    </a>
+  </p>
 </div>
 
+<p style="font-family:verdana;font-size:60%;margin-bottom:4%" align="center">
+<u>Julia data dashboard powered by Stipple and Genie. <a href="https://learn.genieframework.com/app-gallery">App gallery</a></u>
+</p>
+  
+Part of [Genie Framework](https://genieframework.com), Stipple is a reactive UI library for building interactive data applications in pure Julia.
+It uses <a href="https://github.com/GenieFramework/Genie.jl">Genie.jl</a> on the server side and <a href="https://vuejs.org/">Vue.js</a> on the client. Stipple uses a high performance architecture that automatically synchronizes the state two-way (server -> client and client -> server), sending only JSON data over the wire.
+</div>
+
+Besides the low-code API provided by Stipple, you can also use [Genie Builder](https://learn.genieframework.com/docs/genie-builder/quick-start) to build your reactive UIs. Genie Builder is a plugin for VSCode to help you create interactive Genie apps much faster using its visual drag-and-drop editor.
+
+
+To learn more about Stipple and Genie Framework, visit the [documentation](https://learn.genieframework.com/docs/guides), and the [app gallery](https://learn.genieframework.com/app-gallery).
+
+
+If you need help with anything, you can find us on [Discord](https://discord.com/invite/9zyZbD6J7H).
 
 ---
 
@@ -75,281 +95,49 @@ Stipple can be added from the GitHub repo, via `Pkg`:
 pkg> add Stipple
 ```
 
-## Examples
+## Example
 
-### Example 1
+This snippet below illustrates the structure of a reactive UI built with Stipple. See its [documentation page](https://learn.genieframework.com/docs/reference/reactive-ui/introduction) for a detailed explanation.
 
 ```julia
-using Stipple
+module App
+#setup of the Genie Framework environment
+using GenieFramework
+@genietools
 
-@vars Name begin
-  name::R{String} = "World!"
+# reactive code
+@app begin
+    # reactive variables synchronised between server and browser
+    @in N = 0
+    @out msg = ""
+    #reactive handler, executes code when N changes
+    @onchange N begin
+        msg = "N = $N"
+    end
 end
 
+# UI components
 function ui()
-  [
-    h1([
-      "Hello "
-      span("", @text(:name))
-    ])
-
-    p([
-      "What is your name? "
-      input("", placeholder="Type your name", @bind(:name))
-    ])
-  ]
-end
-
-route("/") do
-  global model # this is for debugging purposes only and should be deleted in a productive setting
-  model = Name |> init
-  page(model, ui()) |> html
-end
-
-up() # or `up(open_browser = true)` to automatically open a browser window/tab when launching the app
-```
-
-This will start a web app on port 8000 and we'll be able to access it in the browser at http://localhost:8000
-
-Once the page is loaded, we'll be able to interact with the data and see how it's synced.
-
-We can update the name value from Julia, and see it reflected on the page, at the REPL:
-
-```julia
-julia> model.name[] = "Adrian" # updating the property in Julia will update the values on the front
-```
-
-On the webpage, we can change the name in the input field and confirm that it has been updated in Julia:
-
-```julia
-julia> model.name[] # will have the same value as what you have inputted on the web page
-```
-
-You can see a quick video demo here:
-<https://www.dropbox.com/s/50t5bqd2zk4ehxo/basic_stipple_3.mp4?dl=0>
-
-The Stipple presentation from JuliaCon 2020 is available here (8 minutes):
-<https://www.dropbox.com/s/6atyctgomsqwjki/stipple_exported.mp4?dl=0>
-
-While the above example is perfect for scipting, full web apps rely on handler functions to modify valuesin order to allow for multiple users to connect to the server and not to mix the values. This is shown in the following Example.
-### Example 2
-
-This snippet illustrates how to build a reactive UI based on StippleUI. Below you find three different ways of triggering handlers.
-- Every input in the input field triggers a function that sets the inverted input string in the output field.
-- Hitting the `Enter` key in the input field inverts the output string.
-- Pressing of the action button inverts the output string.
-StippleUI 
-```julia
-using Stipple, StippleUI
-
-@vars Inverter begin
-  process = false
-  input = ""
-  # you can explicitly define the type of the variable
-  output::String = "", READONLY
-end
-
-function handlers(model)
-  on(model.input) do input
-      model.output[] = input |> reverse
-  end
-
-  onbutton(model.process) do
-      model.output[] = model.output[] |> reverse
-  end
-
-  model
-end
-
-function ui()
-  row(cell(class = "st-module", [
-    textfield(class = "q-my-md", "Input", :input, hint = "Please enter some words", @on("keyup.enter", "process = true"))
-
-    btn(class = "q-my-md", "Action!", @click(:process), color = "primary")
-    
-    card(class = "q-my-md", [
-      card_section(h2("Output"))
-      card_section("Variant 1: {{ output }}")
-      card_section(["Variant 2: ", span(class = "text-red", @text(:output))])
-    ])
-  ]))
-end
-
-route("/") do
-  model = Inverter |> init |> handlers
-  page(model, ui()) |> html
-end
-
-Genie.isrunning(:webserver) || up()
-```
-<img src="docs/content/img/Example2.png">
-
-## Choosing the transport layer: WebSockets or HTTP
-
-
-By default Stipple will attempt to use WebSockets for real time data sync between backend and frontend.
-However, in some cases WebSockets support might not be available on the host. In this case, Stipple can be
-switched to use regular HTTP for data sync, using frontend polling with AJAX (1s polling interval by default).
-Stipple can be configured to use AJAX/HTTP by passing the `transport` param to the `init()` method, ex:
-
-```julia
-model = Stipple.init(Name(), transport = Genie.WebThreads)
-```
-
-The current available options for `transport` are `Genie.WebChannels` (default, using WebSockets) and
-`Genie.WebThreads` (using HTTP/AJAX).
-
-Given that polling generates quite a number of extra requests, it can be desirable to disable automatic
-logging of requests. This can be done using `Genie.config.log_requests = false`.
-
-Support for `WebThreads` and request logging disabling has been introduced in Genie v1.14 and Stipple v0.8.
-
-### First example changed to use `WebThreads`
-
-```julia
-using Stipple
-
-Genie.config.log_requests = false
-
-@vars Name begin
-  name::R{String} = "World!"
-end
-
-function ui(model)
     [
-      h1([
-        "Hello "
-        span("", @text(:name))
-      ])
-
-      p([
-        "What is your name? "
-        input("", placeholder="Type your name", @bind(:name))
-      ])
+        cell([
+                p("Enter a number")
+                # variables are bound to a component using their symbol name
+                textfield("N", :N )
+            ])
+        cell([
+                bignumber("The value of N is", :N)
+            ])
     ]
 end
 
-route("/") do
-  model = init(Name, transport = Genie.WebThreads)
-  page(model, ui()) |> html
-end
-
-Genie.isrunning(:webserver) || up()
-```
-## ReactiveTools API
-
-In the previous releases we silently introduced the new ReactiveTools API.
-It offers a simple macro language to define variables and handlers.
-```julia
-using Stipple, Stipple.ReactiveTools
-using StippleUI
-
-@appname Inverter
-
-@app begin
-  @in process = false
-  @out output = ""
-  @in input = ""
-
-  @onchange input begin
-    output = input |> reverse
-  end
-
-  @onbutton process begin
-    output = output |> reverse
-  end
-end
-
-function ui()
-  row(cell(class = "st-module", [
-    textfield(class = "q-my-md", "Input", :input, hint = "Please enter some words", @on("keyup.enter", "process = true"))
-
-    btn(class = "q-my-md", "Action!", @click(:process), color = "primary")
-    
-    card(class = "q-my-md", [
-      card_section(h2("Output"))
-      card_section("Variant 1: {{ output }}")
-      card_section(["Variant 2: ", span(class = "text-red", @text(:output))])
-    ])
-  ]))
-end
-
-route("/") do
-  model = @init
-  page(model, ui()) |> html
-end
-
-Genie.isrunning(:webserver) || up()
-```
-The ReactiveTools API has a different way of defining app variables. `@in` defines variables that can be modified by the client, `@out` (or `@readonly`) defines variables that are only shown, but not modified by the client. For variables that are invisible to the client we have `@private`.
-In this API the model is no longer defined explicitly, instead the macro `@init` instantiates a model including handlers. The model is attached to the current module, therefore it is only possible to define one model per module.
-
-The new API syntax is also available for explicit models and it is possible to mix it with the classical API. For this purpose we have defined `@handlers` that only cares about the definition of handler functions.
-The above example could also be defined as.
-
-
-```julia
-@vars Inverter begin
-  process = false
-  input = ""
-  output = "", READONLY
-end
-
-@handlers Inverter begin
-  @onchange input begin
-    output = input |> reverse
-  end
-
-  @onbutton process begin
-    output = output |> reverse
-  end
-end
-
-route("/") do
-  model = Inverter |> init |> handlers
-  page(model, ui()) |> html
-end
-```
-But also the `@app` macro is available for explicit models
-```julia
-@app Inverter begin
-  @in process = false
-  @out output = ""
-  @in input = ""
-
-  @onchange input begin
-    output = input |> reverse
-  end
-
-  @onbutton process begin
-    output = output |> reverse
-  end
+# definition of root route
+@page("/", ui)
 end
 ```
 
-Note:
-In previous versions, `@in` and `@out` defined variables in the current name space. That led to name collisions with already existing constants, functions or keywords. We therefore decided to remove that feature. The old definitions are still available as `@in!` and `@out!` instead.
+<img src="https://learn.genieframework.com/assets/docs/ui/enternumber.png" width="200px" style="margin-left:auto;margin-right:auto"> </img>
 
-## Demos
-### StippleDemos
-We have dedicated a Github Page to Stipple Demos with many downloadable examples at:
-<https://github.com/GenieFramework/StippleDemos>
-(Not all of them are updated to the latest changes of the API yet. But most of them should be functional.)
-### German Credits visualisation dashboard
-
-<img src="https://genieframework.com/githubimg/Screenshot_German_Credits.png" width="800">
-
-The full application is available at:
-<https://github.com/GenieFramework/Stipple-Demo-GermanCredits>
-
-### Iris Flowers dataset k-Means clustering dashboard
-
-<img src="https://genieframework.com/githubimg/Screenshot_Iris_Data.png" width="800">
-
-The full application is available at:
-<https://github.com/GenieFramework/Stipple-Demo-IrisClustering>
-
-### More information
+## More information
 
 While Stipple/StippleUI documentation is still evolving, you can find help and many small examples via docstrings of the functions.
 

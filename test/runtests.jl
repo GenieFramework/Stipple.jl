@@ -566,3 +566,32 @@ end
     remove_css(my_css, byname = true)
     @test findfirst(==(my_css), Stipple.Layout.THEMES[]) === nothing
 end
+
+@testset "parsing" begin
+    struct T1
+        c::Int
+        d::Int
+    end
+    
+    struct T2
+        a::Int
+        b::T1
+    end
+    
+    t2 = T2(1, T1(2, 3))
+    t2_dict = JSON3.read(Stipple.json(t2), Dict)
+    
+    Base.@kwdef struct T3
+        c::Int = 1
+        d::Int = 3
+    end
+    
+    Base.@kwdef struct T4
+        a::Int = 1
+        b::T3 = T3()
+    end
+    
+    @test Stipple.stipple_parse(T2, t2_dict) == T2(1, T1(2, 3))
+    @test Stipple.stipple_parse(T3, Dict()) == T3(1, 3)
+    @test Stipple.stipple_parse(T4, Dict()) == T4(1, T3(1, 3))
+end

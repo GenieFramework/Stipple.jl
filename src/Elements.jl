@@ -132,8 +132,6 @@ function vue_integration(::Type{M};
   model = Base.invokelatest(M)
 
   vue_app = json(model |> Stipple.render)
-  # vue_app = replace(vue_app, "\"{" => " {")
-  # vue_app = replace(vue_app, "}\"" => "} ")
   vue_app = replace(vue_app, "\"$(getchannel(model))\"" => Stipple.channel_js_name)
 
   # determine global components (registered under ReactiveModel)
