@@ -898,36 +898,44 @@ function transform(expr, vars::Vector{Symbol}, test_fn::Function, replace_fn::Fu
   replaced_vars = Symbol[]
   ex = postwalk(expr) do x
       if x isa Expr
-          if x.head == :call
-            f = x
-            while f.args[1] isa Expr && f.args[1].head == :ref
-              f = f.args[1]
-            end
-            if f.args[1] isa Symbol && test_fn(f.args[1])
-              union!(push!(replaced_vars, f.args[1]))
-              f.args[1] = replace_fn(f.args[1])
-            end
-            if x.args[1] == :notify && length(x.args) == 2
-              if @capture(x.args[2], __model__.fieldname_[])
-                x.args[2] = :(__model__.$fieldname)
-              elseif x.args[2] isa Symbol
-                x.args[2] = :(__model__.$(x.args[2]))
-              end
-            end
-          elseif x.head == :kw && test_fn(x.args[1])
-            x.args[1] = replace_fn(x.args[1])
-          elseif x.head == :parameters
-            for (i, a) in enumerate(x.args)
-              if a isa Symbol && test_fn(a)
-                new_a = replace_fn(a)
-                x.args[i] = new_a in vars ? :($(Expr(:kw, new_a, :(__model__.$new_a[])))) : new_a
-              end
-            end
-          elseif x.head == :ref && length(x.args) == 2 && x.args[2] == :!
-            @capture(x.args[1], __model__.fieldname_[]) && (x.args[1] = :(__model__.$fieldname))
-          elseif x.head == :macrocall && x.args[1] == Symbol("@push")
-            x = :(push!(__model__))
+        if x.head == :call
+          f = x
+          while f.args[1] isa Expr && f.args[1].head == :ref
+            f = f.args[1]
           end
+          if f.args[1] isa Symbol && test_fn(f.args[1])
+            union!(push!(replaced_vars, f.args[1]))
+            f.args[1] = replace_fn(f.args[1])
+          end
+          if x.args[1] == :notify && length(x.args) == 2
+            if @capture(x.args[2], __model__.fieldname_[])
+              x.args[2] = :(__model__.$fieldname)
+            elseif x.args[2] isa Symbol
+              x.args[2] = :(__model__.$(x.args[2]))
+            end
+          end
+        elseif x.head == :kw && test_fn(x.args[1])
+          x.args[1] = replace_fn(x.args[1])
+        elseif x.head == :parameters
+          for (i, a) in enumerate(x.args)
+            if a isa Symbol && test_fn(a)
+              new_a = replace_fn(a)
+              x.args[i] = new_a in vars ? :($(Expr(:kw, new_a, :(__model__.$new_a[])))) : new_a
+            end
+          end
+        elseif x.head == :ref && length(x.args) >= 2 || x.head == :.
+            # if model field is indexed by at least one index argument or if a property is referenced
+            # remove [] after __model__, because getindex, setindex!, getproperty, and setproperty!
+            # handle Reactive vars correctly and call notify after the update in case of set routines
+            @capture(x.args[1], __model__.fieldname_[]) && (x.args[1] = :(__model__.$fieldname))
+        elseif x.head == :macrocall && x.args[1] ∈ (Symbol("@push"), Symbol("@run"))
+          head = Symbol(String(x.args[1])[2:end])
+          args = filter(x -> !isa(x, LineNumberNode), x.args[2:end])
+          x = Expr(:call, head, :__model__)
+          length(args) > 0 && push!(x.args, Stipple.expressions_to_args(args)...)
+        elseif x.head == :(=) && x.args[1] isa Expr && x.args[1].head == :macrocall && x.args[1].args[1] == Symbol("@js_str")
+          x.args[1] = :(__model__[$(x.args[1].args[end])])
+        end
       end
       x
   end
