@@ -1093,8 +1093,8 @@ function attributes(kwargs::Union{Vector{<:Pair}, Base.Iterators.Pairs, Dict},
     k_str == "inner" && (v = join(v))
 
     v_isa_jsexpr = !isa(v, Union{Symbol, AbstractString, Bool, Number})
-    
-    attr_key = v_isa_jsexpr && !startswith(k_str, ":") && !endswith(k_str, "!") &&
+
+    attr_key = (v isa Symbol || v_isa_jsexpr) && !startswith(k_str, ":") && !endswith(k_str, "!") &&
       !startswith(k_str, "v-") && !startswith(k_str, "v" * Genie.config.html_parser_char_dash) ? Symbol(":", k_str) : Symbol(k_str)
 
     attrs[attr_key] = v_isa_jsexpr ? js_attr(v) : v
