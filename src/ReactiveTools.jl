@@ -928,11 +928,13 @@ function transform(expr, vars::Vector{Symbol}, test_fn::Function, replace_fn::Fu
             # remove [] after __model__, because getindex, setindex!, getproperty, and setproperty!
             # handle Reactive vars correctly and call notify after the update in case of set routines
             @capture(x.args[1], __model__.fieldname_[]) && (x.args[1] = :(__model__.$fieldname))
-        elseif x.head == :macrocall && x.args[1] ∈ (Symbol("@push"), Symbol("@run"))
-          head = Symbol(String(x.args[1])[2:end])
+        elseif x.head == :macrocall && x.args[1] ∈ (Symbol("@push"), Symbol("@push!"), Symbol("@run"))
+          head = x.args[1] == Symbol("@push") ? :push! : Symbol(String(x.args[1])[2:end])
           args = filter(x -> !isa(x, LineNumberNode), x.args[2:end])
-          x = Expr(:call, head, :__model__)
-          length(args) > 0 && push!(x.args, Stipple.expressions_to_args(args)...)
+          has_params = length(args) > 0 && args[1] isa Expr && args[1].head == :parameters
+          args = has_params ? vcat([head, args[1]], :__model__, args[2:end]) : vcat([head, :__model__], args)
+          x = Expr(:call)
+          x.args = Stipple.expressions_to_args(args)
         elseif x.head == :(=) && x.args[1] isa Expr && x.args[1].head == :macrocall && x.args[1].args[1] == Symbol("@js_str")
           x.args[1] = :(__model__[$(x.args[1].args[end])])
         end
