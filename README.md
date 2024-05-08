@@ -58,11 +58,14 @@ The Stipple ecosystem also includes:
 * [StippleLatex.jl](https://github.com/GenieFramework/StippleLatex.jl) - support for reactive Latex content based on the [Vue-Katex](https://github.com/lucpotage/vue-katex) plugin. 
 ## News: Vue 3 / Quasar 2
 
-From version 0.29 on Stipple has upgraded the front-end libraries to Vue3 / Quasar 2, as Vue-2 has reached its end-of-life.
+From version 0.30 on Stipple has upgraded the front-end libraries to Vue3 / Quasar 2, as Vue-2 has reached its end-of-life.
+We recommend to use at least v0.30.3, as we have fixed some relevant bugs.
+(Some of these bugs were also present in previous Vue2 versions.
+we therefore recommend to use at least v0.29.1 for legacy Vue2 support.)
 
 We have put lots of effort in making migration as easy as possible. Nevertheless, there are some places where advanced apps might need a little tweeking.
 
-## Main Changes for version >= v0.29
+## Main Changes for version >= v0.30
 
 First of all, basic applications continue to function properly without any changes.
 
