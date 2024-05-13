@@ -475,9 +475,9 @@ macro on(arg, expr, preprocess = nothing)
   isevent = expr isa QuoteNode && expr.value isa Symbol
   v = if isevent
       if preprocess === nothing
-          :("function(event) { handle_event(event, '$($(esc(expr)))') }")
+          :("(event) => { handle_event(event, '$($(esc(expr)))') }")
       else
-          :(replace("""function(event) {
+          :(replace("""(event) => {
               const preprocess = (event) => { """ * replace($preprocess, '"' => "\\\"") * """; return event }
               handle_event(preprocess(event), '$($(esc(expr)))')
           }""", '\n' => ';'))
