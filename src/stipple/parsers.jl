@@ -54,9 +54,14 @@ end
 function stipple_parse(::Type{Symbol}, s::String)
   Symbol(s)
 end
+
 # untyped Dicts to typed Dict's
-function stipple_parse(::Type{<:AbstractDict{K, V}}, value::AbstractDict{String, <:Any}) where {K, V}
-  Dict( zip(Vector{K}(stipple_parse(Vector{K}, collect(keys(value)))), stipple_parse(Vector{V}, collect(values(value)))) )
+function stipple_parse(D::Type{<:AbstractDict{K, V}}, value::AbstractDict) where {K, V}
+  if D isa LittleDict
+    D( stipple_parse(Vector{K}, collect(keys(value))), stipple_parse(Vector{V}, collect(values(value))) )
+  else
+    D( zip(Vector{K}(stipple_parse(Vector{K}, collect(keys(value)))), stipple_parse(Vector{V}, collect(values(value)))) )
+  end
 end
 
 # String to Integer
