@@ -424,7 +424,7 @@ macro type(modelname, storage)
         $output
       end
     end)
-    $modelname() = $modelconst()
+    $modelname(; kwargs...) = $modelconst(; kwargs...)
     Stipple.get_concrete_type(::Type{$modelname}) = $modelconst
 
     delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
