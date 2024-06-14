@@ -807,9 +807,7 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
 
     VUEJS = Genie.Configuration.isprod() ? "vue.global.prod.js" : "vue.global.js"
     Genie.Assets.add_fileroute(assets_config, VUEJS; basedir = normpath(joinpath(@__DIR__, "..")))
-
     Genie.Assets.add_fileroute(assets_config, "stipplecore.js"; basedir = normpath(joinpath(@__DIR__, "..")))
-
     Genie.Assets.add_fileroute(assets_config, "vue_filters.js"; basedir = normpath(joinpath(@__DIR__, "..")))
     Genie.Assets.add_fileroute(assets_config, "watchers.js"; basedir = normpath(joinpath(@__DIR__, "..")))
 
