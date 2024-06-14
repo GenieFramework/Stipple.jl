@@ -29,29 +29,45 @@ pages() = _pages
 
 function Page(  route::Union{Route,String};
                 view::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Vector{<:AbstractString},Function},
-                model::Union{M,Function,Nothing,Expr} = Stipple.init(EmptyModel),
+                model::Union{M,Function,Nothing,Expr,Module,Type{M}} = Stipple.init(EmptyModel),
                 layout::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Nothing,Function} = nothing,
                 context::Module = @__MODULE__,
+                debounce::Int = Stipple.JS_DEBOUNCE_TIME,
+                transport::Module = Stipple.WEB_TRANSPORT[],
+                core_theme::Bool = true,
                 kwargs...
               ) where {M<:ReactiveModel}
 
-  view =  if isa(view, ParsedHTMLString) || isa(view, Vector{<:AbstractString})
-            string(view)
+  model = if isa(model, Expr)
+            Core.eval(context, model)
+          elseif isa(model, Module)
+            context = model
+            () -> @eval(context, Stipple.ReactiveTools.@init(debounce = $debounce, transport = $transport, core_theme = $core_theme))
+          elseif model isa DataType
+            () -> @eval(context, Stipple.ReactiveTools.@init($model; debounce = $debounce, transport = $transport, core_theme = $core_theme))
+          else
+            model
+          end
+  view =  if isa(view, Function) || isa(view, ParsedHTMLString)
+            view
+          elseif isa(view, Vector{ParsedHTMLString})
+            ParsedHTMLString(view)
+          elseif isa(view, Vector{<:AbstractString})
+            join(view)
           elseif isa(view, AbstractString)
             isfile(view) ? filepath(view) : view
           else
             view
           end
 
-  isa(model, Expr) && (model = Core.eval(context, model))
   route = isa(route, String) ? Route(; method = GET, path = route) : route
   layout = isa(layout, String) && length(layout) < Stipple.IF_ITS_THAT_LONG_IT_CANT_BE_A_FILENAME && isfile(layout) ? filepath(layout) :
             isa(layout, ParsedHTMLString) || isa(layout, String) ? string(layout) :
               layout
 
-  route.action = () -> (isa(view, Function) ? html! : html)(view; layout, context, model = (isa(model,Function) ? Base.invokelatest(model) : model), kwargs...)
+  route.action = () -> (isa(view, Function) ? html! : html)(view; layout, context, model = (isa(model, Function) ? Base.invokelatest(model) : model), kwargs...)
 
-  page = Page(route, view, typeof((isa(model,Function) || isa(model,DataType) ? Base.invokelatest(model) : model)), layout, context)
+  page = Page(route, view, typeof((isa(model, Function) || isa(model, DataType) ? Base.invokelatest(model) : model)), layout, context)
 
   if isempty(_pages)
     push!(_pages, page)

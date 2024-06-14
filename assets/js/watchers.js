@@ -1,35 +1,60 @@
 const watcherMixin = {
   methods: {
-    $withoutWatchers: function (cb, filter) {
-      let ww = (filter === null) ? this._watchers : [];
-
-      if (typeof(filter) == "string") {
-        this._watchers.forEach((w) => { if (w.expression == filter) {ww.push(w)} } )
-      } else { // if it is a true regex
-        this._watchers.forEach((w) => { if (w.expression.match(filter)) {ww.push(w)} } )
+    // Acknowledgement: copied watchIgnorable from VueUse
+    watchIgnorable: function (source,cb,options) {
+      const ignoreCount = Vue.ref(0)
+      const syncCount = Vue.ref(0)
+      const syncStop = Vue.watch(
+        source,
+        () => {
+          syncCount.value++
+        },
+        { ...options, flush: 'sync' },
+      )
+      const stop = Vue.watch( source,
+        (...args) => {
+          const ignore = ignoreCount.value > 0 && 
+            ignoreCount.value === syncCount.value
+    
+          ignoreCount.value = 0
+          syncCount.value = 0
+    
+          if (!ignore) {
+            cb(...args)
+          }
+        }, 
+        options 
+      )
+      const ignoreUpdates = (updater) => {
+        const prev = syncCount.value
+        updater()
+        const changes = syncCount.value - prev
+        // Add sync changes done in updater
+        ignoreCount.value += changes
       }
-
-      const watchers = ww.map((watcher) => ({ cb: watcher.cb, sync: watcher.sync }));
-
-      for (let index in ww) {
-        ww[index].cb = () => null;
-        ww[index].sync = true;
+      const ignorePrevAsyncUpdates = () => {
+        // All sync changes til are ignored
+        ignoreCount.value = syncCount.value
       }
-
-      cb();
-
-      for (let index in ww) {
-        ww[index].cb = watchers[index].cb;
-        ww[index].sync = watchers[index].sync;
+      return { 
+        ignoreUpdates,
+        ignorePrevAsyncUpdates,
+        stop: () => {
+          syncStop()
+          stop()
+        }
       }
-
     },
 
     updateField: function (field, newVal) {
       if (field=='js_app') { newVal(); return }
 
       try {
-        this.$withoutWatchers(()=>{this[field]=newVal},"function(){return this." + field + "}");
+        if (this['_ignore_' + field]) {
+          this['_ignore_' + field](()=>{this[field] = newVal});
+        } else {
+          this[field] = newVal
+        }
         if (field=='js_model' && typeof(this[field])=='function') { 
           this[field]()
           this[field] = null
@@ -54,6 +79,14 @@ const watcherMixin = {
 
 const reviveMixin = {
   methods: {
+    revive_jsfunction: function (k, v) {
+      if ( (typeof v==='object') && (v!=null) && (v.jsfunction) ) {
+        return Function(v.jsfunction.arguments, v.jsfunction.body)
+      } else {
+        return v
+      }
+    },
+    // deprecated, kept for compatibility
     revive_payload: function(obj) {
       if (typeof obj === 'object') {
         for (var key in obj) {
@@ -67,6 +100,22 @@ const reviveMixin = {
         }
       }
       return obj;
+    }
+  }
+}
+
+const eventMixin = {
+  methods: {
+    handle_event: function (event_data, event_handler, mode) {
+      if (event_data === undefined) { event_data = {} }
+      console.debug('event: ' + JSON.stringify(event_data) + ":" + event_handler)
+      if (mode=='addclient') { event_data._addclient = true}
+      Genie.WebChannels.sendMessageTo(window.CHANNEL, 'events', {
+          'event': {
+              'name': event_handler,
+              'event': event_data
+          }
+      })
     }
   }
 }

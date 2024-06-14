@@ -1,3 +1,17 @@
+"""
+        mutable struct Reactive{T} <: Observables.AbstractObservable{T}
+
+`Reactive` is a the base type for variables that are handled by a model. It is an `AbstractObservable` of which the content is 
+obtained by appending `[]` after the `Reactive` variable's name.
+For convenience, `Reactive` can be abbreviated by `R`.
+
+There are several methods of creating a Reactive variable:
+- `r = Reactive(8)`
+- `r = Reactive{Float64}(8)`
+- `r = Reactive{Float64}(8, READONLY)`
+- `r = Reactive{String}("Hello", PRIVATE)`
+- `r = Reactive(jsfunction"console.log('Hi')", JSFUNCTION)`
+"""
 mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   o::Observables.Observable{T}
   r_mode::Int
@@ -15,6 +29,20 @@ mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   Reactive{Any}(@nospecialize(o)) = new{Any}(Observable{Any}(o), PUBLIC, false, false, "")
 end
 
+"""
+        mutable struct Reactive{T} <: Observables.AbstractObservable{T}
+
+`Reactive` is a the base type for variables that are handled by a model. It is an `AbstractObservable` of which the content is 
+obtained by appending `[]` after the `Reactive` variable's name.
+For convenience, `Reactive` can be abbreviated by `R`.
+
+There are several methods of creating a Reactive variable:
+- `r = Reactive(8)`
+- `r = Reactive{Float64}(8)`
+- `r = Reactive{Float64}(8, READONLY)`
+- `r = Reactive{String}("Hello", PRIVATE)`
+- `r = Reactive(jsfunction"console.log('Hi')", JSFUNCTION)`
+"""
 Reactive(r::T, arg1, args...) where T = convert(Reactive{T}, (r, arg1, args...))
 Reactive(r::T) where T = convert(Reactive{T}, r)
 
@@ -93,6 +121,9 @@ end
 import Base.map!
 @inline Base.map!(f::F, r::Reactive, os...; update::Bool=true) where F = Base.map!(f::F, getfield(r, :o), os...; update=update)
 
+Base.axes(r::Reactive, args...) = Base.axes(getfield(getfield(r, :o), :val), args...)
+Base.lastindex(r::Reactive, args...) = Base.lastindex(getfield(getfield(r, :o), :val), args...)
+
 const R = Reactive
 const PUBLIC = 1
 const PRIVATE = 2
@@ -122,7 +153,7 @@ end
 """
 abstract type ReactiveModel end
 
-export @vars, @add_vars, @define_mixin
+export @vars, @add_vars, @define_mixin, @clear_cache, clear_cache, @clear_route, clear_route
 
 # deprecated
 export @reactive, @reactive!, @old_reactive, @old_reactive!
@@ -140,13 +171,16 @@ function setchannel(m::M, value) where {M<:ReactiveModel}
   setfield!(m, CHANNELFIELDNAME, ChannelName(value))
 end
 
-const AUTOFIELDS = [:isready, :isprocessing] # not DRY but we need a reference to the auto-set fields
+const AUTOFIELDS = [:isready, :isprocessing, :fileuploads] # not DRY but we need a reference to the auto-set fields
+const INTERNALFIELDS = [CHANNELFIELDNAME, :modes__] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin
-  modes__::LittleDict{Symbol, Int} = LittleDict(:modes__ => PRIVATE, :channel__ => PRIVATE)
   channel__::Stipple.ChannelName = Stipple.channelfactory()
+  modes__::LittleDict{Symbol, Int} = LittleDict(:modes__ => PRIVATE, :channel__ => PRIVATE)
   isready::Stipple.R{Bool} = false
   isprocessing::Stipple.R{Bool} = false
+  channel_::String = "" # not sure what this does if it's empty
+  fileuploads::Stipple.R{Dict{AbstractString,AbstractString}} = Dict{AbstractString,AbstractString}()
 end
 
 @mix Stipple.@with_kw mutable struct old_reactive
@@ -171,15 +205,17 @@ function model_to_storage(::Type{T}, prefix = "", postfix = "") where T# <: Reac
     f = f in [:channel__, :modes__, AUTOFIELDS...] ? f : Symbol(prefix, f, postfix)
     storage[f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = Stipple._deepcopy($v))
   end
+  # fix channel field, which is not reconstructed properly by the code above
+  storage[:channel__] = :(channel__::String = Stipple.channelfactory())
 
   storage
 end
 
-function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict; keep_channel = true)
-  m1 = eval(haskey(storage_1, :modes__) ? storage_1[:modes__].args[end] : LittleDict{Symbol, Any}())
-  m2 = eval(haskey(storage_2, :modes__) ? storage_2[:modes__].args[end] : LittleDict{Symbol, Any}())
+function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict; keep_channel = true, context::Module)
+  m1 = haskey(storage_1, :modes__) ? Core.eval(context, storage_1[:modes__].args[end]) : LittleDict{Symbol, Int}()
+  m2 = haskey(storage_2, :modes__) ? Core.eval(context, storage_2[:modes__].args[end]) : LittleDict{Symbol, Int}()
   modes = merge(m1, m2)
-  
+
   keep_channel && haskey(storage_2, :channel__) && (storage_2 = delete!(copy(storage_2), :channel__))
   for (field, expr) in storage_2
     field == :modes__ && continue
@@ -192,7 +228,7 @@ function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict; keep_ch
     end
   end
   storage = merge(storage_1, storage_2)
-  storage[:modes__] = :(modes__::Stipple.LittleDict{Symbol, Any} = $modes)
+  storage[:modes__] = :(modes__::Stipple.LittleDict{Symbol, Int} = $modes)
 
   storage
 end
@@ -231,18 +267,30 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
       # change type T to type R{T}
       var.args[2] = :($Rtype{$(var.args[2])})
     else
-      # add type definition `::R{T}` to the var where T is the type of the default value
-      T = @eval m typeof($(expr.args[2]))
-      expr.args[1] = :($var::$Rtype{$T})
-      Rtype
+      try
+        # add type definition `::R{T}` to the var where T is the type of the default value
+        T = @eval m typeof($(expr.args[2]))
+        expr.args[1] = :($var::$Rtype{$T})
+        Rtype
+      catch ex
+        # if the default value is not defined, we can't infer the type
+        # so we just set the type to R{Any}
+        :($Rtype{Any})
+      end
     end
     expr.args[2] = :($type($(expr.args[2]), $mode, false, false, $source))
   end
 
   # if no type is defined, set the type of the default value
   if expr.args[1] isa Symbol
-    T = @eval m typeof($(expr.args[2]))
-    expr.args[1] = :($(expr.args[1])::$T)
+    try
+      T = @eval m typeof($(expr.args[2]))
+      expr.args[1] = :($(expr.args[1])::$T)
+    catch ex
+      # if the default value is not defined, we can't infer the type
+      # so we just set the type to Any
+      expr.args[1] = :($(expr.args[1])::Any)
+    end
   end
   expr.args[1].args[1], expr
 end
@@ -327,7 +375,7 @@ macro var_storage(expr, new_inputmode = :auto)
           end
 
           mixin_storage = @eval __module__ Stipple.model_to_storage($(e.args[2]), $prefix, $postfix)
-          storage = merge_storage(storage, mixin_storage)
+          storage = merge_storage(storage, mixin_storage; context = __module__)
         end
         :modes__, e
       end
@@ -335,6 +383,27 @@ macro var_storage(expr, new_inputmode = :auto)
     end
 
     esc(:($storage))
+end
+
+Stipple.Genie.Router.delete!(M::Type{<:ReactiveModel}) = Stipple.Genie.Router.delete!(Symbol(Stipple.routename(M)))
+
+function clear_route(M::Type{<:ReactiveModel})
+  Stipple.Genie.Router.delete!(M)
+  return nothing
+end
+
+macro clear_route(App)
+  :(Stipple.clear_route($(esc(App))))
+end
+
+function clear_cache(M::Type{<:ReactiveModel})
+  delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: M, keys(Stipple.DEPS)))
+  Stipple.Genie.Router.delete!(M)
+  return nothing
+end
+
+macro clear_cache(App)
+  :(Stipple.clear_cache($(esc(App))))
 end
 
 macro type(modelname, storage)
@@ -349,13 +418,13 @@ macro type(modelname, storage)
     # Revise seems to call the macro line by line internally for code tracking purposes.
     # Interstingly, Revise will not populate output.args in that case and will generate an empty model.
     # We use this to our advantage and prevent additional model generation when length(output.args) <= 1.
-    local is_called_by_revise = length(output.args) <= 1 
+    local is_called_by_revise = length(output.args) <= 1
     eval(quote
       $is_called_by_revise || Stipple.@kwredef mutable struct $$modelconst_qn <: $$modelname
         $output
       end
     end)
-    $modelname() = $modelconst()
+    $modelname(; kwargs...) = $modelconst(; kwargs...)
     Stipple.get_concrete_type(::Type{$modelname}) = $modelconst
 
     delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
@@ -413,7 +482,7 @@ macro add_vars(modelname, expr, new_inputmode = :auto)
   storage = @eval(__module__, Stipple.@var_storage($expr, $new_inputmode))
   new_storage = if isdefined(__module__, modelname)
     old_storage = @eval(__module__, Stipple.model_to_storage($modelname))
-    ReactiveTools.merge_storage(old_storage, storage)
+    ReactiveTools.merge_storage(old_storage, storage; context = __module__)
   else
     storage
   end

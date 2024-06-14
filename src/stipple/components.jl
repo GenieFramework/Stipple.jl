@@ -12,16 +12,20 @@ This is usually needed for registering components provided by Stipple plugins.
 Stipple.register_components(HelloPie, StippleCharts.COMPONENTS)
 ```
 """
-function register_components(model::Type{M}, keysvals::AbstractVector) where {M<:ReactiveModel}
-  haskey(COMPONENTS, model) || (COMPONENTS[model] = Any[])
-  push!(COMPONENTS[model], keysvals...)
+function register_components(model::Type{M}, keysvals::Union{AbstractVector, AbstractDict}; legacy::Bool = false) where {M<:ReactiveModel}
+  haskey(COMPONENTS, model) || (COMPONENTS[model] = LittleDict())
+  for kv in keysvals
+    (k, v) = kv isa Pair ? kv : (kv, kv)
+    legacy && (v = "window.vueLegacy.components['$v']")
+    delete!(COMPONENTS[model], k)
+    push!(COMPONENTS[model], k => v)
+  end
+  COMPONENTS
 end
 
-function register_components(model::Type{M}, args...) where {M<:ReactiveModel}
-  for a in args
-    register_components(model, a)
-  end
-end
+register_components(model::Type{<:ReactiveModel}, args...; legacy::Bool = false) = register_components(model, collect(args); legacy)
+
+register_global_components(args...; legacy::Bool = false) = register_components(ReactiveModel, args...; legacy)
 
 """
     function components(m::Type{M})::String where {M<:ReactiveModel}
@@ -32,9 +36,10 @@ JSON representation of the Vue.js components registered for the `ReactiveModel` 
 function components(m::Type{M})::String where {M<:ReactiveModel}
   haskey(COMPONENTS, m) || return ""
 
-  replace(Dict(COMPONENTS[m]...) |> json, "\""=>"") |> string
+  # change to LittleDict as the order of components can be essential
+  json(LittleDict(k => JSONText(v) for (k, v) in COMPONENTS[m]))[2:end - 1]
 end
 
 function components(app::M)::String where {M<:ReactiveModel}
-  components(M)
+  components(get_abstract_type(M))
 end

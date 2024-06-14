@@ -69,9 +69,8 @@ serialize!(d, T::Type) = serialize!(d, serializedfields(T))
 serialize(d, key) = serialize!(deepcopy(d), key)
 
 function serializedfields(T::Type)
-  ff = string.(fieldnames(T))
-  index = collect(occursin.("_", ff) .& .! startswith.(ff, "_") .& .! occursin.("__", ff))
-  ff[index]
+  ff = String[String(f) for f in fieldnames(T)]
+  index = occursin.("_", ff) .& .! startswith.(ff, "_") .& .! occursin.("__", ff)
   union([Symbol(match(r"[^_]+", f).match) for f in ff[index]])
 end
 

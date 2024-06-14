@@ -7,11 +7,90 @@ module Elements
 
 import Genie
 using Stipple
+using MacroTools
 
 import Genie.Renderer.Html: HTMLString, normal_element
 
-export root, elem, vm, @iif, @elsiif, @els, @recur, @text, @bind, @data, @on, @click, @showif
+export root, elem, vm, @if, @else, @elseif, @for, @text, @bind, @data, @on, @click, @showif, @slot
 export stylesheet, kw_to_str
+export add_plugins, remove_plugins
+
+const Plugins = Dict{String, Union{JSONText, AbstractDict}}
+PLUGINS = LittleDict{Union{Module, Type{<:ReactiveModel}}, Plugins}()
+
+
+function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Function; legacy::Bool = false)
+  add_plugins(parent, plugins(); legacy)
+end
+
+function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::AbstractDict; legacy::Bool = false)
+  if legacy
+    d = LittleDict()
+    for (plugin, options) in plugins
+      push!(d, "window.vueLegacy.plugins['$plugin'].plugin" => options)
+    end
+    plugins = d
+  end
+  if haskey(PLUGINS, parent)
+    merge!(PLUGINS[parent], plugins)
+  else
+    PLUGINS[parent] = plugins
+  end
+  PLUGINS
+end
+
+function add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Union{String, Vector{String}}; legacy::Bool = false)
+  plugins isa String && (plugins = [plugins])
+  plugin_dict = if legacy
+    d = LittleDict()
+    for plugin in plugins
+      p = """window.vueLegacy.plugins["$plugin"]"""
+      plugin = "$p.plugin"
+      options = JSONText("($p.options) ? $p.options : {}")
+      push!(d, plugin => options)
+    end
+    d
+  else
+    LittleDict(p => Dict() for p in plugins)
+  end
+  PLUGINS[parent] = plugin_dict
+  PLUGINS
+end
+
+function remove_plugins(parent::Union{Module, Type{<:ReactiveModel}})
+  delete!(PLUGINS, parent)
+end
+
+function remove_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Union{String, Vector{String}})
+  haskey(PLUGINS, parent) || return PLUGINS
+  for plugin in (plugins isa String ? [plugins] : plugins)
+    delete!(PLUGINS[parent], plugin)
+  end
+  isempty(PLUGINS[parent]) && delete!(PLUGINS, parent)
+  PLUGINS
+end
+
+add_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Union{Pair, AbstractVector{Pair}}) = add_plugins(parent, Dict(plugins))
+remove_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::AbstractDict) = remove_plugins(parent, collect(keys(plugins)))
+remove_plugins(parent::Union{Module, Type{<:ReactiveModel}}, plugins::Function) = remove_plugins(parent, plugins())
+
+add_plugins(plugins) = add_plugins(Stipple, plugins)
+remove_plugins(plugins) = remove_plugins(Stipple, plugins)
+
+function plugins(::Type{M}) where M <: ReactiveModel
+  pplugins = values(filter(x -> x[1] isa Module, PLUGINS))
+  isempty(pplugins) && return ""
+  plugins = reduce(merge, pplugins)
+  app_plugins = get(PLUGINS, M, nothing)
+  app_plugins === nothing || merge!(plugins, app_plugins)
+  io = IOBuffer()
+  for (plugin, options) in plugins
+    print(io, options isa AbstractDict && isempty(options) ? "\n  app.use($plugin);" : "\n  app.use($plugin, $(js_attr(options)));")
+  end
+  String(take!(io))
+end
+
+plugins() = plugins(ReactiveModel)
 
 #===#
 
@@ -50,20 +129,53 @@ function vue_integration(::Type{M};
                           core_theme::Bool = true,
                           debounce::Int = Stipple.JS_DEBOUNCE_TIME,
                           transport::Module = Genie.WebChannels)::String where {M<:ReactiveModel}
-
   model = Base.invokelatest(M)
 
-  vue_app = replace(json(model |> Stipple.render), "\"{" => " {")
-  vue_app = replace(vue_app, "}\"" => "} ")
+  vue_app = json(model |> Stipple.render)
   vue_app = replace(vue_app, "\"$(getchannel(model))\"" => Stipple.channel_js_name)
+
+  # determine global components (registered under ReactiveModel)
+  comps = Stipple.components(M)
+  if !isempty(comps)
+    comps = """
+      components = {$comps}
+      Object.entries(components).forEach(([key, value]) => {
+        app.component(key, value)
+      });
+    """
+  end
+
+  globalcomps = Stipple.components(ReactiveModel)
+  if !isempty(globalcomps)
+    globalcomps = """
+      components = {$globalcomps}
+      Object.entries(components).forEach(([key, value]) => {
+        app.component(key, value)
+      });
+    """
+  end
 
   output =
   string(
     "
 
   function initStipple(rootSelector){
-    Stipple.init($( core_theme ? "{theme: 'stipple-blue'}" : "" ));
-    window.$vue_app_name = new Vue($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ));
+    // components = Stipple.init($( core_theme ? "{theme: '$theme'}" : "" ));
+    const app = Vue.createApp($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ))
+    /* Object.entries(components).forEach(([key, value]) => {
+      app.component(key, value)
+    }); */
+    Stipple.init( app, $( core_theme ? "{theme: '$theme'}" : "" ));
+    $globalcomps
+    $comps
+    // gather legacy global options
+    app.prototype = {}
+    $(plugins(M))
+    // apply legacy global options
+    Object.entries(app.prototype).forEach(([key, value]) => {
+      app.config.globalProperties[key] = value
+    });
+    window.$vue_app_name = window.GENIEMODEL = app.mount(rootSelector);
   } // end of initStipple
 
     "
@@ -93,14 +205,14 @@ function vue_integration(::Type{M};
 
   window.parse_payload = function(payload){
     if (payload.key) {
-      window.$(vue_app_name).revive_payload(payload)
-      window.$(vue_app_name).updateField(payload.key, payload.value);
+       window.$(vue_app_name).updateField(payload.key, payload.value);
     }
   }
 
   function app_ready() {
+      $vue_app_name.channel_ = window.CHANNEL;
       $vue_app_name.isready = true;
-
+      Genie.Revivers.addReviver(window.$(vue_app_name).revive_jsfunction);
       $(transport == Genie.WebChannels &&
       "
       try {
@@ -154,7 +266,7 @@ function kw_to_str(; kwargs...)
 end
 
 """
-    @iif(expr)
+    @if(expr)
 
 Generates `v-if` Vue.js code using `expr` as the condition.
 <https://vuejs.org/v2/api/#v-if>
@@ -162,16 +274,17 @@ Generates `v-if` Vue.js code using `expr` as the condition.
 ### Example
 
 ```julia
-julia> span("Bad stuff's about to happen", class="warning", @iif(:warning))
+julia> span("Bad stuff's about to happen", class="warning", @if(:warning))
 "<span class=\"warning\" v-if='warning'>Bad stuff's about to happen</span>"
 ```
 """
 macro iif(expr)
   Expr(:kw, Symbol("v-if"), esc_expr(expr))
 end
+const var"@if" = var"@iif"
 
-"""
-    @elsiif(expr)
+  """
+    @elseif(expr)
 
 Generates `v-else-if` Vue.js code using `expr` as the condition.
 <https://vuejs.org/v2/api/#v-else-if>
@@ -179,16 +292,17 @@ Generates `v-else-if` Vue.js code using `expr` as the condition.
 ### Example
 
 ```julia
-julia> span("An error has occurred", class="error", @elsiif(:error))
+julia> span("An error has occurred", class="error", @elseif(:error))
 "<span class=\"error\" v-else-if='error'>An error has occurred</span>"
 ```
 """
 macro elsiif(expr)
   Expr(:kw, Symbol("v-else-if"), esc_expr(expr))
 end
+const var"@elseif" = var"@elsiif"
 
 """
-    @els(expr)
+    @else(expr)
 
 Generates `v-else` Vue.js code using `expr` as the condition.
 <https://vuejs.org/v2/api/#v-else>
@@ -196,29 +310,55 @@ Generates `v-else` Vue.js code using `expr` as the condition.
 ### Example
 
 ```julia
-julia> span("Might want to keep an eye on this", class="notice", @els(:notice))
+julia> span("Might want to keep an eye on this", class="notice", @else(:notice))
 "<span class=\"notice\" v-else='notice'>Might want to keep an eye on this</span>"
 ```
 """
 macro els(expr)
   Expr(:kw, Symbol("v-else"), esc_expr(expr))
 end
+const var"@else" = var"@els"
 
 """
 Generates `v-for` directive to render a list of items based on an array.
 <https://vuejs.org/v2/guide/list.html#Mapping-an-Array-to-Elements-with-v-for>
 
-### Example
+`@for` supports both js expressions as String or a Julia expression with Vectors or Dicts
 
+## Example
+
+### Javascript
 ```julia
-julia> p(" {{todo}} ", class="warning", @recur(:"todo in todos"))
-"<p v-for='todo in todos'>\n {{todo}} \n</p>\n"
+julia> p(" {{todo}} ", class="warning", @for("todo in todos"))
+\"\"\"
+<p v-for='todo in todos'>
+    {{todo}}
+</p>
+\"\"\"
 ```
+### Julia expression
+```julia
+julia> dict = Dict(:a => "b", :c => 4);
+julia> ul(li("k: {{ k }}, v: {{ v }}, i: {{ i }}", @for((v, k, i) in dict)))
+\"\"\"
+<ul>
+    <li v-for="(v, k, i) in {'a':'b','c':4}">
+        k: {{ k }}, v: {{ v }}, i: {{ i }}
+    </li>
+</ul>
+\"\"\"
+```
+Note the inverted order of value, key and index compared to Stipple destructuring.
+It is also possible to loop over `(v, k)` or `v`; index will always be zero-based
 
 """
 macro recur(expr)
+  expr isa Expr && expr.head == :call && expr.args[1] == :in && (expr.args[2] = string(expr.args[2]))
+  expr = (MacroTools.@capture(expr, y_ in z_)) ? :("$($y) in $($z isa Union{AbstractDict, AbstractVector} ? Stipple.js_attr($z) : $z)") : :("$($expr)")
+
   Expr(:kw, Symbol("v-for"), esc_expr(expr))
 end
+const var"@for" = var"@recur"
 
 """
     @text(expr)
@@ -328,18 +468,19 @@ Sometimes preprocessing of the events is necessary, e.g. to add or skip informat
 ```
 """
 macro on(arg, expr, preprocess = nothing)
-  kw = Symbol("v-on:", arg isa String ? arg : arg isa QuoteNode ? arg.value : arg.head == :vect ? join(lstrip.(string.(arg.args), ':'), '.') : 
+  preprocess isa QuoteNode && preprocess == :(:addclient) && (preprocess = "event._addclient = true")
+  kw = Symbol("v-on:", arg isa String ? arg : arg isa QuoteNode ? arg.value : arg.head == :vect ? join(lstrip.(string.(arg.args), ':'), '.') :
     throw("Value '$arg' for `arg` not supported. `arg` should be of type Symbol, String, or Vector{Union{String, Symbol}}"))
 
   isevent = expr isa QuoteNode && expr.value isa Symbol
   v = if isevent
       if preprocess === nothing
-          :("function(event) { handle_event(event, '$($(esc(expr)))') }")
+          :("(event) => { handle_event(event, '$($(esc(expr)))') }")
       else
-          :(replace("""function(event) {
+          :(replace("""(event) => {
               const preprocess = (event) => { """ * replace($preprocess, '"' => "\\\"") * """; return event }
               handle_event(preprocess(event), '$($(esc(expr)))')
-          }'""", '\n' => ';'))
+          }""", '\n' => ';'))
       end
   else
       esc_expr(expr)
@@ -397,6 +538,65 @@ macro showif(expr)
   Expr(:kw, Symbol("v-show"), esc_expr(expr))
 end
 
+
+"""
+    hyphenate(expr)
+
+Convert minus operations in expressions into join-operations with '-'
+
+### Example
+```julia
+julia> :(a-b-c) |> hyphenate
+Symbol("a-b-c")
+```
+"""
+function hyphenate(@nospecialize expr)
+  if expr isa Expr && expr.head == :call && expr.args[1] == :-
+    x = expr.args[2]
+    Symbol(x isa Expr ? hyphenate(x) : x isa QuoteNode ? x.value : x, '-', join(expr.args[3:end], '-'))
+  else
+    expr
+  end
+end
+
+hyphenate(expr...) = hyphenate.(expr)
+
+"""
+    @slot(slotname)
+
+Add a v-slot attribute to a template.
+
+### Example
+
+```julia
+julia> template(@slot(:header), [cell("Header")])
+"<template v-slot:header><div class=\"st-col col\">Header</div></template>"
+```
+"""
+macro slot(slotname)
+  slotname isa Expr && (slotname = hyphenate(slotname))
+  slotname isa QuoteNode && (slotname = slotname.value)
+  Expr(:kw, Symbol("v-slot:$slotname"), "") |> esc
+end
+
+"""
+    @slot(slotname, varname)
+
+Add a v-slot attribute with a variable name to a template.
+
+### Example
+
+```julia
+julia> template(@slot(:body, :props), ["{{ props.value }}"])
+"<template v-slot:body=\"props\">{{ props.value }}</template>"
+```
+"""
+macro slot(slotname, varname)
+  slotname isa Expr && (slotname = hyphenate(slotname))
+  slotname isa QuoteNode && (slotname = slotname.value)
+  Expr(:kw, Symbol("v-slot:$slotname"), varname) |> esc
+end
+
 #===#
 
 """
@@ -411,8 +611,8 @@ julia> stylesheet("https://fonts.googleapis.com/css?family=Material+Icons")
 "<link href=\"https://fonts.googleapis.com/css?family=Material+Icons\" rel=\"stylesheet\" />"
 ```
 """
-function stylesheet(href::String; args...) :: ParsedHTMLString
-  Genie.Renderer.Html.link(href=href, rel="stylesheet", args...)
+function stylesheet(href::String; kwargs...) :: ParsedHTMLString
+  Genie.Renderer.Html.link(href=href, rel="stylesheet"; kwargs...)
 end
 
 end

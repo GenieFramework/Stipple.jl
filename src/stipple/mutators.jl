@@ -25,7 +25,7 @@ function callwatchers(field, val, keys...; notify)
 
       continue
     end
-    
+
     # compatibility with Observables 0.5
     f = x isa Pair ? x[2] : x
 
@@ -33,18 +33,32 @@ function callwatchers(field, val, keys...; notify)
       try
         Base.invokelatest(f, val)
       catch ex
-        @error "Error attempting to invoke handler $count for field $field with value $val"
-        @error "" exception=(ex, catch_backtrace())
-        Genie.Configuration.isdev() && rethrow(ex)
+        error_message = """
+
+        Error attempting to invoke handler.
+
+          Handler:
+          $(methods(f))
+          $( code_lowered(f, (typeof(val),)) )
+
+          Type of argument:
+          $((isa(field, Reactive) ? field[] : field) |> typeof)
+
+          Value:
+          $val
+
+          Exception:
+          $ex
+
+        """
+        @error error_message exception=(ex, catch_backtrace())
+
+        rethrow(ex)
       end
     end
 
     count += 1
   end
-end
-
-function Base.setindex!(r::Reactive{T}, val, args::Vector{Int}; notify=(x)->true) where T
-  setindex_withoutwatchers!(r, val, args...)
 end
 
 """

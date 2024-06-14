@@ -15,11 +15,78 @@ existing Vue.js libraries.
 """
 module Stipple
 
-using Logging, Mixers, Random, Reexport, Requires, Dates
+using PrecompileTools
+const PRECOMPILE = Ref(false)
+const ALWAYS_REGISTER_CHANNELS = Ref(true)
+const USE_MODEL_STORAGE = Ref(true)
+
+"""
+Disables the automatic storage and retrieval of the models in the session.
+Useful for large models.
+"""
+function enable_model_storage(enable::Bool = true)
+  USE_MODEL_STORAGE[] = enable
+end
+
+"""
+@using_except(expr)
+
+using statement while excluding certain names
+
+### Example
+```
+using Parent.MyModule: x, y
+```
+will import all names from Parent.MyModule except `x` and `y`. Currently suports only a single module.
+"""
+macro using_except(expr)
+  # check validity
+  expr isa Expr && (expr.args[1] == :(:) || (expr.args[1].head == :call && expr.args[1].args[1] == :(:))) || return
+
+  # determine module name and list of excluded symbols
+  m, excluded = expr.args[1] == :(:) ? (expr.args[2], Symbol[expr.args[3]]) : (expr.args[1].args[2], Symbol[s for s in vcat([expr.args[1].args[3]], expr.args[2:end])])
+
+  # convert m.args to list of Symbols
+  if m isa Expr
+      m.args[2] = m.args[2].value
+      while m.args[1] isa Expr
+          pushfirst!(m.args, m.args[1].args[1]);
+          m.args[2] = m.args[2].args[2].value
+      end
+  end
+
+  m_name = m isa Expr ? m.args[end] : m
+
+  # as a first step use only the module name
+  # by constructing `using Parent.MyModuleName: MyModule`
+  expr = :(using dummy1: dummy2)
+  expr.args[1].args[1].args = m isa Expr ? m.args : Any[m]
+  expr.args[1].args[2].args[1] = m_name
+
+  # execute the using statement
+  M = Core.eval(__module__, :($expr; $m_name))
+
+  # determine list of all exported names
+  nn = filter!(x -> Base.isexported(M, x) && ! (x ∈ excluded) && isdefined(M, x), names(M; all = true, imported = true))
+
+  # convert the list of symbols to list of imported names
+  args = [:($(Expr(:., n))) for n in nn]
+
+  # re-use previous expression and insert the names to be imported
+  expr.args[1].args = pushfirst!(args, expr.args[1].args[1])
+
+  @debug(expr)
+  expr
+end
+
+
+using Logging, Mixers, Random, Reexport, Dates, Tables
 
 @reexport using Observables
-@reexport using Genie
-@reexport using Genie.Renderer.Html
+@reexport @using_except Genie: download
+import Genie.Router.download
+@reexport @using_except Genie.Renderers.Html: mark, div, time, view, render, Headers, menu
+export render, htmldiv, js_attr
 @reexport using JSON3
 @reexport using StructTypes
 @reexport using Parameters
@@ -31,7 +98,7 @@ export setchannel, getchannel
 isempty(methods(notify, Observables)) && (Base.notify(observable::AbstractObservable) = Observables.notify!(observable))
 
 include("ParsingTools.jl")
-include("ModelStorage.jl")
+USE_MODEL_STORAGE[] && include("ModelStorage.jl")
 include("NamedTuples.jl")
 
 include("stipple/reactivity.jl")
@@ -39,6 +106,7 @@ include("stipple/json.jl")
 include("stipple/undefined.jl")
 include("stipple/assets.jl")
 include("stipple/converters.jl")
+include("stipple/print.jl")
 
 using .NamedTuples
 
@@ -47,7 +115,7 @@ export JSONParser, JSONText, json, @json, jsfunction, @jsfunction_str
 const config = Genie.config
 const channel_js_name = "window.CHANNEL"
 
-const OptDict = Dict{Symbol, Any}
+const OptDict = OrderedDict{Symbol, Any}
 opts(;kwargs...) = OptDict(kwargs...)
 
 const IF_ITS_THAT_LONG_IT_CANT_BE_A_FILENAME = 500
@@ -56,6 +124,40 @@ const LAST_ACTIVITY = Dict{Symbol, DateTime}()
 const PURGE_TIME_LIMIT = Ref{Period}(Day(1))
 const PURGE_NUMBER_LIMIT = Ref(1000)
 const PURGE_CHECK_DELAY = Ref(60)
+
+const DEBOUNCE = LittleDict{Type{<:ReactiveModel}, LittleDict{Symbol, Any}}()
+
+"""
+    debounce(M::Type{<:ReactiveModel}, fieldnames::Union{Symbol, Vector{Symbol}}, debounce::Union{Int, Nothing} = nothing)
+
+Add field-specific debounce times.
+"""
+function debounce(M::Type{<:ReactiveModel}, fieldnames::Union{Symbol, Vector{Symbol}, NTuple{N, Symbol} where N}, debounce::Union{Int, Nothing} = nothing)
+  if debounce === nothing
+    haskey(DEBOUNCE, M) || return
+    d = DEBOUNCE[M]
+    if fieldnames isa Symbol
+      delete!(d, fieldnames)
+    else
+      for v in fieldnames
+        delete!(d, v)
+      end
+    end
+    isempty(d) && delete!(DEBOUNCE, M)
+  else
+    d = get!(LittleDict{Symbol, Any}, DEBOUNCE, M)
+    if fieldnames isa Symbol
+      d[fieldnames] = debounce
+    else
+      for v in fieldnames
+        d[v] = debounce
+      end
+    end
+  end
+  return
+end
+
+debounce(M::Type{<:ReactiveModel}, ::Nothing) = delete!(DEBOUNCE, M)
 
 """
 `function sorted_channels()`
@@ -136,28 +238,39 @@ function setmode! end
 function deletemode! end
 function init_storage end
 
+include("Tools.jl")
 include("ReactiveTools.jl")
 
 #===#
 
+if !isdefined(Base, :get_extension)
+  using Requires
+end
+
 function __init__()
-  Genie.config.websockets_server = true
+  if (get(ENV, "STIPPLE_TRANSPORT", "webchannels") |> lowercase) == "webthreads"
+    webtransport!(Genie.WebThreads)
+  else
+    Genie.config.websockets_server = true
+  end
+  deps_routes(core_theme = true)
 
-  @require OffsetArrays  = "6fe1bfb0-de20-5000-8ca7-80f57d26f881" function convertvalue(targetfield::Union{Ref{T}, Reactive{T}}, value) where T <: OffsetArrays.OffsetArray
-    a = stipple_parse(eltype(targetfield), value)
+  @static if !isdefined(Base, :get_extension)
+    @require OffsetArrays  = "6fe1bfb0-de20-5000-8ca7-80f57d26f881" begin
+      include(joinpath(@__DIR__, "..", "ext", "StippleOffsetArraysExt.jl"))
+    end
 
-    # if value is not an OffsetArray use the offset of the current array
-    if ! isa(value, OffsetArrays.OffsetArray)
-      o = targetfield[].offsets
-      OffsetArrays.OffsetArray(a, OffsetArrays.Origin(1 .+ o))
-    # otherwise use the existing value
-    else
-      a
+    @require DataFrames  = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0" begin
+      include(joinpath(@__DIR__, "..", "ext", "StippleDataFramesExt.jl"))
+    end
+
+    @require JSON  = "682c06a0-de6a-54ab-a142-c8b1cf79cde6" begin
+      include(joinpath(@__DIR__, "..", "ext", "StippleJSONExt.jl"))
     end
   end
-
-  deps_routes(core_theme = true)
 end
+
+function rendertable end
 
 #===#
 
@@ -233,20 +346,26 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
   isempty(jsfunction) &&
     (jsfunction = "Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal, 'sesstoken': document.querySelector(\"meta[name='sesstoken']\")?.getAttribute('content')}});")
 
+  output = IOBuffer()
   if fieldname == :isready
-    output = """
-      $vue_app_name.\$watch(function(){return this.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true});
-    """
+    print(output, """
+      // Don't remove this line: due to a bug we need to have a \$-sign in this function;
+          ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true}));
+      """)
   else
-    output = """
-      $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true});
-    """
+    AM = get_abstract_type(M)
+    debounce = get(get(DEBOUNCE, AM, Dict{Symbol, Any}()), fieldname, debounce)
+    print(output, debounce == 0 ?
+      """
+          ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true}));
+      """ : 
+      """
+          ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true}));
+      """
+    )
   end
-  # in production mode vue does not fill `this.expression` in the watcher, so we do it manually
-  Genie.Configuration.isprod() &&
-    (output *= "$vue_app_name._watchers[$vue_app_name._watchers.length - 1].expression = 'function(){return this.$fieldname}'")
 
-  output *= "\n\n"
+  String(take!(output))
 end
 
 #===#
@@ -278,6 +397,21 @@ end
 
 function channeldefault() :: Union{String,Nothing}
   params(CHANNELPARAM, (haskey(ENV, "$CHANNELPARAM") ? (Genie.Router.params!(CHANNELPARAM, ENV["$CHANNELPARAM"])) : nothing))
+end
+function channeldefault(::Type{M}) where M<:ReactiveModel
+  haskey(ENV, "$CHANNELPARAM") && (Genie.Router.params!(CHANNELPARAM, ENV["$CHANNELPARAM"]))
+  haskey(params(), CHANNELPARAM) && return params(CHANNELPARAM)
+
+  if ! haskey(Genie.Router.params(), :CHANNEL) && ! haskey(Genie.Router.params(), :ROUTE)
+    return nothing
+  end
+
+  model_id = Symbol(Stipple.routename(M))
+
+  USE_MODEL_STORAGE[] || return nothing
+
+  stored_model = Stipple.ModelStorage.Sessions.GenieSession.get(model_id, nothing)
+  stored_model === nothing ? nothing : getfield(stored_model, Stipple.CHANNELFIELDNAME)
 end
 
 @nospecialize
@@ -318,12 +452,14 @@ function deletemode!(modes, fieldnames::Symbol...)
 end
 
 function init_storage()
+  ch = channelfactory()
+
   LittleDict{Symbol, Expr}(
-    CHANNELFIELDNAME =>
-      :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = Stipple.channelfactory()),
-    :modes__ => :(modes__::Stipple.LittleDict{Symbol, Any} = Stipple.LittleDict{Symbol, Any}()),
+    CHANNELFIELDNAME => :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = $ch),
+    :modes__ => :(modes__::Stipple.LittleDict{Symbol,Int} = Stipple.LittleDict{Symbol,Int}()),
     :isready => :(isready::Stipple.R{Bool} = false),
-    :isprocessing => :(isprocessing::Stipple.R{Bool} = false)
+    :isprocessing => :(isprocessing::Stipple.R{Bool} = false),
+    :fileuploads => :(fileuploads::Stipple.R{Dict{AbstractString,AbstractString}} = Dict{AbstractString,AbstractString}())
   )
 end
 
@@ -354,13 +490,14 @@ frontend and perform the 2-way backend-frontend data sync. Returns the instance 
 hs_model = Stipple.init(HelloPie)
 ```
 """
-function init(::Type{M};
+function init(t::Type{M};
               vue_app_name::S = Stipple.Elements.root(M),
               endpoint::S = vue_app_name,
-              channel::Union{Any,Nothing} = channeldefault(),
+              channel::Union{Any,Nothing} = channeldefault(t),
               debounce::Int = JS_DEBOUNCE_TIME,
               transport::Module = Genie.WebChannels,
-              core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
+              core_theme::Bool = true,
+              always_register_channels::Bool = ALWAYS_REGISTER_CHANNELS[])::M where {M<:ReactiveModel, S<:AbstractString}
 
   webtransport!(transport)
   AM = get_abstract_type(M)
@@ -370,34 +507,33 @@ function init(::Type{M};
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
   ok_response = "OK"
 
-  channel = if channel !== nothing
-    setchannel(model, channel)
-  elseif hasproperty(model, CHANNELFIELDNAME)
-    getchannel(model)
-  else
-    setchannel(model, channelfactory())
-  end
+  channel === nothing && (channel = channelfactory())
+  setchannel(model, channel)
+
+  # make sure we store the channel name in the model
+  USE_MODEL_STORAGE[] && Stipple.ModelStorage.Sessions.store(model)
 
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
   LAST_ACTIVITY[Symbol(getchannel(model))] = now()
 
-  Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
+  PRECOMPILE[] || Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
 
-  if is_channels_webtransport()
-    Genie.Assets.channels_subscribe(channel)
-  else
-    Genie.Assets.webthreads_subscribe(channel)
-    Genie.Assets.webthreads_push_pull(channel)
-  end
+  # register channels and routes only if within a request
+  if haskey(Genie.Router.params(), :CHANNEL) || haskey(Genie.Router.params(), :ROUTE) || always_register_channels
+    if is_channels_webtransport()
+      Genie.Assets.channels_subscribe(channel)
+    else
+      Genie.Assets.webthreads_subscribe(channel)
+      Genie.Assets.webthreads_push_pull(channel)
+    end
 
-  ch = "/$channel/watchers"
-  if ! Genie.Router.ischannel(Symbol(ch))
-    Genie.Router.channel(ch, named = Symbol(ch)) do
+    ch = "/$channel/watchers"
+    Genie.Router.channel(ch, named = Router.channelname(ch)) do
       payload = Genie.Requests.payload(:payload)["payload"]
-      client = transport == Genie.WebChannels ? Genie.Requests.wsclient() : Genie.Requests.wtclient()
+      client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
 
       try
-        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) &&
+        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) && USE_MODEL_STORAGE[] &&
           Genie.Router.params!(Stipple.ModelStorage.Sessions.GenieSession.PARAMS_SESSION_KEY,
                                 Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
       catch ex
@@ -423,32 +559,82 @@ function init(::Type{M};
       end
 
       push!(model, field => newval; channel = channel, except = client)
-      update!(model, field, newval, oldval)
-
       LAST_ACTIVITY[Symbol(channel)] = now()
-      ok_response
-    end
-  end
 
-  ch = "/$channel/keepalive"
-  if ! Genie.Router.ischannel(Symbol(ch))
-    Genie.Router.channel(ch, named = Symbol(ch)) do
-      LAST_ACTIVITY[Symbol(channel)] = now()
-      ok_response
-    end
-  end
+      try
+        update!(model, field, newval, oldval)
+      catch ex
+        # send the error to the frontend
+        if Genie.Configuration.isdev()
+          return ex
+        else
+          return "An error has occured -- please check the logs"
+        end
 
-  ch = "/$channel/events"
-  if ! Genie.Router.ischannel(Symbol(ch))
-    Genie.Router.channel(ch, named = Symbol(ch)) do
+        field = Symbol(payload["field"])
+
+        #check if field exists
+        hasfield(CM, field) || return ok_response
+
+        valtype = Dict(zip(fieldnames(CM), CM.types))[field]
+        val = valtype <: Reactive ? getfield(model, field) : Ref{valtype}(getfield(model, field))
+
+        # reject non-public types
+        ( isprivate(field, model) || isreadonly(field, model) ) && return ok_response
+
+        newval = convertvalue(val, payload["newval"])
+        oldval = try
+          convertvalue(val, payload["oldval"])
+        catch ex
+          val[]
+        end
+
+        push!(model, field => newval; channel = channel, except = client)
+        LAST_ACTIVITY[Symbol(channel)] = now()
+
+        try
+          update!(model, field, newval, oldval)
+        catch ex
+          # send the error to the frontend
+          if Genie.Configuration.isdev()
+            return ex
+          else
+            return "An error has occured -- please check the logs"
+          end
+        end
+
+        ok_response
+      end
+    end
+
+    ch = "/$channel/keepalive"
+    if ! Genie.Router.ischannel(Router.channelname(ch))
+      Genie.Router.channel(ch, named = Router.channelname(ch)) do
+        LAST_ACTIVITY[Symbol(channel)] = now()
+
+        ok_response
+      end
+    end
+
+    ch = "/$channel/events"
+    Genie.Router.channel(ch, named = Router.channelname(ch)) do
       # get event name
       event = Genie.Requests.payload(:payload)["event"]
       # form handler parameter & call event notifier
       handler = Symbol(get(event, "name", nothing))
       event_info = get(event, "event", nothing)
+
+      # add client id if requested
+      if event_info isa Dict && get(event_info, "_addclient", false)
+        client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
+        push!(event_info, "_client" => client)
+      end
+
       isempty(methods(notify, (M, Val{handler}))) || notify(model, Val(handler))
       isempty(methods(notify, (M, Val{handler}, Any))) || notify(model, Val(handler), event_info)
+
       LAST_ACTIVITY[Symbol(channel)] = now()
+
       ok_response
     end
   end
@@ -457,10 +643,6 @@ function init(::Type{M};
 
   setup(model, channel)
 end
-function init(m::M; kwargs...)::M where {M<:ReactiveModel}
-  error("This method has been removed -- please use `init($M; kwargs...)` instead")``
-end
-
 
 function routename(::Type{M}) where M<:ReactiveModel
   AM = get_abstract_type(M)
@@ -529,46 +711,64 @@ const max_retry_times = 10
 
 """
     Base.push!(app::M, vals::Pair{Symbol,T}; channel::String,
-                except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt}) where {T,M<:ReactiveModel}
+                except::Union{Nothing,UInt,Vector{UInt}}) where {T,M<:ReactiveModel}
 
 Pushes data payloads over to the frontend by broadcasting the `vals` through the `channel`.
 """
 function Base.push!(app::M, vals::Pair{Symbol,T};
-                    channel::String = Genie.config.webchannels_default_route,
-                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing)::Bool where {T,M<:ReactiveModel}
+                    channel::String = getchannel(app),
+                    except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                    restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T,M<:ReactiveModel}
   try
-    webtransport().broadcast(channel, json(Dict("key" => julia_to_vue(vals[1]), "value" => Stipple.render(vals[2], vals[1]))), except = except)
+    _push!(vals, channel; except, restrict)
   catch ex
     @debug ex
     false
   end
 end
 
-function Base.push!(model::M, vals::Pair{Symbol,Reactive{T}};
-                    channel::String = getchannel(model),
-                    except::Union{Genie.WebChannels.HTTP.WebSockets.WebSocket,Nothing,UInt} = nothing)::Bool where {T,M<:ReactiveModel}
-                    v = vals[2].r_mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
-  push!(model, Symbol(julia_to_vue(vals[1])) => v; channel, except)
+function _push!(vals::Pair{Symbol,T}, channel::String;
+                except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T}
+  try
+    webtransport().broadcast(channel, json(Dict("key" => vals[1], "value" => Stipple.render(vals[2], vals[1]))); except, restrict)
+  catch ex
+    @debug ex
+    false
+  end
 end
 
-function Base.push!(model::M;
-                    channel::String = getchannel(model),
+function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
+                    channel::String = getchannel(app),
+                    except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                    restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T,M<:ReactiveModel}
+                    v = vals[2].r_mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
+  push!(app, vals[1] => v; channel, except, restrict)
+end
+
+function Base.push!(app::M;
+                    channel::String = getchannel(app),
+                    except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                    restrict::Union{Nothing,UInt,Vector{UInt}} = nothing,
                     skip::Vector{Symbol} = Symbol[])::Bool where {M<:ReactiveModel}
 
   result = true
 
   for field in fieldnames(M)
-    (isprivate(field, model) || field in skip) && continue
+    (isprivate(field, app) || field in skip) && continue
 
-    push!(model, field => getproperty(model, field); channel) === false && (result = false)
+    push!(app, field => getproperty(app, field); channel, except, restrict) === false && (result = false)
   end
 
   result
 end
 
-function Base.push!(model::M, field::Symbol; channel::String = getchannel(model))::Bool where {M<:ReactiveModel}
-  isprivate(field, model) && return false
-  push!(model, field => getproperty(model, field); channel)
+function Base.push!(app::M, field::Symbol;
+                  channel::String = getchannel(app),
+                  except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                  restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {M<:ReactiveModel}
+  isprivate(field, app) && return false
+  push!(app, field => getproperty(app, field); channel, except, restrict)
 end
 
 @specialize
@@ -593,13 +793,8 @@ Registers the `routes` for all the required JavaScript dependencies (scripts).
 
 function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool = true) :: Nothing
   if ! Genie.Assets.external_assets(assets_config)
-
     if core_theme
-      Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, file="stipplecore")) do
-        Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", file="stipplecore")),
-          :css) |> Genie.Renderer.respond
-      end
+      Genie.Assets.add_fileroute(assets_config, "stipplecore.css"; basedir = normpath(joinpath(@__DIR__, "..")))
     end
 
     if is_channels_webtransport()
@@ -608,42 +803,21 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
       Genie.Assets.webthreads_route(Genie.Assets.jsliteral(channel))
     end
 
-    Genie.Router.route(
-      Genie.Assets.asset_route(assets_config, :js, file="underscore-min"), named = :get_underscorejs) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="underscore-min")), :javascript) |> Genie.Renderer.respond
-    end
+    Genie.Assets.add_fileroute(assets_config, "underscore-min.js"; basedir = normpath(joinpath(@__DIR__, "..")))
 
-    VUEJS = Genie.Configuration.isprod() ? "vue.min" : "vue"
-    Genie.Router.route(
-      Genie.Assets.asset_route(assets_config, :js, file=VUEJS), named = :get_vuejs) do
-        Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file=VUEJS)), :javascript) |> Genie.Renderer.respond
-    end
+    VUEJS = Genie.Configuration.isprod() ? "vue.global.prod.js" : "vue.global.js"
+    Genie.Assets.add_fileroute(assets_config, VUEJS; basedir = normpath(joinpath(@__DIR__, "..")))
 
-    Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="stipplecore"), named = :get_stipplecorejs) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="stipplecore")), :javascript) |> Genie.Renderer.respond
-    end
+    Genie.Assets.add_fileroute(assets_config, "stipplecore.js"; basedir = normpath(joinpath(@__DIR__, "..")))
 
-    Genie.Router.route(
-      Genie.Assets.asset_route(assets_config, :js, file="vue_filters"), named = :get_vuefiltersjs) do
-        Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="vue_filters")), :javascript) |> Genie.Renderer.respond
-    end
-
-    Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="watchers"), named = :get_watchersjs) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="watchers")), :javascript) |> Genie.Renderer.respond
-    end
+    Genie.Assets.add_fileroute(assets_config, "vue_filters.js"; basedir = normpath(joinpath(@__DIR__, "..")))
+    Genie.Assets.add_fileroute(assets_config, "watchers.js"; basedir = normpath(joinpath(@__DIR__, "..")))
 
     if Genie.config.webchannels_keepalive_frequency > 0 && is_channels_webtransport()
-      Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="keepalive"), named = :get_keepalivejs) do
-        Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="keepalive")), :javascript) |> Genie.Renderer.respond
-      end
+      Genie.Assets.add_fileroute(assets_config, "keepalive.js"; basedir = normpath(joinpath(@__DIR__, "..")))
     end
 
+    Genie.Assets.add_fileroute(assets_config, "vue2compat.js"; basedir = normpath(joinpath(@__DIR__, "..")))
   end
 
   nothing
@@ -653,11 +827,21 @@ end
 function injectdeps(output::Vector{AbstractString}, M::Type{<:ReactiveModel}) :: Vector{AbstractString}
   for (key, f) in DEPS
     key isa DataType && key <: ReactiveModel && continue
+    # exclude keys starting with '_'
+    key isa Symbol && startswith("$key", '_') && continue
     push!(output, f()...)
   end
   AM = get_abstract_type(M)
-  haskey(DEPS, AM) && push!(output, DEPS[AM]()...)
-
+  if haskey(DEPS, AM)
+    # DEPS[AM] contains the stipple-generated deps
+    push!(output, DEPS[AM]()...)
+    # furthermore, include deps who's keys start with "_<name of the ReactiveModel>_"
+    model_prefix = "_$(vm(AM))_"
+    for (key, f) in DEPS
+      key isa Symbol || continue
+      startswith("$key", model_prefix) && push!(output, f()...)
+    end
+  end
   output
 end
 
@@ -678,10 +862,11 @@ function deps(m::M) :: Vector{String} where {M<:ReactiveModel}
     channelscript(channel),
     (is_channels_webtransport() ? Genie.Assets.channels_script_tag(channel) : Genie.Assets.webthreads_script_tag(channel)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="underscore-min")),
-    Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.min" : "vue"))),
+    Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.global.prod" : "vue.global"))),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="stipplecore")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), defer=true),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="watchers")),
+    Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue2compat")),
 
     (
       (Genie.config.webchannels_keepalive_frequency > 0 && is_channels_webtransport()) ?
@@ -696,8 +881,47 @@ function deps!(m::Any, f::Function)
   DEPS[m] = f
 end
 
+function deps!(m::Any, M::Module)
+  DEPS[m] = M.deps
+end
+
+function deps!(M::Type{<:ReactiveModel}, f::Function; extra_deps = true)
+  key = extra_deps ? Symbol("_$(vm(M))_$(nameof(f))") : M
+  DEPS[key] = f isa Function ? f : f.deps
+end
+
+deps!(M::Type{<:ReactiveModel}, modul::Module; extra_deps = true) = deps!(M, modul.deps; extra_deps)
+
+deps!(m::Any, v::Vector{Union{Function, Module}}) = deps!.(Ref(m), v)
+deps!(m::Any, t::Tuple) = [deps!(m, f) for f in t]
+deps!(m, args...) = [deps!(m, f) for f in args]
+
+function clear_deps!(M::Type{<:ReactiveModel})
+  delete!(DEPS, M)
+  model_prefix = "_$(vm(M))_"
+  for k in keys(Stipple.DEPS)
+    k isa Symbol && startswith("$k", model_prefix) && delete!(DEPS, k)
+  end
+end
+
 @specialize
 
+"""
+Create a js expression that is bound to a field of a vue component.
+Internally this is nothing than conversion to a Symbol, but it's a short version for creating symbols with spaces.
+
+### Example
+
+```
+julia> btn("", @click("toggleFullscreen"), icon = R"is_fullscreen ? 'fullscreen_exit' : 'fullscreen'")
+"<q-btn label v-on:click=\"toggleFullscreen\" :icon=\"is_fullscreen ? 'fullscreen_exit' : 'fullscreen'\"></q-btn>"
+```
+Note: For expressions that contain only variable names, we recommend the Symbol notation
+```
+julia> btn("", @click("toggleFullscreen"), icon = :fullscreen_icon)
+"<q-btn label v-on:click=\"toggleFullscreen\" :icon=\"fullscreen_icon\"></q-btn>"
+```
+"""
 macro R_str(s)
   :(Symbol($s))
 end
@@ -793,7 +1017,7 @@ macro kwredef(expr)
   esc(quote
     Base.@kwdef $expr
     $T_old = $T_new
-    if VERSION < v"1.8-"
+    if Base.VERSION < v"1.8-"
       $curly ? $T_new.body.name.name = $(QuoteNode(T_old)) : $T_new.name.name = $(QuoteNode(T_old)) # fix the name
     end
 
@@ -832,15 +1056,20 @@ function attributes(kwargs::Union{Vector{<:Pair}, Base.Iterators.Pairs, Dict},
     v === nothing && continue
     mapped = false
 
-    if haskey(mappings, string(k))
-      k = mappings[string(k)]
+    k_str = "$k"
+
+    if haskey(mappings, k_str)
+      k_str = mappings[k_str]
     end
 
-    attr_key = string((isa(v, Symbol) && ! startswith(string(k), ":") &&
-                ! ( startswith(string(k), "v-") || startswith(string(k), "v" * Genie.config.html_parser_char_dash) ) ? ":" : ""), "$k") |> Symbol
-    attr_val = isa(v, Symbol) && ! startswith(string(k), ":") ? Stipple.julia_to_vue(v) : v
+    k_str == "inner" && (v = join(v))
 
-    attrs[attr_key] = attr_val
+    v_isa_jsexpr = !isa(v, Union{Symbol, AbstractString, Bool, Number})
+
+    attr_key = (v isa Symbol || v_isa_jsexpr) && !startswith(k_str, ":") && !endswith(k_str, "!") &&
+      !startswith(k_str, "v-") && !startswith(k_str, "v" * Genie.config.html_parser_char_dash) ? Symbol(":", k_str) : Symbol(k_str)
+
+    attrs[attr_key] = v_isa_jsexpr ? js_attr(v) : v
   end
 
   NamedTuple(attrs)
@@ -852,10 +1081,6 @@ include("Pages.jl")
 
 #===#
 
-# function _deepcopy(r::R{T}) where T
-#   v_copy = deepcopy(r.o.val)
-#   :(R{$T}($v_copy, $(r.r_mode), $(r.no_backend_watcher), $(r.no_frontend_watcher), $(r.__source__)))
-# end
 _deepcopy(r::R{T}) where T = R(deepcopy(r.o.val), r.r_mode, r.no_backend_watcher, r.no_frontend_watcher)
 
 _deepcopy(x) = deepcopy(x)
@@ -1025,5 +1250,46 @@ include("Layout.jl")
 @reexport using .Typography
 @reexport using .Elements
 @reexport using .Layout
+
+# precompilation ...
+
+using Stipple.ReactiveTools
+@setup_workload begin
+  # Putting some things in `setup` can reduce the size of the
+  # precompile file and potentially make loading faster.
+  using Genie.HTTPUtils.HTTP
+  PRECOMPILE[] = true
+  @compile_workload begin
+      # all calls in this block will be precompiled, regardless of whether
+      # they belong to your package or not (on Julia 1.8 and higher)
+      ui() = [cell("hello"), row("world"), htmldiv("Hello World")]
+
+      @app PrecompileApp begin
+        @in demo_i = 1
+        @out demo_s = "Hi"
+
+        @onchange demo_i begin
+          println(demo_i)
+        end
+      end
+
+      route("/") do 
+        model = Stipple.ReactiveTools.@init PrecompileApp
+        page(model, ui) |> html
+      end
+      port = tryparse(Int, get(ENV, "STIPPLE_PRECOMPILE_PORT", ""))
+      port === nothing && (port = rand(8081:8999))
+      up(port)
+        
+      precompile_get = tryparse(Bool, get(ENV, "STIPPLE_PRECOMPILE_GET", "1"))
+      precompile_get === true && HTTP.get("http://localhost:$port")
+      # The following lines (still) produce an error although
+      # they pass at the repl. Not very important though.
+      # HTTP.get("http://localhost:$port$(Genie.Assets.asset_path(Genie.assets_config, :js, file = "channels"))")
+      # HTTP.get("http://localhost:$port$(Genie.Assets.asset_path(assets_config, :js, file = "stipplecore"))")
+      down()
+  end
+  PRECOMPILE[] = false
+end
 
 end
