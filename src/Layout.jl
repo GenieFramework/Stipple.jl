@@ -50,7 +50,7 @@ function layout(output::Union{S,Vector}, m::M;
   content = [
     output
     theme(; core_theme)
-    Stipple.deps(m; core_theme)
+    Stipple.deps(m)
   ]
 
   partial && return content
