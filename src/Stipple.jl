@@ -793,8 +793,9 @@ Registers the `routes` for all the required JavaScript dependencies (scripts).
 
 function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool = true) :: Nothing
   if ! Genie.Assets.external_assets(assets_config)
-
-    Genie.Assets.add_fileroute(assets_config, "stipplecore.css"; basedir = normpath(joinpath(@__DIR__, "..")))
+    if core_theme
+      Genie.Assets.add_fileroute(assets_config, "stipplecore.css"; basedir = normpath(joinpath(@__DIR__, "..")))
+    end
 
     if is_channels_webtransport()
       Genie.Assets.channels_route(Genie.Assets.jsliteral(channel))
@@ -807,9 +808,7 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
     VUEJS = Genie.Configuration.isprod() ? "vue.global.prod.js" : "vue.global.js"
     Genie.Assets.add_fileroute(assets_config, VUEJS; basedir = normpath(joinpath(@__DIR__, "..")))
 
-    if core_theme
-      Genie.Assets.add_fileroute(assets_config, "stipplecore.js"; basedir = normpath(joinpath(@__DIR__, "..")))
-    end
+    Genie.Assets.add_fileroute(assets_config, "stipplecore.js"; basedir = normpath(joinpath(@__DIR__, "..")))
 
     Genie.Assets.add_fileroute(assets_config, "vue_filters.js"; basedir = normpath(joinpath(@__DIR__, "..")))
     Genie.Assets.add_fileroute(assets_config, "watchers.js"; basedir = normpath(joinpath(@__DIR__, "..")))
