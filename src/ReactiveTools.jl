@@ -734,30 +734,35 @@ macro init(args...)
   quote
     local new_handlers = false
 
-    local initfn =
-    if isdefined($__module__, :init_from_storage) && Stipple.USE_MODEL_STORAGE[]
-      $__module__.init_from_storage
-    else
-      Stipple.init
+    local initfn = begin
+      if Stipple.use_model_storage() && $__module__ === Stipple
+        Stipple.ModelStorage.Sessions.init_from_storage
+      elseif isdefined($__module__, :Stipple) && isdefined($__module__.Stipple, :ModelStorage) && isdefined($__module__.Stipple.ModelStorage, :Sessions) && isdefined($__module__.Stipple.ModelStorage.Sessions, :init_from_storage) && Stipple.use_model_storage()
+        $__module__.Stipple.ModelStorage.Sessions.init_from_storage
+      elseif isdefined($__module__, :init_from_storage) && Stipple.use_model_storage()
+        $__module__.init_from_storage
+      else
+        Stipple.init
+      end
     end
 
     local handlersfn =
-    if !$called_without_type
-      # writing '$(init_kwargs[type_pos])' generates an error during a pre-evaluation
-      # possibly from Revise?
-      # we use 'get' instead of 'getindex'
-      Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$(get(init_args, type_pos, "dummy"))]
-    else
-      if isdefined($__module__, :__GF_AUTO_HANDLERS__)
-        if length(methods($__module__.__GF_AUTO_HANDLERS__)) == 0
-          @eval(@handlers())
-          new_handlers = true
-        end
-        $__module__.__GF_AUTO_HANDLERS__
+      if !$called_without_type
+        # writing '$(init_kwargs[type_pos])' generates an error during a pre-evaluation
+        # possibly from Revise?
+        # we use 'get' instead of 'getindex'
+        Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$(get(init_args, type_pos, "dummy"))]
       else
-        identity
+        if isdefined($__module__, :__GF_AUTO_HANDLERS__)
+          if length(methods($__module__.__GF_AUTO_HANDLERS__)) == 0
+            @eval(@handlers())
+            new_handlers = true
+          end
+          $__module__.__GF_AUTO_HANDLERS__
+        else
+          identity
+        end
       end
-    end
 
     instance = let model = initfn($(init_args...))
         new_handlers ? Base.invokelatest(handlersfn, model) : handlersfn(model)

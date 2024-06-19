@@ -12,8 +12,10 @@ function model_id(::Type{M}) where M
   Symbol(Stipple.routename(M))
 end
 
-function store(model::M) where M
-  GenieSession.set!(model_id(M), model)
+function store(model::M, force::Bool = false) where M
+  # do not overwrite stored model
+  (GenieSession.get(model_id(M), nothing) === nothing || force) && GenieSession.set!(model_id(M), model)
+
   nothing
 end
 
@@ -22,8 +24,8 @@ function init_from_storage( t::Type{M};
                             kwargs...) where M
   model = Stipple.init(M; channel, kwargs...)
   stored_model = GenieSession.get(model_id(M), nothing)
-
   CM = Stipple.get_concrete_type(M)
+
   for f in fieldnames(CM)
     field = getfield(model, f)
     if field isa Reactive

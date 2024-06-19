@@ -20,6 +20,10 @@ const PRECOMPILE = Ref(false)
 const ALWAYS_REGISTER_CHANNELS = Ref(true)
 const USE_MODEL_STORAGE = Ref(true)
 
+function use_model_storage()
+  USE_MODEL_STORAGE[]
+end
+
 """
 Disables the automatic storage and retrieval of the models in the session.
 Useful for large models.
@@ -98,7 +102,7 @@ export setchannel, getchannel
 isempty(methods(notify, Observables)) && (Base.notify(observable::AbstractObservable) = Observables.notify!(observable))
 
 include("ParsingTools.jl")
-USE_MODEL_STORAGE[] && include("ModelStorage.jl")
+use_model_storage() && include("ModelStorage.jl")
 include("NamedTuples.jl")
 
 include("stipple/reactivity.jl")
@@ -357,7 +361,7 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
     print(output, debounce == 0 ?
       """
         $vue_app_name.\$watch(function(){return this.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true});
-      """ : 
+      """ :
       """
         $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true});
       """
@@ -387,6 +391,8 @@ const CHANNELPARAM = :CHANNEL__
 
 
 function sessionid(; encrypt::Bool = true) :: String
+  use_model_storage() || error("Model storage is disabled")
+
   sessid = Stipple.ModelStorage.Sessions.GenieSession.session().id
 
   encrypt ? Genie.Encryption.encrypt(sessid) : sessid
@@ -411,7 +417,7 @@ function channeldefault(::Type{M}) where M<:ReactiveModel
 
   model_id = Symbol(Stipple.routename(M))
 
-  USE_MODEL_STORAGE[] || return nothing
+  use_model_storage() || return nothing
 
   stored_model = Stipple.ModelStorage.Sessions.GenieSession.get(model_id, nothing)
   stored_model === nothing ? nothing : getfield(stored_model, Stipple.CHANNELFIELDNAME)
@@ -514,7 +520,7 @@ function init(t::Type{M};
   setchannel(model, channel)
 
   # make sure we store the channel name in the model
-  USE_MODEL_STORAGE[] && Stipple.ModelStorage.Sessions.store(model)
+  use_model_storage() && Stipple.ModelStorage.Sessions.store(model)
 
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
   LAST_ACTIVITY[Symbol(getchannel(model))] = now()
@@ -536,7 +542,7 @@ function init(t::Type{M};
       client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
 
       try
-        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) && USE_MODEL_STORAGE[] &&
+        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) && use_model_storage() &&
           Genie.Router.params!(Stipple.ModelStorage.Sessions.GenieSession.PARAMS_SESSION_KEY,
                                 Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
       catch ex
@@ -1309,14 +1315,14 @@ using Stipple.ReactiveTools
         end
       end
 
-      route("/") do 
+      route("/") do
         model = Stipple.ReactiveTools.@init PrecompileApp
         page(model, ui) |> html
       end
       port = tryparse(Int, get(ENV, "STIPPLE_PRECOMPILE_PORT", ""))
       port === nothing && (port = rand(8081:8999))
       up(port)
-        
+
       precompile_get = tryparse(Bool, get(ENV, "STIPPLE_PRECOMPILE_GET", "1"))
       precompile_get === true && HTTP.get("http://localhost:$port")
       # The following lines (still) produce an error although
