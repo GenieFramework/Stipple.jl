@@ -28,12 +28,15 @@ function init_from_storage( t::Type{M};
 
   for f in fieldnames(CM)
     field = getfield(model, f)
+
     if field isa Reactive
       # restore fields only if a stored model exists, if the field is not part of the internal fields and is not write protected
-      (
-        isnothing(stored_model) || f ∈ [Stipple.CHANNELFIELDNAME, Stipple.AUTOFIELDS...] || Stipple.isreadonly(f, model) || Stipple.isprivate(f, model) ||
-        ! hasproperty(stored_model, f) || ! hasproperty(model, f) || (field[!] = getfield(stored_model, f)[])
-      )
+      if isnothing(stored_model) || f ∈ [Stipple.CHANNELFIELDNAME, Stipple.AUTOFIELDS...] ||
+          Stipple.isprivate(f, model) || ! hasproperty(stored_model, f) || ! hasproperty(model, f)
+      else
+        # restore field value from stored model
+        (field[!] = getfield(stored_model, f)[])
+      end
 
       # register reactive handlers to automatically save model on session when model changes
       if f ∉ [Stipple.AUTOFIELDS...]
@@ -42,7 +45,8 @@ function init_from_storage( t::Type{M};
         end
       end
     else
-      isnothing(stored_model) || Stipple.isprivate(f, model) || Stipple.isreadonly(f, model) || ! hasproperty(stored_model, f) || ! hasproperty(model, f) || setfield!(model, f, getfield(stored_model, f))
+      isnothing(stored_model) || Stipple.isprivate(f, model) || Stipple.isreadonly(f, model) ||
+        ! hasproperty(stored_model, f) || ! hasproperty(model, f) || setfield!(model, f, getfield(stored_model, f))
     end
   end
 
