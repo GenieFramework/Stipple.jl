@@ -5,7 +5,7 @@ on:
 jobs:
   test:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }}
-    continue-on-error: ${{ matrix.experimental }}
+    continue-on-error: ${{ matrix.os == 'nightly' || matrix.os == '1.11'  }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -13,39 +13,14 @@ jobs:
         version:
           - '1.6'
           - '1'
+          - '1.11'
+          - 'nightly'
         os:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
         arch:
           - x64
-        experimental: 
-          - false
-        include:
-          - version: 'beta'
-            os: ubuntu-latest
-            arch: x64
-            experimental: true
-          - version: 'beta'
-            os: macOS-latest
-            arch: x64
-            experimental: true
-          - version: 'beta'
-            os: windows-latest
-            arch: x64
-            experimental: true
-          - version: 'nightly'
-            os: ubuntu-latest
-            arch: x64
-            experimental: true
-          - version: 'nightly'
-            os: macOS-latest
-            arch: x64
-            experimental: true
-          - version: 'nightly'
-            os: windows-latest
-            arch: x64
-            experimental: true
     steps:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@latest
