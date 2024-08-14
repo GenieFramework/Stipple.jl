@@ -61,10 +61,6 @@ function callwatchers(field, val, keys...; notify)
   end
 end
 
-function Base.setindex!(r::Reactive{T}, val, args::Vector{Int}; notify=(x)->true) where T
-  setindex_withoutwatchers!(r, val, args...)
-end
-
 """
     setfield_withoutwatchers!(app::ReactiveModel, field::Symmbol, val; notify=(x)->true)
     setfield_withoutwatchers!(app::ReactiveModel, field::Symmbol, val, keys...; notify=(x)->true)

@@ -1,5 +1,19 @@
 # wrapper around Base.parse to prevent type piracy
-stipple_parse(::Type{T}, value) where T = Base.parse(T, value)
+function stipple_parse(::Type{T}, value) where T
+  if isstructtype(T) && value isa Dict
+    ff = [String(f) for f in fieldnames(T)]
+    kk = String.(keys(value))
+    # if all fieldnames are present, generate the type directly from the fields
+    if all(ff .∈ Ref(kk))
+      T([stipple_parse(Ft, value[String(f)]) for (f, Ft) in zip(ff, fieldtypes(T))]...)
+    # otherwise, try to generate it via kwargs, e.g. when the type is defined via @kwdef
+    else
+      T(; (Symbol(k) => v for (k,v) in value)...)
+    end
+  else
+    Base.parse(T, value)
+  end
+end
 
 # function stipple_parse(::Type{T}, value::Dict) where T <: AbstractDict
 #   convert(T, value)
@@ -40,9 +54,14 @@ end
 function stipple_parse(::Type{Symbol}, s::String)
   Symbol(s)
 end
+
 # untyped Dicts to typed Dict's
-function stipple_parse(::Type{<:AbstractDict{K, V}}, value::AbstractDict{String, <:Any}) where {K, V}
-  Dict( zip(Vector{K}(stipple_parse(Vector{K}, collect(keys(value)))), stipple_parse(Vector{V}, collect(values(value)))) )
+function stipple_parse(D::Type{<:AbstractDict{K, V}}, value::AbstractDict) where {K, V}
+  if D isa LittleDict
+    D( stipple_parse(Vector{K}, collect(keys(value))), stipple_parse(Vector{V}, collect(values(value))) )
+  else
+    D( zip(Vector{K}(stipple_parse(Vector{K}, collect(keys(value)))), stipple_parse(Vector{V}, collect(values(value)))) )
+  end
 end
 
 # String to Integer

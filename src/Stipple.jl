@@ -119,7 +119,7 @@ export JSONParser, JSONText, json, @json, jsfunction, @jsfunction_str
 const config = Genie.config
 const channel_js_name = "window.CHANNEL"
 
-const OptDict = Dict{Symbol, Any}
+const OptDict = OrderedDict{Symbol, Any}
 opts(;kwargs...) = OptDict(kwargs...)
 
 const IF_ITS_THAT_LONG_IT_CANT_BE_A_FILENAME = 500
@@ -353,25 +353,22 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
   output = IOBuffer()
   if fieldname == :isready
     print(output, """
-      $vue_app_name.\$watch(function(){return this.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true});
-    """)
+      // Don't remove this line: due to a bug we need to have a \$-sign in this function;
+          ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true}));
+      """)
   else
     AM = get_abstract_type(M)
     debounce = get(get(DEBOUNCE, AM, Dict{Symbol, Any}()), fieldname, debounce)
     print(output, debounce == 0 ?
       """
-        $vue_app_name.\$watch(function(){return this.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true});
-      """ :
+          ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true}));
+      """ : 
       """
-        $vue_app_name.\$watch(function(){return this.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true});
+          ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true}));
       """
     )
   end
-  # in production mode vue does not fill `this.expression` in the watcher, so we do it manually
-  Genie.Configuration.isprod() &&
-    print(output, "$vue_app_name._watchers[$vue_app_name._watchers.length - 1].expression = 'function(){return this.$fieldname}'")
 
-  print(output, "\n\n")
   String(take!(output))
 end
 
@@ -740,7 +737,7 @@ function _push!(vals::Pair{Symbol,T}, channel::String;
                 except::Union{Nothing,UInt,Vector{UInt}} = nothing,
                 restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T}
   try
-    webtransport().broadcast(channel, json(Dict("key" => julia_to_vue(vals[1]), "value" => Stipple.render(vals[2], vals[1]))); except, restrict)
+    webtransport().broadcast(channel, json(Dict("key" => vals[1], "value" => Stipple.render(vals[2], vals[1]))); except, restrict)
   catch ex
     @debug ex
     false
@@ -752,7 +749,7 @@ function Base.push!(app::M, vals::Pair{Symbol,Reactive{T}};
                     except::Union{Nothing,UInt,Vector{UInt}} = nothing,
                     restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T,M<:ReactiveModel}
                     v = vals[2].r_mode != JSFUNCTION ? vals[2][] : replace_jsfunction(vals[2][])
-  push!(app, Symbol(julia_to_vue(vals[1])) => v; channel, except, restrict)
+  push!(app, vals[1] => v; channel, except, restrict)
 end
 
 function Base.push!(app::M;
@@ -802,11 +799,8 @@ Registers the `routes` for all the required JavaScript dependencies (scripts).
 
 function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool = true) :: Nothing
   if ! Genie.Assets.external_assets(assets_config)
-
-    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, file="stipplecore")) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", file="stipplecore")),
-        :css) |> Genie.Renderer.respond
+    if core_theme
+      Genie.Assets.add_fileroute(assets_config, "stipplecore.css"; basedir = normpath(joinpath(@__DIR__, "..")))
     end
 
     if is_channels_webtransport()
@@ -815,44 +809,19 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
       Genie.Assets.webthreads_route(Genie.Assets.jsliteral(channel))
     end
 
-    Genie.Router.route(
-      Genie.Assets.asset_route(assets_config, :js, file="underscore-min"), named = :get_underscorejs) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="underscore-min")), :javascript) |> Genie.Renderer.respond
-    end
+    Genie.Assets.add_fileroute(assets_config, "underscore-min.js"; basedir = normpath(joinpath(@__DIR__, "..")))
 
-    VUEJS = Genie.Configuration.isprod() ? "vue.min" : "vue"
-    Genie.Router.route(
-      Genie.Assets.asset_route(assets_config, :js, file=VUEJS), named = :get_vuejs) do
-        Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file=VUEJS)), :javascript) |> Genie.Renderer.respond
-    end
-
-    if core_theme
-      Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="stipplecore"), named = :get_stipplecorejs) do
-        Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="stipplecore")), :javascript) |> Genie.Renderer.respond
-      end
-    end
-
-    Genie.Router.route(
-      Genie.Assets.asset_route(assets_config, :js, file="vue_filters"), named = :get_vuefiltersjs) do
-        Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="vue_filters")), :javascript) |> Genie.Renderer.respond
-    end
-
-    Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="watchers"), named = :get_watchersjs) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="watchers")), :javascript) |> Genie.Renderer.respond
-    end
+    VUEJS = Genie.Configuration.isprod() ? "vue.global.prod.js" : "vue.global.js"
+    Genie.Assets.add_fileroute(assets_config, VUEJS; basedir = normpath(joinpath(@__DIR__, "..")))
+    Genie.Assets.add_fileroute(assets_config, "stipplecore.js"; basedir = normpath(joinpath(@__DIR__, "..")))
+    Genie.Assets.add_fileroute(assets_config, "vue_filters.js"; basedir = normpath(joinpath(@__DIR__, "..")))
+    Genie.Assets.add_fileroute(assets_config, "watchers.js"; basedir = normpath(joinpath(@__DIR__, "..")))
 
     if Genie.config.webchannels_keepalive_frequency > 0 && is_channels_webtransport()
-      Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file="keepalive"), named = :get_keepalivejs) do
-        Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=normpath(joinpath(@__DIR__, "..")), type="js", file="keepalive")), :javascript) |> Genie.Renderer.respond
-      end
+      Genie.Assets.add_fileroute(assets_config, "keepalive.js"; basedir = normpath(joinpath(@__DIR__, "..")))
     end
 
+    Genie.Assets.add_fileroute(assets_config, "vue2compat.js"; basedir = normpath(joinpath(@__DIR__, "..")))
   end
 
   nothing
@@ -891,16 +860,17 @@ end
 
 Outputs the HTML code necessary for injecting the dependencies in the page (the <script> tags).
 """
-function deps(m::M; core_theme::Bool = true) :: Vector{String} where {M<:ReactiveModel}
+function deps(m::M) :: Vector{String} where {M<:ReactiveModel}
   channel = getchannel(m)
   output = [
     channelscript(channel),
     (is_channels_webtransport() ? Genie.Assets.channels_script_tag(channel) : Genie.Assets.webthreads_script_tag(channel)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="underscore-min")),
-    Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.min" : "vue"))),
-    core_theme && Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="stipplecore")),
+    Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.global.prod" : "vue.global"))),
+    Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="stipplecore")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), defer=true),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="watchers")),
+    Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue2compat")),
 
     (
       (Genie.config.webchannels_keepalive_frequency > 0 && is_channels_webtransport()) ?
@@ -1097,17 +1067,13 @@ function attributes(kwargs::Union{Vector{<:Pair}, Base.Iterators.Pairs, Dict},
     end
 
     k_str == "inner" && (v = join(v))
-    v_isa_jsexpr = v isa Symbol || !isa(v, Union{AbstractString, Bool, Number})
-    attr_key = string((v_isa_jsexpr && ! startswith(k_str, ":") &&
-                ! (endswith(k_str, "!") || startswith(k_str, "v-") || startswith(k_str, "v" * Genie.config.html_parser_char_dash)) ? ":" : ""), k_str) |> Symbol
-    attr_val = if isa(v, Symbol) && ! startswith(k_str, ":")
-      Stipple.julia_to_vue(v)
-    elseif v isa Symbol || ! v_isa_jsexpr
-      v
-    else
-      js_attr(v)
-    end
-    attrs[attr_key] = attr_val
+
+    v_isa_jsexpr = !isa(v, Union{Symbol, AbstractString, Bool, Number})
+
+    attr_key = (v isa Symbol || v_isa_jsexpr) && !startswith(k_str, ":") && !endswith(k_str, "!") &&
+      !startswith(k_str, "v-") && !startswith(k_str, "v" * Genie.config.html_parser_char_dash) ? Symbol(":", k_str) : Symbol(k_str)
+
+    attrs[attr_key] = v_isa_jsexpr ? js_attr(v) : v
   end
 
   NamedTuple(attrs)
@@ -1119,10 +1085,6 @@ include("Pages.jl")
 
 #===#
 
-# function _deepcopy(r::R{T}) where T
-#   v_copy = deepcopy(r.o.val)
-#   :(R{$T}($v_copy, $(r.r_mode), $(r.no_backend_watcher), $(r.no_frontend_watcher), $(r.__source__)))
-# end
 _deepcopy(r::R{T}) where T = R(deepcopy(r.o.val), r.r_mode, r.no_backend_watcher, r.no_frontend_watcher)
 
 _deepcopy(x) = deepcopy(x)

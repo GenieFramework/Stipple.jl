@@ -431,6 +431,12 @@ end
     @test htmldiv(col = 9, class = split("a b c")) == "<div :class=\"['a','b','c','col-9']\"></div>"
 
     @test htmldiv(col = 9, class = Dict(:myclass => "b"), class! = "test") == "<div :class=\"[test,{'myclass':b},'col-9']\"></div>"
+
+    @test row(@gutter :sm [
+        cell("Hello", sm = 2,  md = 8)
+        cell("World", sm = 10, md = 4)
+    ]).data == "<div class=\"row q-col-gutter-sm\"><div class=\"col col-sm-2 col-md-8\">" * 
+    "<div class=\"st-col\">Hello</div></div><div class=\"col col-sm-10 col-md-4\"><div class=\"st-col\">World</div></div></div>"
 end
 
 @testset "Vue Conditionals and Iterator" begin
@@ -559,4 +565,33 @@ end
     @test Stipple.Layout.THEMES[][end] == my_css
     remove_css(my_css, byname = true)
     @test findfirst(==(my_css), Stipple.Layout.THEMES[]) === nothing
+end
+
+@testset "parsing" begin
+    struct T1
+        c::Int
+        d::Int
+    end
+    
+    struct T2
+        a::Int
+        b::T1
+    end
+    
+    t2 = T2(1, T1(2, 3))
+    t2_dict = JSON3.read(Stipple.json(t2), Dict)
+    
+    Base.@kwdef struct T3
+        c::Int = 1
+        d::Int = 3
+    end
+    
+    Base.@kwdef struct T4
+        a::Int = 1
+        b::T3 = T3()
+    end
+    
+    @test Stipple.stipple_parse(T2, t2_dict) == T2(1, T1(2, 3))
+    @test Stipple.stipple_parse(T3, Dict()) == T3(1, 3)
+    @test Stipple.stipple_parse(T4, Dict()) == T4(1, T3(1, 3))
 end
