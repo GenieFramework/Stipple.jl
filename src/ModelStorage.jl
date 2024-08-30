@@ -35,7 +35,7 @@ function init_from_storage( t::Type{M};
           Stipple.isprivate(f, model) || ! hasproperty(stored_model, f) || ! hasproperty(model, f)
       else
         # restore field value from stored model
-        (field[!] = getfield(stored_model, f)[])
+        field[!] = getfield(stored_model, f)[]
       end
 
       # register reactive handlers to automatically save model on session when model changes

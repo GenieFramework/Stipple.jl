@@ -148,7 +148,7 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
     js = join_js(f(app), ",\n    "; pre = strip)
     isempty(js) || push!(vue, field => JSONText("{\n    $js\n}"))
   end
-  
+
   for (f, field) in (
     (js_before_create, :beforeCreate), (js_created, :created), (js_before_mount, :beforeMount), (js_mounted, :mounted),
     (js_before_update, :beforeUpdate), (js_updated, :updated), (js_activated, :activated), (js_deactivated, :deactivated),
@@ -207,3 +207,5 @@ quasar(
 function js_attr(x)
   Symbol(replace(replace(json(render(x)), "'" => raw"\'"), '"' => '''))
 end
+
+Stipple.render(X::Matrix) = [X[:, i] for i in 1:size(X, 2)]

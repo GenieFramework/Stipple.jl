@@ -729,6 +729,12 @@ function Base.push!(app::M, vals::Pair{Symbol,T};
                     except::Union{Nothing,UInt,Vector{UInt}} = nothing,
                     restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T,M<:ReactiveModel}
   try
+    use_model_storage() && Stipple.ModelStorage.Sessions.store(app)
+  catch ex
+    @error ex
+  end
+
+  try
     _push!(vals, channel; except, restrict)
   catch ex
     @debug ex
