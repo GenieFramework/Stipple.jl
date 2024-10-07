@@ -1,3 +1,23 @@
+function getField(obj, indices) {
+  return indices.reduce((current, index) => current && current[index], obj);
+}
+
+function setField(obj, indices, value) {
+  const lastIndex = indices.length - 1;
+  const lastKey = indices[lastIndex];
+
+  indices.reduce((current, index, i) => {
+      if (i === lastIndex) {
+          current[lastKey] = value; // Set the value at the final index
+      } else {
+          if (!current[index]) {
+              current[index] = {}; // Create nested objects if they don't exist
+          }
+      }
+      return current[index];
+  }, obj);
+}
+
 const watcherMixin = {
   methods: {
     // Acknowledgement: copied watchIgnorable from VueUse
@@ -47,13 +67,17 @@ const watcherMixin = {
     },
 
     updateField: function (field, newVal) {
+      // allow for subindexing with dot notation
+      var fields = field.split('.')
+      field = fields[0]
+
       if (field=='js_app') { newVal(); return }
 
       try {
         if (this['_ignore_' + field]) {
-          this['_ignore_' + field](()=>{this[field] = newVal});
+          this['_ignore_' + field](() => { setField(this, fields, newVal) });
         } else {
-          this[field] = newVal
+          setField(this, fields, newVal)
         }
         if (field=='js_model' && typeof(this[field])=='function') { 
           this[field]()
