@@ -507,6 +507,11 @@ function htmldiv(args...;
   Genie.Renderer.Html.div(args...; kwargs...)
 end
 
+function coretheme()
+    stylesheet("https://fonts.googleapis.com/css?family=Material+Icons"),
+    stylesheet(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore"))
+end
+
 """
     function theme() :: String
 
@@ -528,20 +533,12 @@ julia> push!(Stipple.Layout.THEMES[], StippleUI.theme)
 function theme(; core_theme::Bool = true) :: Vector{String}
   output = String[]
 
-  if core_theme
-    push!(THEMES[], () -> begin
-        stylesheet("https://fonts.googleapis.com/css?family=Material+Icons"),
-        stylesheet(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore"))
-      end
-    )
-  end
-
-  unique!(THEMES[])
-
   for f in THEMES[]
     push!(output, f()...)
   end
 
+  core_theme && coretheme ∉ THEMES[] && push!(output, coretheme()...)
+  
   output
 end
 
