@@ -10,7 +10,8 @@ using Genie, Stipple
 export layout, add_css, remove_css
 export page, app, row, column, cell, container, flexgrid_kwargs, htmldiv, @gutter
 
-export theme
+export theme, googlefonts_css, stipplecore_css, genie_footer
+
 const THEMES = Ref(Function[])
 
 const FLEXGRID_KWARGS = [:col, :xs, :sm, :md, :lg, :xl, :gutter, :xgutter, :ygutter]
@@ -120,6 +121,31 @@ end
 
 function iscontainer(class)
     false
+end
+
+function genie_footer()
+  ParsedHTMLString("""
+  <style>
+    ._genie_logo {
+      background:url('https://genieframework.com/logos/genie/logo-simple-with-padding.svg') no-repeat;
+      background-size:40px;
+      padding-top:22px;
+      padding-right:10px;
+      color:transparent !important;
+      font-size:9pt;
+    }
+    ._genie .row .col-12 { width:50%; margin:auto; }
+  </style>
+  <footer class='_genie container'>
+    <div class='row'>
+      <div class='col-12'>
+        <p class='text-muted credit' style='text-align:center;color:#8d99ae;'>Built with
+          <a href='https://genieframework.com' target='_blank' class='_genie_logo' ref='nofollow'>Genie</a>
+        </p>
+      </div>
+    </div>
+  </footer>
+  """)
 end
 
 function flexgrid_class(tag::Symbol, value::Union{String,Int,Nothing,Symbol} = -1, container = false)
@@ -507,6 +533,19 @@ function htmldiv(args...;
   Genie.Renderer.Html.div(args...; kwargs...)
 end
 
+function googlefonts_css()
+  (stylesheet("https://fonts.googleapis.com/css?family=Material+Icons"),)
+end
+
+function stipplecore_css()
+  (stylesheet(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore")),)
+end
+
+function coretheme()
+    stylesheet("https://fonts.googleapis.com/css?family=Material+Icons"),
+    stylesheet(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore"))
+end
+
 """
     function theme() :: String
 
@@ -528,20 +567,12 @@ julia> push!(Stipple.Layout.THEMES[], StippleUI.theme)
 function theme(; core_theme::Bool = true) :: Vector{String}
   output = String[]
 
-  if core_theme
-    push!(THEMES[], () -> begin
-        stylesheet("https://fonts.googleapis.com/css?family=Material+Icons"),
-        stylesheet(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore"))
-      end
-    )
-  end
-
-  unique!(THEMES[])
+  core_theme && coretheme ∉ THEMES[] && push!(output, coretheme()...)
 
   for f in THEMES[]
     push!(output, f()...)
   end
-
+  
   output
 end
 
