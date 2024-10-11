@@ -42,7 +42,9 @@ const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
 const HANDLERS_FUNCTIONS = LittleDict{Type{<:ReactiveModel},Function}()
 
 function DEFAULT_LAYOUT(; title::String = "Genie App",
-                          meta::D = Dict(), head_content::Union{AbstractString, Vector} = "") where {D <:AbstractDict}
+                          meta::D = Dict(),
+                          head_content::Union{AbstractString, Vector} = "",
+                          core_theme::Bool = true) where {D <:AbstractDict}
   tags = Genie.Renderers.Html.for_each(x -> """<meta name="$(string(x.first))" content="$(string(x.second))">\n""", meta)
   """
 <!DOCTYPE html>
@@ -73,7 +75,7 @@ function DEFAULT_LAYOUT(; title::String = "Genie App",
     <div class='container'>
       <div class='row'>
         <div class='col-12'>
-          <% Stipple.page(model, partial = true, v__cloak = true, [Stipple.Genie.Renderer.Html.@yield], Stipple.@if(:isready)) %>
+          <% Stipple.page(model, partial = true, v__cloak = true, [Stipple.Genie.Renderer.Html.@yield], Stipple.@if(:isready); core_theme = $core_theme) %>
         </div>
       </div>
     </div>

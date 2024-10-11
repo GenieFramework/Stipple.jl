@@ -1260,6 +1260,9 @@ using Stipple.ReactiveTools
   @compile_workload begin
       # all calls in this block will be precompiled, regardless of whether
       # they belong to your package or not (on Julia 1.8 and higher)
+      # set secret in order to avoid automatic generation of a new one,
+      # which would invalidate the precompiled file
+      Genie.Secrets.secret_token!(repeat("f", 64))
       ui() = [cell("hello"), row("world"), htmldiv("Hello World")]
 
       @app PrecompileApp begin
@@ -1277,15 +1280,20 @@ using Stipple.ReactiveTools
       end
       port = tryparse(Int, get(ENV, "STIPPLE_PRECOMPILE_PORT", ""))
       port === nothing && (port = rand(8081:8999))
-      up(port)
-        
-      precompile_get = tryparse(Bool, get(ENV, "STIPPLE_PRECOMPILE_GET", "1"))
-      precompile_get === true && HTTP.get("http://localhost:$port")
-      # The following lines (still) produce an error although
-      # they pass at the repl. Not very important though.
-      # HTTP.get("http://localhost:$port$(Genie.Assets.asset_path(Genie.assets_config, :js, file = "channels"))")
-      # HTTP.get("http://localhost:$port$(Genie.Assets.asset_path(assets_config, :js, file = "stipplecore"))")
-      down()
+
+      Logging.with_logger(Logging.SimpleLogger(stdout, Logging.Error)) do
+        up(port)
+          
+        precompile_get = tryparse(Bool, get(ENV, "STIPPLE_PRECOMPILE_GET", "1"))
+        precompile_get === true && HTTP.get("http://localhost:$port")
+        # The following lines (still) produce an error although
+        # they pass at the repl. Not very important though.
+        # HTTP.get("http://localhost:$port$(Genie.Assets.asset_path(Genie.assets_config, :js, file = "channels"))")
+        # HTTP.get("http://localhost:$port$(Genie.Assets.asset_path(assets_config, :js, file = "stipplecore"))")
+        down()
+      end
+      # reset secret back to empty string
+      Genie.Secrets.secret_token!("")
   end
   PRECOMPILE[] = false
 end
