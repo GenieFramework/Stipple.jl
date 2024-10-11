@@ -1277,6 +1277,8 @@ using Stipple.ReactiveTools
       end
       port = tryparse(Int, get(ENV, "STIPPLE_PRECOMPILE_PORT", ""))
       port === nothing && (port = rand(8081:8999))
+
+      Logging.with_logger(Logging.SimpleLogger(stdout, Logging.Error)) do
       up(port)
         
       precompile_get = tryparse(Bool, get(ENV, "STIPPLE_PRECOMPILE_GET", "1"))
@@ -1286,6 +1288,7 @@ using Stipple.ReactiveTools
       # HTTP.get("http://localhost:$port$(Genie.Assets.asset_path(Genie.assets_config, :js, file = "channels"))")
       # HTTP.get("http://localhost:$port$(Genie.Assets.asset_path(assets_config, :js, file = "stipplecore"))")
       down()
+      end
   end
   PRECOMPILE[] = false
 end
