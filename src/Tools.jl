@@ -107,3 +107,107 @@ end
 
 delete_kwarg(expressions, kwarg::Symbol) = delete_kwarg!(Any[copy(x) for x in expressions], kwarg)
 delete_kwargs(expressions, kwarg::Vector{Symbol}) = delete_kwargs!(Any[copy(x) for x in expressions], kwarg)
+
+"""
+    @stipple_precompile(setup, workload)
+
+A macro that facilitates the precompilation process for Stipple-related code. 
+
+# Arguments
+- `setup`: An optional setup configuration that is required for the precompilation.
+- `workload`: The workload or tasks that need to be precompiled.
+
+The macro defines three local routines: `precompile_get`, `precompile_post`, and `precompile_request`.
+These routines can be used to send requests to the local server that is started during the
+precompilation process.
+
+The envrionment variable ENV["STIPPLE_PRECOMPILE_REQUESTS"] can be set to "false" to disable the
+precompilation of HTTP.requests. The default value is "true".
+
+# Example (see also end of Stipple.jl)
+```
+module MyApp
+using Stipple, Stipple.ReactiveTools
+
+@app PrecompileApp begin
+    @in demo_i = 1
+    @out demo_s = "Hi"
+
+    @onchange demo_i begin
+    println(demo_i)
+    end
+end
+
+ui() = [cell("hello"), row("world"), htmldiv("Hello World")]
+
+function __init__()
+    @page("/", ui)
+end
+
+@stipple_precompile begin
+    # the @page macro cannot be called here, as it reilies on writing some cache files to disk
+    # hence, we use a manual route definition for precompilation
+
+    route("/") do 
+        model = @init PrecompileApp
+        page(model, ui) |> html
+    end
+
+    precompile_get("/")
+end
+
+end
+```
+"""
+macro stipple_precompile(setup, workload)
+    quote
+        @setup_workload begin
+        # Putting some things in `setup` can reduce the size of the
+        # precompile file and potentially make loading faster.
+        using Genie.HTTPUtils.HTTP
+        PRECOMPILE[] = true
+
+        esc($setup)
+
+        @compile_workload begin
+            # all calls in this block will be precompiled, regardless of whether
+            # they belong to your package or not (on Julia 1.8 and higher)
+            # set secret in order to avoid automatic generation of a new one,
+            # which would invalidate the precompiled file
+            Genie.Secrets.secret_token!(repeat("f", 64))
+            
+            port = tryparse(Int, get(ENV, "STIPPLE_PRECOMPILE_PORT", ""))
+            port === nothing && (port = rand(8081:8999))
+            precompile_requests = tryparse(Bool, get(ENV, "STIPPLE_PRECOMPILE_REQUESTS", "true"))
+            # for compatibility with older versions
+            precompile_requests |= tryparse(Bool, get(ENV, "STIPPLE_PRECOMPILE_GET", "true"))
+
+            function precompile_request(method, location, args...; kwargs...)
+                precompile_requests && HTTP.request(method, "http://localhost:$port/$(lstrip(location, '/'))", args...; kwargs...)
+            end
+
+            precompile_get(location::String, args...; kwargs...) = precompile_request(:GET, location, args...; kwargs...)
+            precompile_post(location::String, args...; kwargs...) = precompile_request(:POST, location, args...; kwargs...)
+            
+            Logging.with_logger(Logging.SimpleLogger(stdout, Logging.Error)) do
+                up(port)
+                
+                esc($workload)
+
+                down()
+            end
+            # reset secret back to empty string
+            Genie.Secrets.secret_token!("")
+        end
+        PRECOMPILE[] = false
+        end
+    end
+end
+
+macro stipple_precompile(workload)
+    quote
+        @stipple_precompile begin end begin
+            $workload
+        end
+    end
+end
