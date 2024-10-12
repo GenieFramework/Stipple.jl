@@ -120,6 +120,10 @@ A macro that facilitates the precompilation process for Stipple-related code.
 The macro defines three local routines: `precompile_get`, `precompile_post`, and `precompile_request`.
 These routines can be used to send requests to the local server that is started during the
 precompilation process.
+
+The envrionment variable ENV["STIPPLE_PRECOMPILE_REQUESTS"] can be set to "false" to disable the
+precompilation of HTTP.requests. The default value is "true".
+
 # Example (see also end of Stipple.jl)
 ```
 module MyApp
