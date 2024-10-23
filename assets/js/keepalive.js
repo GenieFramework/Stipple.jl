@@ -5,8 +5,10 @@
 */
 
 function keepalive() {
-  if (Date.now() - _lastMessageAt < Genie.Settings.webchannels_keepalive_frequency) {
-    return
+  if (window._lastMessageAt !== undefined) {
+    if (Date.now() - window._lastMessageAt < Genie.Settings.webchannels_keepalive_frequency) {
+      return
+    }
   }
 
   if (Genie.Settings.env == 'dev') {
