@@ -5,9 +5,14 @@
 */
 
 function keepalive() {
+  if (Date.now() - _lastMessageAt < Genie.Settings.webchannels_keepalive_frequency) {
+    return
+  }
+
   if (Genie.Settings.env == 'dev') {
     console.info('Keeping connection alive');
   }
+
   Genie.WebChannels.sendMessageTo(CHANNEL, 'keepalive', {
     'payload': {}
   });
