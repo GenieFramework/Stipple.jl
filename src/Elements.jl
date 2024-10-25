@@ -108,7 +108,8 @@ function vue_integration(::Type{M};
       "
       try {
         if (Genie.Settings.webchannels_keepalive_frequency > 0) {
-          setInterval(keepalive, Genie.Settings.webchannels_keepalive_frequency);
+          clearInterval($vue_app_name.keepalive_interval);
+          $vue_app_name.keepalive_interval = setInterval(keepalive, Genie.Settings.webchannels_keepalive_frequency);
         }
       } catch (e) {
         if (Genie.Settings.env === 'dev') {
