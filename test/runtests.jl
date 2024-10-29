@@ -597,6 +597,12 @@ end
 
     @test Stipple.stipple_parse(Union{Nothing, String}, "hi") == "hi"
     @test Stipple.stipple_parse(Union{Nothing, String}, SubString("hi")) == "hi"
-    @test Stipple.stipple_parse(Union{Nothing, SubString}, "hi") == SubString("hi")
+    # the following test is only valid for Julia 1.7 and above because specifity of methods
+    # changed in Julia 1.7. As the latest LTS version of Julia is now 1.10, we accept that
+    # this specific stipple_parse for Union{Nothing, T} fails for Julia 1.6
+    # people can define explicit methods for their types if they need this functionality
+    @static if VERSION ≥ v"1.7"
+        @test Stipple.stipple_parse(Union{Nothing, SubString}, "hi") == SubString("hi")
+    end
     @test Stipple.stipple_parse(Union{Nothing, String}, nothing) === nothing
 end
