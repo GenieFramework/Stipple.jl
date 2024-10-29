@@ -15,6 +15,10 @@ function stipple_parse(::Type{T}, value) where T
   end
 end
 
+function stipple_parse(::Type{T}, value::AbstractString) where T<:AbstractString
+  convert(T, value)
+end
+
 # function stipple_parse(::Type{T}, value::Dict) where T <: AbstractDict
 #   convert(T, value)
 # end
@@ -79,8 +83,13 @@ function stipple_parse(::Type{Union{Nothing, T}}, ::Nothing) where T
   nothing
 end
 
-# Union with Nothing
+# Union with Nothing, part I
 function stipple_parse(::Type{Union{Nothing, T}}, value) where T
+  stipple_parse(T, value)
+end
+
+# Union with Nothing, part II
+function stipple_parse(::Type{Union{Nothing, T}}, value::Union{Nothing, T}) where T
   stipple_parse(T, value)
 end
 
