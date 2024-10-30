@@ -49,7 +49,6 @@ end
 
 function register_theme(name::Symbol, theme::String)
   THEMES[name] = theme
-  @show THEMES
 end
 
 

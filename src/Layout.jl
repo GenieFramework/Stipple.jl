@@ -319,6 +319,7 @@ function set_theme!(theme::Symbol)
   else
     THEMES[][Stipple.Theme.THEME_INDEX[]] = Stipple.Theme.to_asset(theme)
   end
+  Stipple.Theme.set_theme(theme)
 
   Stipple.Theme.THEME_INDEX[]
 end
@@ -354,7 +355,7 @@ function theme(; core_theme::Bool = true) :: Vector{String}
   end
 
   unique!(THEMES[])
-  set_theme!(:default) # set the default theme
+  set_theme!(Stipple.Theme.get_theme()) # set the default theme
 
   for f in THEMES[]
     _o = f()
@@ -364,8 +365,6 @@ function theme(; core_theme::Bool = true) :: Vector{String}
     end
     push!(output, _o)
   end
-
-  @show "Output is going out"
 
   output
 end
