@@ -39,7 +39,7 @@ julia> join_js([1, f, "2 "], " - ", pre = strip)
 "1 - hi - 2"
 ```
 """
-function join_js(xx, delim = ""; skip_empty = true, pre::Function = identity, strip_delimiter = true, pre_delim::Union{Function,Nothing} = nothing)
+function join_js(xx::Union{Tuple, AbstractArray}, delim = ""; skip_empty = true, pre::Function = identity, strip_delimiter = true, pre_delim::Union{Function,Nothing} = nothing)
   io = IOBuffer()
   firstrun = true
   s_delim = pre_delim === nothing ? pre(delim) : pre_delim(delim)
@@ -67,9 +67,9 @@ function join_js(xx, delim = ""; skip_empty = true, pre::Function = identity, st
   String(take!(io))
 end
 
-join_js(s::AbstractString, delim = ""; kwargs...) = join_js([s], delim; kwargs...)
-join_js(p::Pair, delim = ""; kwargs...) = join_js([p], delim; kwargs...)
-join_js(f::Base.Callable, delim = ""; kwargs...) = join_js([f], delim; kwargs...)
+function join_js(x, delim = ""; skip_empty = true, pre::Function = identity, strip_delimiter = true, pre_delim::Union{Function,Nothing} = nothing)
+  join_js([x], delim; skip_empty, pre, strip_delimiter, pre_delim)
+end
 
 const RENDERING_MAPPINGS = Dict{String,String}()
 mapping_keys() = collect(keys(RENDERING_MAPPINGS))
