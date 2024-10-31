@@ -1,62 +1,92 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+  :root.stipple-core{
+    --st-color-primary: #0da2e7;
+    --st-color-neutral: #a1afce4d;
+    --st-color-field-border: #a1afce4d;
+    --st-color-field-text-dimmed: #fffffffa;
+    --st-color-field-background-dimmed: #0000001a;
+    --st-shadow-color: #00000061;
+  }
+  :root.stipple-core{
+    --st-dashboard-bg-0: #101928;
+    --st-dashboard-bg-1: #162336;
+    --st-dashboard-bg-2: #1d2c42;
+  }
+  :root.stipple-core{
+    --st-text-1: #e3e9ed;
+    --st-text-2: #aab3ca;
+    --st-text-3: #777f92;
+    --st-font-family: Outfit;
+    --st-font-size: 14px;
+    --st-font-size-4xl: 2.5rem;
+    --st-font-size-3xl: 2.1rem;
+    --st-font-size-2xl: 1.8rem;
+    --st-font-size-xl: 1.5rem;
+    --st-font-size-lg: 1.2rem;
+    --st-font-size-md: 1rem;
+    --st-font-size-sm: 0.8rem;
+    --st-font-size-xs: 0.6rem;
+  }
+  :root.stipple-core h1, :root.stipple-core h2, :root.stipple-core h3, :root.stipple-core h4, :root.stipple-core h5, :root.stipple-core h6{
+    color: var(--st-text-1);
+    font-weight: 600;
+  }
+  :root.stipple-core .st-module{
+    background: var(--st-dashboard-bg-1);
+    box-shadow: var(--st-shadow-md);
+  }
+  :root.stipple-core{
+    --st-color-secondary: #5a963c;
+    --st-color-accent: #458fe3;
+    --st-color-dark: #1c1c1c;
+    --st-color-info: #32cdec;
+    --st-color-white: #ffffff;
+    --st-color-black: #313030;
+    --st-color-positive: #21ba45;
+    --st-color-negative: #c20017;
+    --st-color-warning: #f2c036;
+    --st-color-dark-page: #121212;
+    --st-color-neutral-alt: #d1d1d1;
+    --q-primary: var(--st-color-primary);
+    --q-secondary: var(--st-color-secondary);
+    --q-accent: var(--st-color-accent);
+    --q-positive: var(--st-color-positive);
+    --q-negative: var(--st-color-negative);
+    --q-info: var(--st-color-info);
+    --q-warning: var(--st-color-warning);
+    --q-dark: var(--st-color-dark);
+    --q-white: var(--st-color-white);
+    --q-black: var(--st-color-black);
+    --q-dark-page: var(--st-color-dark-page);
+  }
+  :root.stipple-core a{
+    color: var(--st-color-primary);
+  }
+  :root.stipple-core h1{
+    font-size: var(--st-font-size-4xl);
+  }
+  :root.stipple-core h2{
+    font-size: var(--st-font-size-3xl);
+  }
+  :root.stipple-core h3{
+    font-size: var(--st-font-size-2xl);
+  }
+  :root.stipple-core h4{
+    font-size: var(--st-font-size-xl);
+  }
+  :root.stipple-core h5{
+    font-size: var(--st-font-size-lg);
+  }
+  :root.stipple-core h6{
+    font-size: var(--st-font-size-md);
+  }
 
+  
   /* **************************************************************** */
-  /*                    VARIABLES IN THEMe EDITOR                     */
+  /*                    VARIABLES IN THEME EDITOR                     */
   /* **************************************************************** */
 
 :root.stipple-core {
-  /*===================================================================
-                          Main Colors
-================================================================== */
---st-color-primary: #5bbaff; /* Lighter blue for contrast */
---st-color-secondary: #8fbc5a; /* Softer green */
---st-color-accent: #5a9cf2; /* Slightly brighter accent */
---st-color-dark: #101010; /* Very dark background */
---st-color-info: #48e1ff; /* Brightened for dark theme */
---st-color-white: #e1e1e1; /* Soft white for readability */
---st-color-black: #1a1a1a; /* Darker black tone */
---st-color-positive: #33d165; /* Enhanced green */
---st-color-negative: #e04856; /* Softened red for dark theme */
---st-color-warning: #f7d35e; /* Brighter warning for visibility */
---st-color-dark-page: #0e0e0e; /* Darker background */
---st-color-neutral: #404040; /* Dark neutral tone */
---st-color-neutral-alt: #484848; /* Slight variation for contrast */
-
-/*===================================================================
-                          Text Colors
-================================================================== */
---st-text-1: #e1e5f2; /* Light text for readability */
---st-text-2: #a1a5b0; /* Dimmed light gray */
---st-text-3: #9199b0; /* Muted blue-gray for soft accents */
-
-/*===================================================================
-                        Background Colors
-================================================================== */
---st-dashboard-bg-0: #181818; /* Darker dashboard background */
---st-dashboard-bg-1: #202020; /* Slightly lighter than bg-0 */
---st-dashboard-bg-2: #282828; /* Soft dark gray */
-
-/*===================================================================
-                          UI Elements Colors
-================================================================== */
---st-color-field-border: #404040; /* Dark border */
---st-shadow-color: #00000080; /* Dark shadow with transparency */
---st-field-text-dimmed: #e1e1e133; /* Dimmed white text */
---st-color-field-background-dimmed: #1c1c1cb3; /* Dimmed dark field background */
-
-  /* from stipplecore.css */
-  /* --st-dashboard-module: #fcfcfc;
-  --st-dashboard-line: #e2e2e2;
-  --st-dashboard-bg: #fff;
-  --st-slider--track: #cad2d2;
-  --st-skeleton: #e1e5ee; */
-
-
-  /*===================================================================
-                      Text Properties
-  ================================================================== */
-  --st-font-family: Outfit;
-  --st-font-size: 14px;
   --st-font-size-4xl: 2.5rem;
   --st-font-size-3xl: 2.1rem;
   --st-font-size-2xl: 1.8rem;
@@ -89,10 +119,10 @@
     margin: 0px;
     color: var(--st-text-1);
   }
+  
+  /* ---------- Module ---------- */
 
-  /* ---------- Cards ---------- */
-
-  .st-card {
+  .st-module {
     box-shadow: var(--st-shadow-md);
     border-radius: var(--st-border-radius-md);
     background: var(--st-dashboard-bg-1 );
@@ -110,21 +140,37 @@
     margin-bottom: var(--st-spacing-md);
 
   }
+  
+  
 
-
-
-
+  
   /*===================================================================
-                        Form Controls
+                        Containers & Common
   ================================================================== */
 
   /* ---------- Common  ---------- */
   hr{
     border: solid 0.5px var(--st-color-neutral);
   }
-
+  
   .container > .row, .st-dashboard > .row {
     padding: 0;
+  }
+
+  body > .container {
+    padding: 0 20px;
+    margin: 0 auto;
+  }
+
+  @media (max-width: 999px) {    
+    body > .container {
+        padding: 0 10px;
+      }
+  }
+  @media (max-width: 599px) {
+    body > .container {
+        padding: 0 5px;
+      }
   }
 
   /*===================================================================
@@ -134,7 +180,7 @@
     border: none;
   }
 
-  .q-field--float.q-field--focused.q-field--standout .q-field__control,
+  .q-field--float.q-field--focused.q-field--standout .q-field__control, 
   .q-input .q-field__native,
   .q-select .q-field__native {
     font-weight: var(--st-font-weight-bold);
@@ -171,7 +217,7 @@
     font-weight: normal;
     font-size: 1em;
   }
-
+  
   .q-field .q-field__control{
     padding: 0 12px;
   }
@@ -207,7 +253,7 @@
     padding-top: 6px;
   }
 
-  .q-field--float .q-field__label {
+  .q-field--float .q-field__label, .q-field__control-container .q-field__label {
     transform: translateY(-45px);
     left: -10px;
     font-size: var(--st-font-size-md);
@@ -235,7 +281,7 @@
   .q-ripple {
     display: none;
   }
-
+  
   .q-btn .q-btn__wrapper:before {
     box-shadow: none;
   }
@@ -275,14 +321,14 @@
   .q-knob, .q-rating{
     color: var(--st-color-primary);
   }
-
+  
   .q-avatar{
     .q-avatar__content {
       background: var(--st-color-primary) !important;
       color: var(--st-color-field-text-dimmed);
     }
   }
-
+  
   /*===================================================================
                               Scrolls
   ================================================================== */
@@ -294,14 +340,14 @@
     width: 4px;
     opacity: 0.8;
   }
-
+  
   /*===================================================================
-                          Menu, Q-Item
+                          Menu, Item, Date, Time, Uploader, Card
   ================================================================== */
-  .q-menu {
+  .q-menu, .q-date, .q-time, .q-uploader, .q-card {
     background-color: var( --st-dashboard-bg-2 );
   }
-
+  
   .q-menu .q-item{
     min-height: var( --st-component-height-lg);
   }
@@ -313,42 +359,42 @@
     padding-right: 10px;
   }
 
-
+  
   .q-field__control {
     border-radius: var( --st-border-radius-sm );
   }
-
+  
   /*===================================================================
                         Radio, Checkbox
   ================================================================== */
 .q-checkbox__bg {
     border-radius: 3px;
   }
-
+  
   .q-radio, .q-checkbox {
     margin-top: var(--st-spacing-xs);
     margin-right: var(--st-spacing-md);
     margin-bottom: var(--st-spacing-xs);
     margin-left: var(--st-spacing-xs);
-    .q-radio__inner, .q-checkbox__inner {
-      width: 0.42em;   height: 0.42em;  min-width: 0.42em;
-      .q-radio__bg, .q-checkbox__bg {
-        width: 100%;    height: 100%;   left: 0;  top: 0;
+    .q-radio__inner, .q-checkbox__inner {   
+      width: 0.42em;   height: 0.42em;  min-width: 0.42em;       
+      .q-radio__bg, .q-checkbox__bg {    
+        width: 100%;    height: 100%;   left: 0;  top: 0;    
       }
     }
-    .q-checkbox__inner--falsy {
+    .q-checkbox__inner--falsy {   
       .q-checkbox__bg {
         border: 1.7px solid var(--st-color-neutral);
       }
     }
-    .q-radio__inner--falsy{
+    .q-radio__inner--falsy{   
       .q-radio__bg path {
           fill: var(--st-color-neutral);
       }
     }
     .q-radio__label, .q-checkbox__label {   padding-left: 0.5em;  }
   }
-
+   
 
   /*===================================================================
                           Date-Time
@@ -366,12 +412,12 @@
     background: var(--st-color-primary) !important;
   }
 
-
+  
   .q-item--active, .q-item.q-router-link--active {
     font-weight: var(--st-font-weight-bold);
     color: var(--st-color-primary) !important;
   }
-
+  
 
 
   /*===================================================================
@@ -385,7 +431,7 @@
   .q-slider__pin-text {
     font-weight: var(--st-font-weight-bold);
   }
-
+  
   .q-slider__track-markers {
     color: currentColor;
   }
@@ -406,7 +452,7 @@
   }
 
 
-
+  
 
   /*===================================================================
                               Table
@@ -477,7 +523,7 @@
   .q-table__container{
     background: none;
   }
-
+  
   .q-table td, .q-table th, .q-table thead, .q-table tr  {
     border-color: var(--st-color-field-border);
   }
@@ -495,7 +541,7 @@
     }
   }
 
-
+  
 
   /*===================================================================
                         Big Number
@@ -561,7 +607,7 @@
   /*===================================================================
                         Header
   ================================================================== */
-
+  
 .st-header {
     background: var(--q-color-white);
     padding-left: 20px;
@@ -644,8 +690,6 @@
   .st-center {
     margin: auto;
   }
-
-
 }
 
 
@@ -666,31 +710,3 @@
 .max-width-xl {
   max-width: 1400px;
 }
-
-.top-bar {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.app-container {
-  display: flex;
-  flex-direction: column;
-}
-
-.main-content {
-  display: flex;
-  flex-grow: 1;
-  justify-content: center;
-  margin-bottom: 50px;
-}
-
-
-
-
-@media (max-width: 600px) {
-  .sidebar {
-    display: none;
-  }
-}
-
