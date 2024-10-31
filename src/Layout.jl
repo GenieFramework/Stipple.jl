@@ -5,7 +5,7 @@ Utilities for rendering the general layout of a Stipple app, such as of a data d
 """
 module Layout
 
-using Genie, Stipple
+using Genie, Stipple, Stipple.Theme
 
 export layout, add_css, remove_css
 export page, app, row, column, cell, container, flexgrid_kwargs, htmldiv
@@ -308,6 +308,23 @@ function sizetocol(size::Union{String,Int,Nothing,Symbol} = -1, tag::Symbol = :c
   return join(out, '-')
 end
 
+
+"""
+Sets the app theme to the given theme. Returns the index of the theme in the `THEMES[]` array.
+"""
+function set_theme!(theme::Symbol)
+  if Stipple.Theme.THEME_INDEX[] == 0
+    push!(THEMES[], Stipple.Theme.to_asset(theme)) # automatically load the current/default theme
+    Stipple.Theme.THEME_INDEX[] = length(THEMES[]) # store the index of the current theme
+  else
+    THEMES[][Stipple.Theme.THEME_INDEX[]] = Stipple.Theme.to_asset(theme)
+  end
+  Stipple.Theme.set_theme(theme)
+
+  Stipple.Theme.THEME_INDEX[]
+end
+
+
 """
     function theme() :: String
 
@@ -338,13 +355,31 @@ function theme(; core_theme::Bool = true) :: Vector{String}
   end
 
   unique!(THEMES[])
+  set_theme!(Stipple.Theme.get_theme()) # set the default theme
 
   for f in THEMES[]
-    push!(output, f()...)
+    _o = f()
+    if _o isa Vector || _o isa Tuple
+      push!(output, _o...)
+      continue
+    end
+    push!(output, _o)
   end
 
   output
 end
+
+"""
+Register a theme with a given name and path to the CSS file.
+"""
+function register_theme(name::Symbol, theme::String)
+  Stipple.Theme.register_theme(name, theme)
+  set_theme!(name)
+end
+function register_theme(theme::String)
+  register_theme(Symbol(theme), theme)
+end
+
 
 """
     add_css(css::Function; update = true)

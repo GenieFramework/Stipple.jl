@@ -815,6 +815,18 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
         :css) |> Genie.Renderer.respond
     end
 
+    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, file="theme-default-light")) do
+      Genie.Renderer.WebRenderable(
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", file="theme-default-light")),
+        :css) |> Genie.Renderer.respond
+    end
+
+    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, file="theme-default-dark")) do
+      Genie.Renderer.WebRenderable(
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", file="theme-default-dark")),
+        :css) |> Genie.Renderer.respond
+    end
+
     if is_channels_webtransport()
       Genie.Assets.channels_route(Genie.Assets.jsliteral(channel))
     else
@@ -1293,10 +1305,12 @@ end
 
 include("Typography.jl")
 include("Elements.jl")
+include("Theme.jl")
 include("Layout.jl")
 
 @reexport using .Typography
 @reexport using .Elements
+@reexport using .Theme
 @reexport using .Layout
 
 # precompilation ...
