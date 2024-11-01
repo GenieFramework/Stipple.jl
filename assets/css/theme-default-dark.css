@@ -59,7 +59,7 @@
     --q-black: var(--st-color-black);
     --q-dark-page: var(--st-color-dark-page);
   }
-  :root.stipple-core a{
+  a{
     color: var(--st-color-primary);
   }
   :root.stipple-core h1{
