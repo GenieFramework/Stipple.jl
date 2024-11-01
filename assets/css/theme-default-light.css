@@ -184,11 +184,13 @@
     .q-field {
       font-size: 14px;
     }
+    .q-field__bottom{
+        color: var(--st-text-3);
+      }
     .q-file .q-field__native{
-  
         white-space: nowrap;
         overflow: hidden;
-      }
+    }
     .q-field__input, .q-field__native, .q-field__prefix, .q-field__suffix {
       color: var(--st-text-2);
     }
@@ -362,6 +364,11 @@
         background: var(--st-color-primary) !important;
         color: var(--st-color-field-text-dimmed);
       }
+    }
+
+    .q-uploader{
+        max-width: 100%;
+        width: 100%;
     }
     
     /*===================================================================
