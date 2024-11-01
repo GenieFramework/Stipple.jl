@@ -246,10 +246,12 @@
     /*===================================================================
                               PLOTLY
     ================================================================== */
-    .plot-container.plotly svg.main-svg, 
-    .plot-container.plotly svg.main-svg g.infolayer g.legend rect.bg{
-      fill: none !important;
-    }
+    .plot-container.plotly svg.main-svg{
+        background: none !important;
+      }
+      .plot-container.plotly svg.main-svg g.infolayer g.legend rect.bg{
+        fill: none !important;
+      }
     .plot-container.plotly svg.main-svg g.infolayer g.rangeslider-container rect.rangeslider-bg{
       fill: #00000030 !important;
     }
