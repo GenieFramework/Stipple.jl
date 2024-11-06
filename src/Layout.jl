@@ -321,11 +321,12 @@ function set_theme!(theme::Symbol)
   end
   Stipple.Theme.set_theme(theme)
 
-  Stipple.Theme.THEME_INDEX[]
+  nothing
 end
+const set_theme = set_theme!
 
 
-const DEFAULT_USER_THEME_FILE = joinpath("css", "theme.css")
+const DEFAULT_USER_THEME_FILE = joinpath("css", Stipple.THEMES_FOLDER, "theme.css")
 
 
 """
@@ -360,10 +361,12 @@ function theme(; core_theme::Bool = true) :: Vector{String}
   unique!(THEMES[])
 
   user_theme_file = joinpath(Genie.config.server_document_root, DEFAULT_USER_THEME_FILE)
+  # @show isfile(user_theme_file), user_theme_file
   if isfile(user_theme_file)
     register_theme(:usertheme, "/" * join(splitpath(DEFAULT_USER_THEME_FILE), "/")) # make this a relative URL
     set_theme!(:usertheme)
   else
+    # @show Stipple.Theme.get_theme()
     set_theme!(Stipple.Theme.get_theme()) # set the default theme
   end
 
@@ -382,9 +385,9 @@ end
 """
 Register a theme with a given name and path to the CSS file.
 """
-function register_theme(name::Symbol, theme::String)
+function register_theme(name::Symbol, theme::String; apply_theme = false)
   Stipple.Theme.register_theme(name, theme)
-  set_theme!(name)
+  apply_theme && set_theme!(name)
 end
 function register_theme(theme::String)
   register_theme(Symbol(theme), theme)

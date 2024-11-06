@@ -804,6 +804,8 @@ const DEPS = OrderedCollections.LittleDict{Union{Any,AbstractString}, Function}(
 Registers the `routes` for all the required JavaScript dependencies (scripts).
 """
 
+const THEMES_FOLDER = "themes"
+
 @nospecialize
 
 function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool = true) :: Nothing
@@ -815,15 +817,15 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
         :css) |> Genie.Renderer.respond
     end
 
-    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, file="theme-default-light")) do
+    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-light")) do
       Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", file="theme-default-light")),
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-light")),
         :css) |> Genie.Renderer.respond
     end
 
-    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, file="theme-default-dark")) do
+    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-dark")) do
       Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", file="theme-default-dark")),
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-dark")),
         :css) |> Genie.Renderer.respond
     end
 
