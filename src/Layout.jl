@@ -325,6 +325,9 @@ function set_theme!(theme::Symbol)
 end
 
 
+const DEFAULT_USER_THEME_FILE = joinpath("css", "theme.css")
+
+
 """
     function theme() :: String
 
@@ -355,7 +358,14 @@ function theme(; core_theme::Bool = true) :: Vector{String}
   end
 
   unique!(THEMES[])
-  set_theme!(Stipple.Theme.get_theme()) # set the default theme
+
+  user_theme_file = joinpath(Genie.config.server_document_root, DEFAULT_USER_THEME_FILE)
+  if isfile(user_theme_file)
+    register_theme(:usertheme, "/" * join(splitpath(DEFAULT_USER_THEME_FILE), "/")) # make this a relative URL
+    set_theme!(:usertheme)
+  else
+    set_theme!(Stipple.Theme.get_theme()) # set the default theme
+  end
 
   for f in THEMES[]
     _o = f()
