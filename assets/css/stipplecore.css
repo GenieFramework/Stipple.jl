@@ -92,6 +92,9 @@
   .st-gap-lg {  gap: var(--st-spacing-lg);  }
   .st-gap-xl {  gap: var(--st-spacing-xl);  }
 
+  .st-flex-row {  display: flex; flex-direction: row; }
+  .st-flex-col {  display: flex; flex-direction: column; }
+
 
 }
 

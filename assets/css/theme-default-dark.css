@@ -59,7 +59,7 @@
     --q-black: var(--st-color-black);
     --q-dark-page: var(--st-color-dark-page);
   }
-  :root.stipple-core a{
+  a{
     color: var(--st-color-primary);
   }
   :root.stipple-core h1{
@@ -81,6 +81,7 @@
     font-size: var(--st-font-size-md);
   }
 
+  
   
   /* **************************************************************** */
   /*                    VARIABLES IN THEME EDITOR                     */
@@ -179,88 +180,125 @@
   fieldset {
     border: none;
   }
-
-  .q-field--float.q-field--focused.q-field--standout .q-field__control, 
-  .q-input .q-field__native,
-  .q-select .q-field__native {
-    font-weight: var(--st-font-weight-bold);
+  .q-field {
+    font-size: 14px;
   }
-
-  .q-field--rounded.q-field--filled .q-field__control {
-    border-radius: 5px 5px 0 0;
+  .q-field__bottom{
+    color: var(--st-text-3);
   }
-
-  .q-field--rounded.q-field--outlined .q-field__control,
-  .q-field--rounded.q-field--standout .q-field__control {
-    border-radius: 5px;
-    box-shadow: none;
+  .q-file .q-field__native{
+      white-space: nowrap;
+      overflow: hidden;
   }
-
-  .q-field--standout .text-white .q-field__label,
-  .q-field--standout .text-white .q-field__marginal,
-  .q-field--standout .text-white .q-field__native {
-    color: var(--q-color-white);
+  .q-field__input, .q-field__native, .q-field__prefix, .q-field__suffix {
+    color: var(--st-text-2);
   }
-
-  .q-field .q-field__control, .q-field .q-field__native, .q-field .q-field__marginal {
-    height: var( --st-component-height-md );
-    min-height: var( --st-component-height-md );
+  .q-field__control, .q-field--auto-height .q-field__control, .q-field__marginal {
+    height: 36px;
+    min-height: 36px;
     color: var(--st-text-2);
   }
 
   .q-field--auto-height.q-field--labeled .q-field__control-container {
-    padding-top: 0px;
+    padding-top: 0;
   }
 
-
-  .q-input .q-field__native, .q-select .q-field__native {
-    font-weight: normal;
-    font-size: 1em;
-  }
-  
-  .q-field .q-field__control{
-    padding: 0 12px;
+  .q-field--auto-height .q-field__control, .q-field--auto-height .q-field__native {
+    min-height: 36px;
   }
 
-  .q-field .q-field__control:before {
-    border: solid 1px var(--st-color-field-border);
+ .q-field--labeled {
+    margin-top: 25px;
+ }
+
+ .q-field--labeled .q-field__native, .q-field--labeled .q-field__prefix, .q-field--labeled .q-field__suffix {
+    padding-top: unset;
+    padding-bottom: unset;
+ }
+
+ .q-field--float .q-field__label, .q-field__label {
+    color: var(--st-text-1);
+    transform: translateY(-210%) scale(1);
+    font-weight: 500;
+    left: -10px;
+ }
+
+ .q-field--labeled.q-field--standard .q-field__label, 
+ .q-field--labeled.q-field--borderless .q-field__label {
+    left: 0px;
+ }
+ 
+ .q-field--filled.q-field--rounded .q-field__control {
+    border-radius: 18px 18px 0 0;
+ }
+
+ .q-field .q-field__control:before {
+    border-color: var(--st-color-field-border);
   }
   .q-field.q-field--highlighted .q-field__control:after {
     border-color: var(--st-color-primary);
     border-width: 1px;
-    transform: scale3d(1, 1, 1);
+  }
+  .q-field--outlined .q-field__control:hover:before {
+    border-color: color-mix(in srgb, var(--st-color-primary), transparent 50%);
   }
 
-  .q-select .q-field__control  {
-    padding-right: 0px;
+
+  /*===================================================================
+                            PLOTLY
+  ================================================================== */
+  .plot-container.plotly svg.main-svg{
+    background: none !important;
+  }
+  .plot-container.plotly svg.main-svg g.infolayer g.legend rect.bg{
+    fill: none !important;
+  }
+  .plot-container.plotly svg.main-svg g.infolayer g.rangeslider-container rect.rangeslider-bg{
+    fill: #00000030 !important;
+  }
+  .plot-container.plotly svg.main-svg g.infolayer g.rangeslider-container rect.rangeslider-mask-min,
+  .plot-container.plotly svg.main-svg g.infolayer g.rangeslider-container rect.rangeslider-mask-max{
+    fill: var(--st-dashboard-bg-1) !important;
+    fill-opacity: 0.8 !important;
+  }
+  .plot-container.plotly div.modebar-container > div.modebar{
+   
+  }
+  .plot-container.plotly div.modebar-container > div.modebar > div.modebar-group{
+    background-color: var(--st-dashboard-bg-1) !important;
+  }
+  .plot-container.plotly div.modebar-container > div.modebar > div.modebar-group > a.modebar-btn > svg.icon > path{
+    fill: color-mix(in srgb, var(--st-color-primary), transparent 80%) !important;
+  }
+  .plot-container.plotly div.modebar-container > div.modebar > div.modebar-group > a.modebar-btn:hover > svg.icon > path{
+    fill: var(--st-color-primary) !important;
+  }
+  .plot-container.plotly svg.main-svg g.infolayer g.rangeslider-container rect.rangeslider-mask-max{
+    fill: var(--st-dashboard-bg-1) !important;
+    fill-opacity: 0.8 !important;
+  }
+  .plot-container.plotly svg.main-svg g.treemaplayer g.slice path.surface, 
+  .plot-container.plotly svg.main-svg g.funnelarealayer g.slice path.surface{
+    stroke: var(--st-dashboard-bg-1) !important;
+  }
+  .plot-container.plotly text{
+    font-family: var(--st-font-family) !important;
   }
 
-  .q-field .q-field__control:has(input[type="number"])
-  {
-    padding-right: 5px;
+  .plot-container.plotly svg.main-svg g.infolayer text{
+    fill: var(--st-text-1) !important;
   }
-  .q-field:has(.q-field__label)
-  {
-    margin-top: 35px;
+  .plot-container.plotly svg.main-svg g.cartesianlayer g.zerolinelayer path, 
+  .plot-container.plotly svg.main-svg g.cartesianlayer g.zerolinelayer path{
+    stroke: color-mix(in srgb, var(--st-color-neutral), transparent 0%) !important;
   }
-
-  .q-field__label
-  {
-    font-size: var(--st-font-size-md);
+  .plot-container.plotly svg.main-svg g.cartesianlayer g.gridlayer path{
+    stroke: color-mix(in srgb, var(--st-color-neutral), transparent 60%) !important;
   }
-
-  .q-field--labeled .q-field__native, .q-field--labeled .q-field__prefix, .q-field--labeled .q-field__suffix {
-    padding-top: 6px;
+  .plot-container.plotly svg.main-svg g.cartesianlayer g.xtick text, 
+  .plot-container.plotly svg.main-svg g.cartesianlayer g.ytick text{
+    fill: var(--st-text-2) !important;
   }
-
-  .q-field--float .q-field__label, .q-field__control-container .q-field__label {
-    transform: translateY(-45px);
-    left: -10px;
-    font-size: var(--st-font-size-md);
-    font-weight: 500;
-    color: var(--st-text-1);
-  }
-
 
   /*===================================================================
                       Button, Badge, Banner, chip...
@@ -312,9 +350,7 @@
   /*===================================================================
                         MISC (File, Skeleton)
   ================================================================== */
-  .q-file .q-field__marginal {
-    padding-top: 27px;
-  }
+  
   .q-skeleton {
     background: var(--st-skeleton);
   }
@@ -328,6 +364,11 @@
       color: var(--st-color-field-text-dimmed);
     }
   }
+
+  .q-uploader{
+    max-width: 100%;
+    width: 100%;
+  }
   
   /*===================================================================
                               Scrolls
@@ -340,7 +381,7 @@
     width: 4px;
     opacity: 0.8;
   }
-  
+
   /*===================================================================
                           Menu, Item, Date, Time, Uploader, Card
   ================================================================== */
@@ -360,9 +401,7 @@
   }
 
   
-  .q-field__control {
-    border-radius: var( --st-border-radius-sm );
-  }
+  
   
   /*===================================================================
                         Radio, Checkbox
