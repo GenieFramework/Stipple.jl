@@ -171,7 +171,7 @@ function setchannel(m::M, value) where {M<:ReactiveModel}
   setfield!(m, CHANNELFIELDNAME, ChannelName(value))
 end
 
-const AUTOFIELDS = [:isready, :isprocessing, :fileuploads, :ws_disonnected] # not DRY but we need a reference to the auto-set fields
+const AUTOFIELDS = [:isready, :isprocessing, :fileuploads, :ws_disconnected] # not DRY but we need a reference to the auto-set fields
 const INTERNALFIELDS = [CHANNELFIELDNAME, :modes__] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin
