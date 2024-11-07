@@ -327,6 +327,20 @@ const set_theme = set_theme!
 
 
 const DEFAULT_USER_THEME_FILE = joinpath("css", Stipple.THEMES_FOLDER, "theme.css")
+const USER_THEME_WATCHER = Ref(false)
+function set_user_theme_watcher() :: Bool
+  (USER_THEME_WATCHER[] || ! Genie.Configuration.isdev()) && return false
+
+  path_to_user_theme = joinpath(Genie.config.server_document_root, DEFAULT_USER_THEME_FILE)
+  @async Genie.Revise.entr([path_to_user_theme]) do
+    if ! isfile(path_to_user_theme) && Stipple.Theme.get_theme() == :usertheme
+      set_theme!(:default)
+    end
+  end
+  USER_THEME_WATCHER[] = true
+
+  true
+end
 
 
 """
@@ -364,6 +378,7 @@ function theme(; core_theme::Bool = true) :: Vector{String}
   if isfile(user_theme_file)
     register_theme(:usertheme, "/" * join(splitpath(DEFAULT_USER_THEME_FILE), "/")) # make this a relative URL
     set_theme!(:usertheme)
+    set_user_theme_watcher()
   else
     set_theme!(Stipple.Theme.get_theme()) # set the default theme
   end
