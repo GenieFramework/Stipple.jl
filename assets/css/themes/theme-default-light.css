@@ -59,6 +59,8 @@
     --q-white: var(--st-color-white);
     --q-black: var(--st-color-black);
     --q-dark-page: var(--st-color-dark-page);
+    --st-filter-light: none;
+    --st-filter-dark: invert(1) saturate(0) brightness(2);
   }
   a{
     color: var(--st-color-primary);
@@ -80,6 +82,9 @@
   }
   :root.stipple-core h6{
     font-size: var(--st-font-size-md);
+  }
+  :root.stipple-core ._genie_logo{
+    filter: var(--st-filter-light);
   }
 
   
