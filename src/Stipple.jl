@@ -468,7 +468,8 @@ function init_storage()
     :modes__ => :(modes__::Stipple.LittleDict{Symbol,Int} = Stipple.LittleDict{Symbol,Int}()),
     :isready => :(isready::Stipple.R{Bool} = false),
     :isprocessing => :(isprocessing::Stipple.R{Bool} = false),
-    :fileuploads => :(fileuploads::Stipple.R{Dict{AbstractString,AbstractString}} = Dict{AbstractString,AbstractString}())
+    :fileuploads => :(fileuploads::Stipple.R{Dict{AbstractString,AbstractString}} = Dict{AbstractString,AbstractString}()),
+    :ws_disconnected => :(ws_disconnected::Stipple.R{Bool} = false),
   )
 end
 

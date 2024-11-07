@@ -1,7 +1,7 @@
 """
         mutable struct Reactive{T} <: Observables.AbstractObservable{T}
 
-`Reactive` is a the base type for variables that are handled by a model. It is an `AbstractObservable` of which the content is 
+`Reactive` is a the base type for variables that are handled by a model. It is an `AbstractObservable` of which the content is
 obtained by appending `[]` after the `Reactive` variable's name.
 For convenience, `Reactive` can be abbreviated by `R`.
 
@@ -32,7 +32,7 @@ end
 """
         mutable struct Reactive{T} <: Observables.AbstractObservable{T}
 
-`Reactive` is a the base type for variables that are handled by a model. It is an `AbstractObservable` of which the content is 
+`Reactive` is a the base type for variables that are handled by a model. It is an `AbstractObservable` of which the content is
 obtained by appending `[]` after the `Reactive` variable's name.
 For convenience, `Reactive` can be abbreviated by `R`.
 
@@ -171,7 +171,7 @@ function setchannel(m::M, value) where {M<:ReactiveModel}
   setfield!(m, CHANNELFIELDNAME, ChannelName(value))
 end
 
-const AUTOFIELDS = [:isready, :isprocessing, :fileuploads] # not DRY but we need a reference to the auto-set fields
+const AUTOFIELDS = [:isready, :isprocessing, :fileuploads, :ws_disconnected] # not DRY but we need a reference to the auto-set fields
 const INTERNALFIELDS = [CHANNELFIELDNAME, :modes__] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin
@@ -181,6 +181,7 @@ const INTERNALFIELDS = [CHANNELFIELDNAME, :modes__] # not DRY but we need a refe
   isprocessing::Stipple.R{Bool} = false
   channel_::String = "" # not sure what this does if it's empty
   fileuploads::Stipple.R{Dict{AbstractString,AbstractString}} = Dict{AbstractString,AbstractString}()
+  ws_disconnected::Stipple.R{Bool} = false
 end
 
 @mix Stipple.@with_kw mutable struct old_reactive
