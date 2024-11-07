@@ -361,12 +361,10 @@ function theme(; core_theme::Bool = true) :: Vector{String}
   unique!(THEMES[])
 
   user_theme_file = joinpath(Genie.config.server_document_root, DEFAULT_USER_THEME_FILE)
-  # @show isfile(user_theme_file), user_theme_file
   if isfile(user_theme_file)
     register_theme(:usertheme, "/" * join(splitpath(DEFAULT_USER_THEME_FILE), "/")) # make this a relative URL
     set_theme!(:usertheme)
   else
-    # @show Stipple.Theme.get_theme()
     set_theme!(Stipple.Theme.get_theme()) # set the default theme
   end
 

@@ -10,9 +10,10 @@ using Stipple
 A dictionary of themes. Each theme is a string that represents a CSS class.
 Add your own themes here.
 """
-const THEMES = Dict{Symbol, String}(
+const THEMES = Ref(Dict{Symbol, String}(
 	:default => "theme-default-light",
-)
+  :dark => "theme-default-dark",
+))
 
 
 """
@@ -28,10 +29,18 @@ const THEME_INDEX = Ref(0) #TODO: this will need to be refactored to manage them
 
 
 """
+Get all the themes.
+"""
+function get_themes()
+  return THEMES[]
+end
+
+
+"""
 Get the current theme.
 """
 function set_theme(theme::Symbol)
-	if haskey(THEMES, theme)
+	if haskey(get_themes(), theme)
 		CURRENT_THEME[] = theme
 	else
 		error("Theme not found: $theme")
@@ -47,16 +56,25 @@ function get_theme()
 end
 
 
+"""
+Register a new theme.
+"""
 function register_theme(name::Symbol, theme::String)
-  THEMES[name] = theme
+  get_themes()[name] = theme
 end
 
 
+"""
+Check if a theme exists.
+"""
 function theme_exists(theme::Symbol)
-  return haskey(THEMES, theme)
+  return haskey(get_themes(), theme)
 end
 
 
+"""
+Check if a theme exists, and throw an error if it doesn't.
+"""
 function theme_exists!(theme::Symbol)
   if ! theme_exists(theme)
     error("Theme not found: $theme")
@@ -70,7 +88,7 @@ end
 Get the URL or path to the theme's stylesheet.
 """
 function to_path(theme::Symbol = CURRENT_THEME[]) :: String
-  theme_path = theme_exists!(theme) && THEMES[theme]
+  theme_path = theme_exists!(theme) && get_themes()[theme]
 
   return if startswith(theme_path, "http://") || startswith(theme_path, "https://") # external URL
     theme_path
@@ -86,7 +104,7 @@ end
 Get the current theme as a stylesheet to be loaded into Stipple.Layout.THEMES[]
 """
 function to_asset(theme::Symbol = CURRENT_THEME[]) :: Function
-  theme_path = theme_exists!(theme) && THEMES[theme]
+  theme_path = theme_exists!(theme) && get_themes()[theme]
 
   return if startswith(theme_path, "http://") || startswith(theme_path, "https://") || startswith(theme_path, "/")
     () -> stylesheet(theme_path)
