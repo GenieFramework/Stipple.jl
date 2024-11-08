@@ -335,6 +335,7 @@ function set_user_theme_watcher() :: Bool
   @async Genie.Revise.entr([path_to_user_theme]) do
     if ! isfile(path_to_user_theme) && Stipple.Theme.get_theme() == :usertheme
       set_theme!(:default)
+      Stipple.Theme.unregister_theme(:usertheme)
     end
   end
   USER_THEME_WATCHER[] = true

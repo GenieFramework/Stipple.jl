@@ -65,6 +65,14 @@ end
 
 
 """
+Unregister a theme.
+"""
+function unregister_theme(name::Symbol)
+  theme_exists!(name) && delete!(get_themes(), name)
+end
+
+
+"""
 Check if a theme exists.
 """
 function theme_exists(theme::Symbol)
