@@ -1,7 +1,7 @@
 name = "Stipple"
 uuid = "4acbeb90-81a0-11ea-1966-bdaff8155998"
 authors = ["Adrian <e@essenciary.com>"]
-version = "0.30.12"
+version = "0.30.13"
 
 [deps]
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
@@ -38,7 +38,7 @@ StippleOffsetArraysExt = "OffsetArrays"
 DataFrames = "1"
 Dates = "1.6"
 FilePathsBase = "0.9"
-Genie = "5.30.7"
+Genie = "5.31"
 GenieSession = "1"
 GenieSessionFileSession = "1"
 JSON = "0.20, 0.21"
