@@ -176,6 +176,10 @@ function vue_integration(::Type{M};
       app.config.globalProperties[key] = value
     });
     window.$vue_app_name = window.GENIEMODEL = app.mount(rootSelector);
+    window.channelIndex = window.channelIndex || 0;
+    $vue_app_name.WebChannel = Genie.AllWebChannels[channelIndex];
+    $vue_app_name.channel_ = $vue_app_name.WebChannel.channel;
+    channelIndex++;
   } // end of initStipple
 
     "
@@ -209,8 +213,7 @@ function vue_integration(::Type{M};
     }
   }
 
-  function app_ready() {
-      $vue_app_name.channel_ = window.CHANNEL;
+  function app_$(vue_app_name)_ready() {
       $vue_app_name.isready = true;
       Genie.Revivers.addReviver(window.$(vue_app_name).revive_jsfunction);
       $(transport == Genie.WebChannels &&
@@ -236,8 +239,8 @@ function vue_integration(::Type{M};
     initStipple('#$vue_app_name');
     initWatchers();
 
-    Genie.WebChannels.subscriptionHandlers.push(function(event) {
-      app_ready();
+    $vue_app_name.WebChannel.subscriptionHandlers.push(function(event) {
+      app_$(vue_app_name)_ready();
     });
   }
   """

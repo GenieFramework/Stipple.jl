@@ -67,7 +67,7 @@ const watcherMixin = {
     },
 
     push: function (field) {
-      Genie.WebChannels.sendMessageTo(CHANNEL, 'watchers', {'payload': {
+      Genie.WebChannels.sendMessageTo(this.channel_, 'watchers', {'payload': {
           'field': field,
           'newval': this[field],
           'oldval': null,
@@ -110,7 +110,7 @@ const eventMixin = {
       if (event_data === undefined) { event_data = {} }
       console.debug('event: ' + JSON.stringify(event_data) + ":" + event_handler)
       if (mode=='addclient') { event_data._addclient = true}
-      Genie.WebChannels.sendMessageTo(window.CHANNEL, 'events', {
+      Genie.WebChannels.sendMessageTo(this.channel_, 'events', {
           'event': {
               'name': event_handler,
               'event': event_data

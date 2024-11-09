@@ -342,10 +342,10 @@ changed on the frontend, it is pushed over to the backend using `channel`, at a 
 function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounce::Int, model::M; jsfunction::String = "")::String where {M<:ReactiveModel}
   js_channel = isempty(channel) ?
                 "window.Genie.Settings.webchannels_default_route" :
-                (channel == Stipple.channel_js_name ? Stipple.channel_js_name : "'$channel'")
+                "$vue_app_name.channel_"
 
   isempty(jsfunction) &&
-    (jsfunction = "Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal, 'sesstoken': document.querySelector(\"meta[name='sesstoken']\")?.getAttribute('content')}});")
+    (jsfunction = "$vue_app_name.WebChannel.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal, 'sesstoken': document.querySelector(\"meta[name='sesstoken']\")?.getAttribute('content')}});")
 
   output = IOBuffer()
   if fieldname == :isready
@@ -847,7 +847,10 @@ end
 
 
 function channelscript(channel::String) :: String
-  Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"])
+  Genie.Renderer.Html.script(["""
+  window.CHANNEL = '$(channel)';
+  if (window.Genie) Genie.init_webchannel('$(channel)');
+  """])
 end
 
 
