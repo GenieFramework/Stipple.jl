@@ -849,7 +849,7 @@ end
 function channelscript(channel::String) :: String
   Genie.Renderer.Html.script(["""
   window.CHANNEL = '$(channel)';
-  if (window.Genie) Genie.init_webchannel('$(channel)');
+  if (window.Genie) Genie.initWebChannel('$(channel)');
   """])
 end
 

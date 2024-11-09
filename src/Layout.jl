@@ -86,6 +86,7 @@ julia> page(:elemid, [
 ```
 """
 function page(model::Union{M, Vector{M}}, args...;
+              pagetemplate = (x...) -> join([x...], '\n'),
               partial::Bool = false, title::String = "", class::String = "container", style::String = "",
               channel::String = Genie.config.webchannels_default_route, head_content::Union{AbstractString, Vector{<:AbstractString}} = "",
               prepend::Union{S,Vector} = "", append::Union{T,Vector} = [],
@@ -100,7 +101,7 @@ function page(model::Union{M, Vector{M}}, args...;
   layout(
     [
       join(prepend)
-      [Genie.Renderer.Html.div(id = vm(m), ui, args[2:end]...; class = class, kwargs...) for (m, ui) in zip(model, uis)]...
+      pagetemplate([Genie.Renderer.Html.div(id = vm(m), ui, args[2:end]...; class = class, kwargs...) for (m, ui) in zip(model, uis)]...)
       join(append)
     ], model;
     partial = partial, title = title, style = style, head_content = head_content, channel = channel,
