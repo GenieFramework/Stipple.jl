@@ -222,8 +222,8 @@ function vue_integration(::Type{M};
       "
       try {
         if (Genie.Settings.webchannels_keepalive_frequency > 0) {
-          clearInterval(app.keepalive_interval);
-          app.keepalive_interval = setInterval(keepalive, Genie.Settings.webchannels_keepalive_frequency);
+          clearInterval(app.WebChannel.keepalive_interval);
+          app.WebChannel.keepalive_interval = setInterval(() => keepalive(app.WebChannel), Genie.Settings.webchannels_keepalive_frequency);
         }
       } catch (e) {
         if (Genie.Settings.env === 'dev') {
@@ -239,7 +239,7 @@ function vue_integration(::Type{M};
 
   function create$vue_app_name() {
     window.counter$vue_app_name = window.counter$vue_app_name || 1
-    appName = '$vue_app_name' + ((counter$vue_app_name == 1) ? '' : '_' + window.counter$vue_app_name)
+    const appName = '$vue_app_name' + ((counter$vue_app_name == 1) ? '' : '_' + window.counter$vue_app_name)
     rootSelector = '#$vue_app_name' + ((counter$vue_app_name == 1) ? '' : '-' + window.counter$vue_app_name)
     counter$vue_app_name++
 
