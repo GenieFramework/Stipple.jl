@@ -36,10 +36,11 @@ function js_methods(app::T)::String where {T<:ReactiveModel}
   ""
 end
 
+# deprecated, now part of the model
 function js_methods_events()::String
 """
   handle_event: function (event, handler) {
-    Genie.WebChannels.sendMessageTo(window.CHANNEL, 'events', {
+    Genie.WebChannels.sendMessageTo(GENIEMODEL.channel_, 'events', {
         'event': {
             'name': handler,
             'event': event

@@ -113,7 +113,7 @@ using .NamedTuples
 export JSONParser, JSONText, json, @json, jsfunction, @jsfunction_str
 
 const config = Genie.config
-const channel_js_name = "window.CHANNEL"
+const channel_js_name = "'not_assigned'"
 
 const OptDict = OrderedDict{Symbol, Any}
 opts(;kwargs...) = OptDict(kwargs...)
@@ -345,7 +345,7 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
                 "$vue_app_name.channel_"
 
   isempty(jsfunction) &&
-    (jsfunction = "$vue_app_name.WebChannel.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal, 'sesstoken': document.querySelector(\"meta[name='sesstoken']\")?.getAttribute('content')}});")
+    (jsfunction = "$vue_app_name.push('$fieldname')")
 
   output = IOBuffer()
   if fieldname == :isready
@@ -848,8 +848,7 @@ end
 
 function channelscript(channel::String) :: String
   Genie.Renderer.Html.script(["""
-  window.CHANNEL = '$(channel)'; // probably no longer required, but in runtests still used
-  document.addEventListener("DOMContentLoaded", () => Genie.initWebChannel('$(channel)') );
+  document.addEventListener("DOMContentLoaded", () => window.Genie.initWebChannel('$(channel)') );
   """])
 end
 

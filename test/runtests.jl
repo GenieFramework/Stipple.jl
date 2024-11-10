@@ -10,7 +10,7 @@ function string_get(x; kwargs...)
 end
 
 function get_channel(s::String)
-    match(r"window.CHANNEL = '([^']+)'", s).captures[1]
+    match(r"initWebChannel\('([^']+)'", s).captures[1]
 end
 
 function get_debounce(port, modelname)
