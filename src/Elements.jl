@@ -238,12 +238,13 @@ function vue_integration(::Type{M};
   };
 
   function create$vue_app_name() {
-    window.counter$vue_app_name = window.counter$vue_app_name || 0
-    appName = '$vue_app_name' + ((counter$vue_app_name == 0) ? '' : '-' + window.counter$vue_app_name)
+    window.counter$vue_app_name = window.counter$vue_app_name || 1
+    appName = '$vue_app_name' + ((counter$vue_app_name == 1) ? '' : '_' + window.counter$vue_app_name)
+    rootSelector = '#$vue_app_name' + ((counter$vue_app_name == 1) ? '' : '-' + window.counter$vue_app_name)
     counter$vue_app_name++
 
     if ( window.autorun === undefined || window.autorun === true ) {
-      initStipple$vue_app_name(appName, '#' + appName);
+      initStipple$vue_app_name(appName, rootSelector);
       initWatchers$vue_app_name($app);
 
       $app.WebChannel.subscriptionHandlers.push(function(event) {

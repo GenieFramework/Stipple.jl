@@ -102,8 +102,8 @@ function page(model::Union{M, Vector{M}}, args...;
 
   function rootselector(m::M) where M <:ReactiveModel
     AM = Stipple.get_abstract_type(M)
-    counter[AM] = get(counter, AM, -1) + 1
-    return (counter[AM] == 0) ? vm(m) : "$(vm(m))-$(counter[AM])"
+    counter[AM] = get(counter, AM, 0) + 1
+    return (counter[AM] == 1) ? vm(m) : "$(vm(m))-$(counter[AM])"
   end
 
   layout(
