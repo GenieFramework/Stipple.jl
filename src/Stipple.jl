@@ -848,8 +848,8 @@ end
 
 function channelscript(channel::String) :: String
   Genie.Renderer.Html.script(["""
-  window.CHANNEL = '$(channel)';
-  if (window.Genie) Genie.initWebChannel('$(channel)');
+  window.CHANNEL = '$(channel)'; // probably no longer required, but in runtests still used
+  document.addEventListener("DOMContentLoaded", () => Genie.initWebChannel('$(channel)') );
   """])
 end
 
