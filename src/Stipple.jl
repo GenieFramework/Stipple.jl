@@ -853,6 +853,12 @@ function channelscript(channel::String) :: String
   """])
 end
 
+function initscript(vue_app_name) :: String
+  Genie.Renderer.Html.script(["""
+  // script id: $(randstring(64))
+  document.addEventListener("DOMContentLoaded", () => window.create$vue_app_name() );
+  """])
+end
 
 """
     function deps(channel::String = Genie.config.webchannels_default_route)
@@ -863,6 +869,7 @@ function deps(m::M) :: Vector{String} where {M<:ReactiveModel}
   channel = getchannel(m)
   output = [
     channelscript(channel),
+    initscript(vm(m)),
     (is_channels_webtransport() ? Genie.Assets.channels_script_tag(channel) : Genie.Assets.webthreads_script_tag(channel)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="underscore-min")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.global.prod" : "vue.global"))),

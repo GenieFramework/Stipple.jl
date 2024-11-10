@@ -130,7 +130,7 @@ function vue_integration(::Type{M};
                           debounce::Int = Stipple.JS_DEBOUNCE_TIME,
                           transport::Module = Genie.WebChannels)::String where {M<:ReactiveModel}
   model = Base.invokelatest(M)
-
+  app = "window[appName]"
   vue_app = json(model |> Stipple.render)
   vue_app = replace(vue_app, "\"$(getchannel(model))\"" => Stipple.channel_js_name)
 
@@ -159,7 +159,7 @@ function vue_integration(::Type{M};
   string(
     "
 
-  function initStipple(rootSelector){
+  function initStipple$vue_app_name(appName, rootSelector){
     // components = Stipple.init($( core_theme ? "{theme: '$theme'}" : "" ));
     const app = Vue.createApp($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ))
     /* Object.entries(components).forEach(([key, value]) => {
@@ -175,10 +175,12 @@ function vue_integration(::Type{M};
     Object.entries(app.prototype).forEach(([key, value]) => {
       app.config.globalProperties[key] = value
     });
-    window.$vue_app_name = window.GENIEMODEL = app.mount(rootSelector);
+    $app = window.GENIEMODEL = app.mount(rootSelector);
     window.channelIndex = window.channelIndex || 0;
-    $vue_app_name.WebChannel = Genie.AllWebChannels[channelIndex];
-    $vue_app_name.channel_ = $vue_app_name.WebChannel.channel;
+    $app.WebChannel = Genie.AllWebChannels[channelIndex];
+    $app.WebChannel.parent = $app;
+    $app.channel_ = $app.WebChannel.channel;
+
     channelIndex++;
   } // end of initStipple
 
@@ -188,12 +190,12 @@ function vue_integration(::Type{M};
 
     "
 
-  function initWatchers(){
+  function initWatchers$vue_app_name(app){
     "
 
     ,
     join(
-      [Stipple.watch(string("window.", vue_app_name), field, Stipple.channel_js_name, debounce, model) for field in fieldnames(Stipple.get_concrete_type(M))
+      [Stipple.watch("app", field, Stipple.channel_js_name, debounce, model) for field in fieldnames(Stipple.get_concrete_type(M))
         if Stipple.has_frontend_watcher(field, model)]
     )
     ,
@@ -207,21 +209,21 @@ function vue_integration(::Type{M};
 
     """
 
-  window.parse_payload = function(payload){
+  window.parse_payload = function(WebChannel, payload){
     if (payload.key) {
-       window.$(vue_app_name).updateField(payload.key, payload.value);
+      WebChannel.parent.updateField(payload.key, payload.value);
     }
   }
 
-  function app_$(vue_app_name)_ready() {
-      $vue_app_name.isready = true;
-      Genie.Revivers.addReviver(window.$(vue_app_name).revive_jsfunction);
+  function app_ready(app) {
+      app.isready = true;
+      Genie.Revivers.addReviver(app.revive_jsfunction);
       $(transport == Genie.WebChannels &&
       "
       try {
         if (Genie.Settings.webchannels_keepalive_frequency > 0) {
-          clearInterval($vue_app_name.keepalive_interval);
-          $vue_app_name.keepalive_interval = setInterval(keepalive, Genie.Settings.webchannels_keepalive_frequency);
+          clearInterval(app.keepalive_interval);
+          app.keepalive_interval = setInterval(keepalive, Genie.Settings.webchannels_keepalive_frequency);
         }
       } catch (e) {
         if (Genie.Settings.env === 'dev') {
@@ -235,14 +237,23 @@ function vue_integration(::Type{M};
       }
   };
 
-  if ( window.autorun === undefined || window.autorun === true ) {
-    initStipple('#$vue_app_name');
-    initWatchers();
+  function create$vue_app_name() {
+    window.counter$vue_app_name = window.counter$vue_app_name || 0
+    appName = '$vue_app_name' + ((counter$vue_app_name == 0) ? '' : '-' + window.counter$vue_app_name)
+    counter$vue_app_name++
 
-    $vue_app_name.WebChannel.subscriptionHandlers.push(function(event) {
-      app_$(vue_app_name)_ready();
-    });
+    if ( window.autorun === undefined || window.autorun === true ) {
+      initStipple$vue_app_name(appName, '#' + appName);
+      initWatchers$vue_app_name($app);
+
+      $app.WebChannel.subscriptionHandlers.push(function(event) {
+        app_ready($app);
+      });
+    }
   }
+
+  // create$vue_app_name()
+  // is called via scipt with addEventListener to support multiple apps
   """
   )
 

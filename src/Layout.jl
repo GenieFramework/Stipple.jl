@@ -98,14 +98,21 @@ function page(model::Union{M, Vector{M}}, args...;
   else
     ""
   end
+  counter = Dict{DataType, Int}()
+
+  function rootselector(m::M) where M <:ReactiveModel
+    AM = Stipple.get_abstract_type(M)
+    counter[AM] = get(counter, AM, -1) + 1
+    return (counter[AM] == 0) ? vm(m) : "$(vm(m))-$(counter[AM])"
+  end
+
   layout(
     [
       join(prepend)
-      pagetemplate([Genie.Renderer.Html.div(id = vm(m), ui, args[2:end]...; class = class, kwargs...) for (m, ui) in zip(model, uis)]...)
+      pagetemplate([Genie.Renderer.Html.div(id = rootselector(m), ui, args[2:end]...; class = class, kwargs...) for (m, ui) in zip(model, uis)]...)
       join(append)
     ], model;
-    partial = partial, title = title, style = style, head_content = head_content, channel = channel,
-    core_theme = core_theme)
+    partial, title, style, head_content, channel, core_theme)
 end
 
 const app = page
