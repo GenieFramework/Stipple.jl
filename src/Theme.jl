@@ -39,12 +39,13 @@ end
 """
 Get the current theme.
 """
-function set_theme(theme::Symbol)
+function set_theme(theme::Symbol) :: Bool
 	if haskey(get_themes(), theme)
 		CURRENT_THEME[] = theme
-	else
-		error("Theme not found: $theme")
-	end
+    return true
+  end
+
+  return false
 end
 
 
@@ -68,7 +69,7 @@ end
 Unregister a theme.
 """
 function unregister_theme(name::Symbol)
-  theme_exists!(name) && delete!(get_themes(), name)
+  theme_exists(name) && delete!(get_themes(), name)
 end
 
 
@@ -81,22 +82,10 @@ end
 
 
 """
-Check if a theme exists, and throw an error if it doesn't.
-"""
-function theme_exists!(theme::Symbol)
-  if ! theme_exists(theme)
-    error("Theme not found: $theme")
-  end
-
-  return true
-end
-
-
-"""
 Get the URL or path to the theme's stylesheet.
 """
 function to_path(theme::Symbol = CURRENT_THEME[]) :: String
-  theme_path = theme_exists!(theme) && get_themes()[theme]
+  theme_path = theme_exists(theme) ? get_themes()[theme] : return ""
 
   return if startswith(theme_path, "http://") || startswith(theme_path, "https://") # external URL
     theme_path
@@ -112,7 +101,7 @@ end
 Get the current theme as a stylesheet to be loaded into Stipple.Layout.THEMES[]
 """
 function to_asset(theme::Symbol = CURRENT_THEME[]) :: Function
-  theme_path = theme_exists!(theme) && get_themes()[theme]
+  theme_path = theme_exists(theme) ? get_themes()[theme] : return () -> ""
 
   return if startswith(theme_path, "http://") || startswith(theme_path, "https://") || startswith(theme_path, "/")
     () -> stylesheet(theme_path)

@@ -319,15 +319,27 @@ function set_theme!(theme::Symbol)
   else
     THEMES[][Stipple.Theme.THEME_INDEX[]] = Stipple.Theme.to_asset(theme)
   end
+
+  theme == :usertheme && ! Stipple.Theme.theme_exists(:usertheme) && register_usertheme()
   Stipple.Theme.set_theme(theme)
+
+  try
+    read_theme_dotfile() != theme && write_theme_dotfile(theme)
+  catch ex
+    @warn "Could not write theme to dotfile: $ex"
+  end
 
   nothing
 end
 const set_theme = set_theme!
 
 
+const THEME_DOTFILE = joinpath(".theme")
 const DEFAULT_USER_THEME_FILE = joinpath("css", Stipple.THEMES_FOLDER, "theme.css")
 const USER_THEME_WATCHER = Ref(false)
+const DOTTHEME_WATCHER = Ref(false)
+
+
 function set_user_theme_watcher() :: Bool
   (USER_THEME_WATCHER[] || ! Genie.Configuration.isdev()) && return false
 
@@ -339,6 +351,64 @@ function set_user_theme_watcher() :: Bool
     end
   end
   USER_THEME_WATCHER[] = true
+
+  true
+end
+
+
+function set_dottheme_watcher() :: Bool
+  (DOTTHEME_WATCHER[] || ! Genie.Configuration.isdev()) && return false
+
+  @async Genie.Revise.entr([THEME_DOTFILE]) do
+    theme_from_dotfile = read_theme_dotfile()
+    if theme_from_dotfile !== nothing && Stipple.Theme.get_theme() != theme_from_dotfile
+      if theme_from_dotfile == :usertheme && ! Stipple.Theme.theme_exists(:usertheme)
+        register_usertheme()
+      end
+      set_theme!(theme_from_dotfile)
+    end
+  end
+  DOTTHEME_WATCHER[] = true
+
+  true
+end
+
+
+function read_theme_dotfile() :: Union{Symbol,Nothing}
+  if ! isfile(THEME_DOTFILE)
+    try
+      touch(THEME_DOTFILE) # create the file if it doesn't exist
+    catch ex
+      @warn "Could not create theme dotfile: $ex"
+    end
+
+    return nothing
+  end
+
+  try
+    Symbol(open(THEME_DOTFILE, "r") do file
+      read(file, String)
+    end)
+  catch
+    nothing
+  end
+end
+
+
+function write_theme_dotfile(theme::Symbol)
+  isfile(THEME_DOTFILE) || return
+
+  open(THEME_DOTFILE, "w") do file
+    write(file, string(theme))
+  end
+
+  nothing
+end
+
+
+function register_usertheme() :: Bool
+  isfile(joinpath(Genie.config.server_document_root, DEFAULT_USER_THEME_FILE)) || return false
+  register_theme(:usertheme, "/" * join(splitpath(DEFAULT_USER_THEME_FILE), "/")) # make this a relative URL
 
   true
 end
@@ -375,14 +445,30 @@ function theme(; core_theme::Bool = true) :: Vector{String}
 
   unique!(THEMES[])
 
+  has_custom_theme = false
+  has_dottheme = false
+
   user_theme_file = joinpath(Genie.config.server_document_root, DEFAULT_USER_THEME_FILE)
   if isfile(user_theme_file)
-    register_theme(:usertheme, "/" * join(splitpath(DEFAULT_USER_THEME_FILE), "/")) # make this a relative URL
-    set_theme!(:usertheme)
-    set_user_theme_watcher()
-  else
-    set_theme!(Stipple.Theme.get_theme()) # set the default theme
+    register_usertheme()
+    has_custom_theme = true
   end
+
+  theme_from_dotfile = read_theme_dotfile()
+  if theme_from_dotfile !== nothing && Stipple.Theme.theme_exists(theme_from_dotfile)
+    has_dottheme = true
+  end
+
+  if has_dottheme
+    set_theme!(theme_from_dotfile)
+  elseif has_custom_theme
+    set_theme!(:usertheme)
+  else
+    set_theme!(:default)
+  end
+
+  set_dottheme_watcher()
+  set_user_theme_watcher()
 
   for f in THEMES[]
     _o = f()
