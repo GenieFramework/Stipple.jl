@@ -222,8 +222,7 @@ function vue_integration(::Type{M};
       "
       try {
         if (Genie.Settings.webchannels_keepalive_frequency > 0) {
-          clearInterval(app.WebChannel.keepalive_interval);
-          app.WebChannel.keepalive_interval = setInterval(() => keepalive(app.WebChannel), Genie.Settings.webchannels_keepalive_frequency);
+          keepaliveTimer(app.WebChannel, 0);
         }
       } catch (e) {
         if (Genie.Settings.env === 'dev') {
