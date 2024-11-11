@@ -177,7 +177,7 @@ function vue_integration(::Type{M};
     });
     $app = window.GENIEMODEL = app.mount(rootSelector);
     window.channelIndex = window.channelIndex || 0;
-    $app.WebChannel = Genie.AllWebChannels[channelIndex];
+    $app.WebChannel = Genie.WebChannels;
     $app.WebChannel.parent = $app;
     $app.channel_ = $app.WebChannel.channel;
 

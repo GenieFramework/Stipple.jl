@@ -854,7 +854,6 @@ end
 
 function initscript(vue_app_name) :: String
   Genie.Renderer.Html.script(["""
-  // script id: $(randstring(64))
   document.addEventListener("DOMContentLoaded", () => window.create$vue_app_name() );
   """])
 end

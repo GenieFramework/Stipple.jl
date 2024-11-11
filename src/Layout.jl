@@ -17,6 +17,25 @@ const THEMES = Ref(Function[])
 const FLEXGRID_KWARGS = [:col, :xs, :sm, :md, :lg, :xl, :gutter, :xgutter, :ygutter]
 
 """
+    make_unique!(src::Vector, condition::Union{Nothing, Function} = nothing)
+
+Utility function for removing duplicates from a vector that fulfill a given condition.
+"""
+function make_unique!(src::Vector, condition::Union{Nothing, Function} = nothing)
+  seen = Int[]
+  dups = Int[]
+  for (i, name) in enumerate(src)
+      if name ∈ view(src, seen) && (condition === nothing || condition(name))
+          push!(dups, i)
+      else
+          push!(seen, i)
+      end
+  end
+
+  deleteat!(src, dups)
+end
+
+"""
     function layout(output::Union{String,Vector}; partial::Bool = false, title::String = "", class::String = "", style::String = "",
                       head_content::String = "", channel::String = Genie.config.webchannels_default_route) :: String
 
@@ -53,7 +72,9 @@ function layout(output::Union{S,Vector}, m::Union{M, Vector{M}};
     output
     theme(; core_theme)
     Stipple.deps.(m)...
-  ] |> union
+  ]
+
+  make_unique!(content, contains(r"src=|href="i))
 
   partial && return content
 
