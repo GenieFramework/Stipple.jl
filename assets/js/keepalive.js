@@ -14,13 +14,14 @@ function keepalive(WebChannel) {
     }
   }
 
-  if (Genie.Settings.env == 'dev') {
-    console.info('Keeping connection alive');
+  if (!WebChannel.wsconnectionalert_triggered) {
+    if (Genie.Settings.env == 'dev') {
+      console.info('Keeping connection alive');
+    }
+    WebChannel.sendMessageTo(WebChannel.channel, 'keepalive', {
+      'payload': {}
+    });
   }
-
-  WebChannel.sendMessageTo(WebChannel.channel, 'keepalive', {
-    'payload': {}
-  });
 }
 
 function keepaliveTimer(WebChannel, startDelay = Genie.Settings.webchannels_keepalive_frequency) {

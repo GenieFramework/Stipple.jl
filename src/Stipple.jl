@@ -848,13 +848,13 @@ end
 
 function channelscript(channel::String) :: String
   Genie.Renderer.Html.script(["""
-  document.addEventListener("DOMContentLoaded", () => window.Genie.initWebChannel('$(channel)') );
+  document.addEventListener('DOMContentLoaded', () => window.Genie.initWebChannel('$dchannel') );
   """])
 end
 
-function initscript(vue_app_name) :: String
+function initscript(vue_app_name, channel) :: String
   Genie.Renderer.Html.script(["""
-  document.addEventListener("DOMContentLoaded", () => window.create$vue_app_name() );
+  document.addEventListener('DOMContentLoaded', () => window.create$vue_app_name('$channel') );
   """])
 end
 
@@ -866,8 +866,8 @@ Outputs the HTML code necessary for injecting the dependencies in the page (the 
 function deps(m::M) :: Vector{String} where {M<:ReactiveModel}
   channel = getchannel(m)
   output = [
-    channelscript(channel),
-    initscript(vm(m)),
+    # channelscript(channel),
+    initscript(vm(m), channel),
     (is_channels_webtransport() ? Genie.Assets.channels_script_tag(channel) : Genie.Assets.webthreads_script_tag(channel)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="underscore-min")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.global.prod" : "vue.global"))),

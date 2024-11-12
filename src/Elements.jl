@@ -159,7 +159,7 @@ function vue_integration(::Type{M};
   string(
     "
 
-  function initStipple$vue_app_name(appName, rootSelector){
+  function initStipple$vue_app_name(appName, rootSelector, channel){
     // components = Stipple.init($( core_theme ? "{theme: '$theme'}" : "" ));
     const app = Vue.createApp($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ))
     /* Object.entries(components).forEach(([key, value]) => {
@@ -177,9 +177,9 @@ function vue_integration(::Type{M};
     });
     $app = window.GENIEMODEL = app.mount(rootSelector);
     window.channelIndex = window.channelIndex || 0;
-    $app.WebChannel = Genie.WebChannels;
+    $app.WebChannel = Genie.initWebChannel(channel);
     $app.WebChannel.parent = $app;
-    $app.channel_ = $app.WebChannel.channel;
+    $app.channel_ = channel;
 
     channelIndex++;
   } // end of initStipple
@@ -216,34 +216,34 @@ function vue_integration(::Type{M};
   }
 
   function app_ready(app) {
-      app.isready = true;
-      Genie.Revivers.addReviver(app.revive_jsfunction);
-      $(transport == Genie.WebChannels &&
-      "
-      try {
-        if (Genie.Settings.webchannels_keepalive_frequency > 0) {
-          keepaliveTimer(app.WebChannel, 0);
-        }
-      } catch (e) {
-        if (Genie.Settings.env === 'dev') {
-          console.error('Error setting WebSocket keepalive interval: ' + e);
-        }
+    if (app.WebChannel == Genie.AllWebChannels[0]) Genie.Revivers.addReviver(app.revive_jsfunction);
+    app.isready = true;
+    $(transport == Genie.WebChannels &&
+    "
+    try {
+      if (Genie.Settings.webchannels_keepalive_frequency > 0) {
+        keepaliveTimer(app.WebChannel, 0);
       }
-      ")
-
+    } catch (e) {
       if (Genie.Settings.env === 'dev') {
-        console.info('App starting');
+        console.error('Error setting WebSocket keepalive interval: ' + e);
       }
+    }
+    ")
+
+    if (Genie.Settings.env === 'dev') {
+      console.info('App starting');
+    }
   };
 
-  function create$vue_app_name() {
+  function create$vue_app_name(channel) {
     window.counter$vue_app_name = window.counter$vue_app_name || 1
     const appName = '$vue_app_name' + ((counter$vue_app_name == 1) ? '' : '_' + window.counter$vue_app_name)
     rootSelector = '#$vue_app_name' + ((counter$vue_app_name == 1) ? '' : '-' + window.counter$vue_app_name)
     counter$vue_app_name++
 
     if ( window.autorun === undefined || window.autorun === true ) {
-      initStipple$vue_app_name(appName, rootSelector);
+      initStipple$vue_app_name(appName, rootSelector, channel);
       initWatchers$vue_app_name($app);
 
       $app.WebChannel.subscriptionHandlers.push(function(event) {
