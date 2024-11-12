@@ -845,7 +845,7 @@ function injectdeps(output::Vector{AbstractString}, M::Type{<:ReactiveModel}) ::
   output
 end
 
-
+# no longer needed, replaced by initscript
 function channelscript(channel::String) :: String
   Genie.Renderer.Html.script(["""
   document.addEventListener('DOMContentLoaded', () => window.Genie.initWebChannel('$dchannel') );
@@ -866,7 +866,6 @@ Outputs the HTML code necessary for injecting the dependencies in the page (the 
 function deps(m::M) :: Vector{String} where {M<:ReactiveModel}
   channel = getchannel(m)
   output = [
-    # channelscript(channel),
     initscript(vm(m), channel),
     (is_channels_webtransport() ? Genie.Assets.channels_script_tag(channel) : Genie.Assets.webthreads_script_tag(channel)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="underscore-min")),
