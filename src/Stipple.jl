@@ -848,7 +848,7 @@ end
 # no longer needed, replaced by initscript
 function channelscript(channel::String) :: String
   Genie.Renderer.Html.script(["""
-  document.addEventListener('DOMContentLoaded', () => window.Genie.initWebChannel('$dchannel') );
+  document.addEventListener('DOMContentLoaded', () => window.Genie.initWebChannel('$channel') );
   """])
 end
 
