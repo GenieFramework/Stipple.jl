@@ -14,7 +14,7 @@ function keepalive(WebChannel) {
     }
   }
 
-  if (!WebChannel.wsconnectionalert_triggered) {
+  if (!WebChannel.ws_disconnected) {
     if (Genie.Settings.env == 'dev') {
       console.info('Keeping connection alive');
     }
