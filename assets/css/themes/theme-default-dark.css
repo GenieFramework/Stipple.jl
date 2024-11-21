@@ -4,18 +4,18 @@
     --st-color-neutral: #a1afce4d;
     --st-color-field-border: #a1afce4d;
     --st-color-field-text-dimmed: #fffffffa;
-    --st-color-field-background-dimmed: #0000001a;
+    --st-color-field-background-dimmed: #0000002a;
     --st-shadow-color: #00000061;
   }
   :root.stipple-core{
     --st-dashboard-bg-0: #101928;
-    --st-dashboard-bg-1: #162336;
-    --st-dashboard-bg-2: #1d2c42;
+    --st-dashboard-bg-1: #1d2d44;
+    --st-dashboard-bg-2: #26374f;
   }
   :root.stipple-core{
-    --st-text-1: #e3e9ed;
-    --st-text-2: #aab3ca;
-    --st-text-3: #777f92;
+    --st-text-1: #f3f6f8;
+    --st-text-2: #d3d9e9;
+    --st-text-3: #adb4c7;
     --st-font-family: Outfit;
     --st-font-size: 14px;
     --st-font-size-4xl: 2.5rem;
@@ -138,13 +138,12 @@
     transition: background 0.3s;
   }
 
-  .st-card-title {
+  .st-module-title {
     font-size: var(--st-font-size-lg);
     font-weight: bold;
     color: var(--st-text-1);
     margin-top: 0px;
     margin-bottom: var(--st-spacing-md);
-
   }
   
   
@@ -212,20 +211,22 @@
     min-height: 36px;
   }
 
- .q-field--labeled {
-    margin-top: 25px;
- }
-
  .q-field--labeled .q-field__native, .q-field--labeled .q-field__prefix, .q-field--labeled .q-field__suffix {
     padding-top: unset;
     padding-bottom: unset;
  }
 
+ .q-field--labeled {
+    padding-top: 25px;
+ }
+
  .q-field--float .q-field__label, .q-field__label {
     color: var(--st-text-1);
-    transform: translateY(-210%) scale(1);
+    transform: translateY(-190%) scale(1);
     font-weight: 500;
     left: -10px;
+    max-width: 100%;
+    font-size: var(--st-font-size-md);
  }
 
  .q-field--labeled.q-field--standard .q-field__label, 
@@ -235,6 +236,10 @@
  
  .q-field--filled.q-field--rounded .q-field__control {
     border-radius: 18px 18px 0 0;
+ }
+
+ .q-field--filled .q-field__control{
+  background-color: var(--st-color-field-background-dimmed);
  }
 
  .q-field .q-field__control:before {
