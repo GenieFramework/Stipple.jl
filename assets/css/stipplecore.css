@@ -128,6 +128,14 @@
   margin-left: 5px;
 }
 
+.st-footer {
+  padding: var(--st-spacing-md);
+  text-align: center;
+  background-color: var(--st-dashboard-bg-1);
+  margin: var(--st-spacing-xl) 8px;
+}
+
+
 /*===================================================================
                             LAYOUT
   ================================================================== */
