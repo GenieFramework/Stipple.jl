@@ -211,3 +211,37 @@ macro stipple_precompile(workload)
         end
     end
 end
+
+"""
+    striplines!(ex::Union{Expr, Vector})
+
+Remove all line number nodes from an expression or vector of expressions. See also `striplines`.
+"""
+function striplines!(ex::Expr)
+  for i in reverse(eachindex(ex.args))
+    if isa(ex.args[i], LineNumberNode)
+      deleteat!(ex.args, i)
+    elseif isa(ex.args[i], Expr)
+      striplines!(ex.args[i])
+    end
+  end
+  ex
+end
+
+function striplines!(exprs::Vector)
+  for i in reverse(eachindex(exprs))
+    if isa(exprs[i], LineNumberNode)
+      deleteat!(exprs, i)
+    elseif isa(exprs[i], Expr)
+      striplines!(exprs[i])
+    end
+  end
+  exprs
+end
+
+"""
+    striplines(ex::Union{Expr, Vector})
+
+Return a copy of an expression with all line number nodes removed. See also `striplines!`.
+"""
+striplines(ex) = striplines!(copy(ex))

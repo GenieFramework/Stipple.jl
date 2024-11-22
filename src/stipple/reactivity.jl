@@ -153,10 +153,8 @@ end
 """
 abstract type ReactiveModel end
 
-export @vars, @add_vars, @define_mixin, @clear_cache, clear_cache, @clear_route, clear_route
+export @vars, @define_mixin, @clear_cache, clear_cache, @clear_route, clear_route
 
-# deprecated
-export @reactive, @reactive!, @old_reactive, @old_reactive!
 export ChannelName, getchannel
 
 const ChannelName = String
@@ -182,15 +180,6 @@ const INTERNALFIELDS = [CHANNELFIELDNAME, :modes__] # not DRY but we need a refe
   channel_::String = "" # not sure what this does if it's empty
   fileuploads::Stipple.R{Dict{AbstractString,AbstractString}} = Dict{AbstractString,AbstractString}()
   ws_disconnected::Stipple.R{Bool} = false
-end
-
-@mix Stipple.@with_kw mutable struct old_reactive
-  Stipple.@reactors
-end
-
-
-@mix Stipple.@kwredef mutable struct old_reactive!
-  Stipple.@reactors
 end
 
 function split_expr(expr)
@@ -261,16 +250,17 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
 
   source = (source !== nothing ? String(strip(string(source), collect("#= "))) : "")
 
+  # args[end] instead of args[2] because of potential LineNumberNode
   var = expr.args[1]
   if !isnothing(mode)
     mode = mode isa Symbol && ! isdefined(m, mode) ? :(Stipple.$mode) : mode
     type = if isa(var, Expr) && var.head == Symbol("::")
       # change type T to type R{T}
-      var.args[2] = :($Rtype{$(var.args[2])})
+      var.args[end] = :($Rtype{$(var.args[end])})
     else
       try
         # add type definition `::R{T}` to the var where T is the type of the default value
-        T = @eval m typeof($(expr.args[2]))
+        T = @eval(m === nothing ? @__MODULE__() : m, typeof($(expr.args[end])))
         expr.args[1] = :($var::$Rtype{$T})
         Rtype
       catch ex
@@ -279,13 +269,13 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
         :($Rtype{Any})
       end
     end
-    expr.args[2] = :($type($(expr.args[2]), $mode, false, false, $source))
+    expr.args[end] = :($type($(expr.args[end]), $mode, false, false, $source))
   end
 
   # if no type is defined, set the type of the default value
   if expr.args[1] isa Symbol
     try
-      T = @eval m typeof($(expr.args[2]))
+      T = @eval m typeof($(expr.args[end]))
       expr.args[1] = :($(expr.args[1])::$T)
     catch ex
       # if the default value is not defined, we can't infer the type
@@ -296,24 +286,12 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
   expr.args[1].args[1], expr
 end
 
-macro var_storage(expr, new_inputmode = :auto)
+parse_expression(expr::Expr, mode = nothing, source = nothing, m = nothing) = parse_expression!(copy(expr), mode, source, m)
+
+macro var_storage(expr)
   m = __module__
   if expr.head != :block
       expr = quote $expr end
-  end
-
-  if new_inputmode == :auto
-    new_inputmode = true
-    for e in expr.args
-        e isa LineNumberNode && continue
-        e.args[1] isa Symbol && continue
-
-        type = e.args[1].args[2]
-        if startswith(string(type), r"(Stipple\.)?R(eactive)?($|{)")
-            new_inputmode = false
-            break
-        end
-    end
   end
 
   storage = init_storage()
@@ -327,34 +305,17 @@ macro var_storage(expr, new_inputmode = :auto)
       mode = :PUBLIC
       reactive = true
       if e.head == :(=)
-        var, ex = if new_inputmode
-            #check whether flags are set
-            if e.args[end] isa Expr && e.args[end].head == :tuple
-                flags = e.args[end].args[2:end]
-                if length(flags) > 0 && flags[1] ∈ [:READONLY, :PRIVATE, :JSFUNCTION, :NON_REACTIVE]
-                    newmode = intersect(setdiff(flags, [:NON_REACTIVE]), [:READONLY, :PRIVATE, :JSFUNCTION])
-                    length(newmode) > 0 && (mode = newmode[end])
-                    reactive = :NON_REACTIVE ∉ flags
-                    e.args[end] = e.args[end].args[1]
-                end
-            end
-            var, ex = parse_expression!(e, reactive ? mode : nothing, source, m)
-        else
-            var = e.args[1]
-            if var isa Symbol
-                reactive = false
-            else
-                type = var.args[2]
-                reactive = startswith(string(type), r"(Stipple\.)?R(eactive)?($|{)")
-                var = var.args[1]
-            end
-            if occursin(Stipple.SETTINGS.private_pattern, string(var))
-                mode = :PRIVATE
-            elseif occursin(Stipple.SETTINGS.readonly_pattern, string(var))
-                mode = :READONLY
-            end
-            var, e
+        #check whether flags are set
+        if e.args[end] isa Expr && e.args[end].head == :tuple
+          flags = e.args[end].args[2:end]
+          if length(flags) > 0 && flags[1] ∈ [:READONLY, :PRIVATE, :JSFUNCTION, :NON_REACTIVE]
+            newmode = intersect(setdiff(flags, [:NON_REACTIVE]), [:READONLY, :PRIVATE, :JSFUNCTION])
+            length(newmode) > 0 && (mode = newmode[end])
+            reactive = :NON_REACTIVE ∉ flags
+            e.args[end] = e.args[end].args[1]
+          end
         end
+        var, ex = parse_expression!(e, reactive ? mode : nothing, source, m)
         # prevent overwriting of control fields
         var ∈ keys(Stipple.init_storage()) && continue
         if reactive == false
@@ -412,19 +373,26 @@ macro type(modelname, storage)
   modelconst = Symbol(modelname, '!')
   modelconst_qn = QuoteNode(modelconst)
 
+  output = quote end
+  output.args = @eval __module__ collect(values($storage))
+  output_qn = QuoteNode(output)
+
+  is_called_by_revise = length(output.args) <= 1
+  is_called_by_revise && error("No fields defined in model $modelname")
+
   quote
     abstract type $modelname <: Stipple.ReactiveModel end
-    local output = quote end
-    output.args = collect(values($storage))
+    
     # Revise seems to call the macro line by line internally for code tracking purposes.
     # Interstingly, Revise will not populate output.args in that case and will generate an empty model.
     # We use this to our advantage and prevent additional model generation when length(output.args) <= 1.
-    local is_called_by_revise = length(output.args) <= 1
-    eval(quote
-      $is_called_by_revise || Stipple.@kwredef mutable struct $$modelconst_qn <: $$modelname
-        $output
-      end
-    end)
+    local is_called_by_revise = length($(output.args)) <= 1
+    is_called_by_revise && error("No variables defined")
+
+    @eval Stipple.@kwredef mutable struct $modelconst <: $modelname
+      $output
+    end
+    
     $modelname(; kwargs...) = $modelconst(; kwargs...)
     Stipple.get_concrete_type(::Type{$modelname}) = $modelconst
 
@@ -446,49 +414,11 @@ end
   e::String = "private",  NON_REACTIVE, PRIVATE
 end
 ```
-This macro replaces the old `@reactive!` and doesn't need the Reactive in the declaration.
-Instead the non_reactives are marked by a flag. The old declaration syntax is still supported
-to make adaptation of old code easier.
-```
-@vars HHModel begin
-  a::R{Int} = 1
-  b::R{Float64} = 2
-  c::String = "Hello"
-  d_::String = "readonly"
-  e__::String = "private"
-end
-```
-by
-
-```julia
-@reactive! mutual struct HHModel <: ReactiveModel
-  a::R{Int} = 1
-  b::R{Float64} = 2
-  c::String = "Hello"
-  d_::String = "readonly"
-  e__::String = "private"
-end
-```
-
-Old syntax is still supported by @vars and can be forced by the `new_inputmode` argument.
-
 """
-macro vars(modelname, expr, new_inputmode = :auto)
+macro vars(modelname, expr)
   quote
-    Stipple.@type($modelname, values(Stipple.@var_storage($expr, $new_inputmode)))
+    Stipple.@type($modelname, values(Stipple.@var_storage($expr)))
   end |> esc
-end
-
-macro add_vars(modelname, expr, new_inputmode = :auto)
-  storage = @eval(__module__, Stipple.@var_storage($expr, $new_inputmode))
-  new_storage = if isdefined(__module__, modelname)
-    old_storage = @eval(__module__, Stipple.model_to_storage($modelname))
-    ReactiveTools.merge_storage(old_storage, storage; context = __module__)
-  else
-    storage
-  end
-
-  esc(:(Stipple.@type $modelname $new_storage))
 end
 
 macro define_mixin(mixin_name, expr)
@@ -500,44 +430,6 @@ macro define_mixin(mixin_name, expr)
           $(values(storage)...)
       end
   end |> esc
-end
-
-macro reactive!(expr)
-  warning = """@reactive! is deprecated, please replace use `@vars` instead.
-
-  In case of errors, please replace `@reactive!` by `@old_reactive!` and open an issue at
-  https://github.com/GenieFramework/Stipple.jl.
-
-  If you use `@old_reactive!`, make sure to call `accessmode_from_pattern!()`, because the internals for
-  accessmode have changed, e.g.
-  ```
-  model = init(MyDashboard) |> accessmode_from_pattern! |> handlers |> ui |> html
-  ```
-  """
-  @warn warning
-  output = @eval(__module__, values(Stipple.@var_storage($(expr.args[3]), false)))
-  expr.args[3] = quote $(output...) end
-
-  esc(:(Stipple.@kwredef $expr))
-end
-
-macro reactive(expr)
-  warning = """@reactive is deprecated, please replace use `@vars` instead.
-
-  In case of errors, please replace `@reactive` by `@old_reactive!` and open an issue at
-  https://github.com/GenieFramework/Stipple.jl.
-  If you use `@old_reactive!`, make sure to call `accessmode_from_pattern!()`, because the internals for
-  accessmode have changed, e.g.
-  ```
-  model = init(MyDashboard) |> accessmode_from_pattern! |> handlers |> ui |> html
-  ```
-
-  """
-  @warn warning
-  output = @eval(__module__, values(Stipple.@var_storage($(expr.args[3]), false)))
-  expr.args[3] = quote $(output...) end
-
-  esc(:(Base.@kwdef $expr))
 end
 
 #===#
