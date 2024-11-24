@@ -377,19 +377,10 @@ macro type(modelname, storage)
   output.args = @eval __module__ collect(values($storage))
   output_qn = QuoteNode(output)
 
-  is_called_by_revise = length(output.args) <= 1
-  is_called_by_revise && error("No fields defined in model $modelname")
-
   quote
     abstract type $modelname <: Stipple.ReactiveModel end
-    
-    # Revise seems to call the macro line by line internally for code tracking purposes.
-    # Interstingly, Revise will not populate output.args in that case and will generate an empty model.
-    # We use this to our advantage and prevent additional model generation when length(output.args) <= 1.
-    local is_called_by_revise = length($(output.args)) <= 1
-    is_called_by_revise && error("No variables defined")
 
-    @eval Stipple.@kwredef mutable struct $modelconst <: $modelname
+    Stipple.@kwredef mutable struct $modelconst <: $modelname
       $output
     end
     

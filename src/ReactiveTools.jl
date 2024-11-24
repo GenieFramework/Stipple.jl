@@ -30,9 +30,6 @@ export @before_create, @created, @before_mount, @mounted, @before_update, @updat
 
 export DEFAULT_LAYOUT, Page
 
-const HANDLERS = LittleDict{Module,Vector{Expr}}()
-const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
-
 const HANDLERS_FUNCTIONS = LittleDict{Type{<:ReactiveModel},Function}()
 
 function DEFAULT_LAYOUT(; title::String = "Genie App",
@@ -126,13 +123,6 @@ macro appname()
   :(isdefined($__module__, :__typename__) ? @appname($appname) : $appname) |> esc
 end
 
-function Stipple.init_storage(m::Module)
-  (m == @__MODULE__) && return nothing
-  haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = Stipple.init_storage())
-  haskey(TYPES, m) || (TYPES[m] = nothing)
-  REACTIVE_STORAGE[m]
-end
-
 function Stipple.setmode!(expr::Expr, mode::Int, fieldnames::Symbol...)
   fieldname in [Stipple.CHANNELFIELDNAME, :modes__] && return
   expr.args[2] isa Expr && expr.args[2].args[1] == :(Stipple._deepcopy) && (expr.args[2] = expr.args[2].args[2])
@@ -158,10 +148,6 @@ end
 
 #===#
 
-function clear_type(m::Module)
-  TYPES[m] = nothing
-end
-
 function delete_handlers_fn(m::Module)
   if isdefined(m, :__GF_AUTO_HANDLERS__)
     Base.delete_method.(methods(m.__GF_AUTO_HANDLERS__))
@@ -169,7 +155,9 @@ function delete_handlers_fn(m::Module)
 end
 
 function delete_events(m::Module)
-  haskey(TYPES, m) && TYPES[m] isa DataType && delete_events(TYPES[m])
+  modelname = Symbol(model_typename(m))
+  M = @eval m $modelname
+  delete_events(M) 
 end
 
 function delete_events(::Type{M}) where M
@@ -186,7 +174,6 @@ function delete_events(::Type{M}) where M
 end
 
 function delete_handlers!(m::Module)
-  delete!(HANDLERS, m)
   delete_handlers_fn(m)
   delete_events(m)
   nothing
@@ -205,30 +192,6 @@ macro clear()
   delete_handlers!(__module__)
 end
 
-macro clear(args...)
-  haskey(REACTIVE_STORAGE, __module__) || return
-  for arg in args
-    arg in [Stipple.CHANNELFIELDNAME, :modes__] && continue
-    delete!(REACTIVE_STORAGE[__module__], arg)
-  end
-  deletemode!(REACTIVE_STORAGE[__module__][:modes__], args...)
-
-  update_storage(__module__)
-
-  REACTIVE_STORAGE[__module__]
-end
-
-"""
-```julia
-@clear_vars
-```
-
-Deletes all reactive variables in a model.
-"""
-macro clear_vars()
-  delete_bindings!(__module__)
-end
-
 """
 ```julia
 @clear_handlers
@@ -242,16 +205,8 @@ end
 
 import Stipple.@type
 macro type()
-  Stipple.init_storage(__module__)
-  type = if TYPES[__module__] !== nothing
-    TYPES[__module__]
-  else
-    modelname = Symbol(model_typename(__module__))
-    storage = REACTIVE_STORAGE[__module__]
-    TYPES[__module__] = @eval(__module__, Stipple.@type($modelname, $storage))
-  end
-
-  esc(:($type))
+  modelname = Symbol(model_typename(__module__))
+  esc(:($modelname))
 end
 
 import Stipple.@clear_cache
@@ -412,12 +367,11 @@ end
 import Stipple: @vars
 
 macro vars(expr)
-  init_storage(__module__)
-
-  REACTIVE_STORAGE[__module__] = @eval(__module__, Stipple.@var_storage($expr))
-
-  update_storage(__module__)
-  REACTIVE_STORAGE[__module__]
+  modelname = Symbol(model_typename(__module__))
+  storage = Stipple.init_storage()
+  quote
+    Stipple.ReactiveTools.@vars $modelname $expr
+  end |> esc
 end
 
 macro model()
@@ -454,7 +408,7 @@ macro app(expr)
   storage = Stipple.init_storage()
   quote
     Stipple.ReactiveTools.@app $modelname $expr __GF_AUTO_HANDLERS__
-    Stipple.ReactiveTools.TYPES[$__module__] = $modelname
+    $modelname
   end |> esc
 end
 
@@ -518,10 +472,6 @@ function parse_macros(expr::Expr, storage::LittleDict, m::Module)
 end
 
 #===#
-
-function init_handlers(m::Module)
-  get!(Vector{Expr}, HANDLERS, m)
-end
 
 """
         @init(kwargs...)
@@ -608,28 +558,23 @@ macro init(args...)
 end
 
 macro app(typename, expr, handlers_fn_name = :handlers)
-  # indicate to the @handlers macro that old typefields have to be cleared
-  # (avoids model_to_storage)
-  newtypename = Symbol(typename, "_!_")
   quote
-    let model = Stipple.ReactiveTools.@handlers $newtypename $expr $handlers_fn_name
-      Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$typename] = $handlers_fn_name
-      model
-    end
+    Stipple.ReactiveTools.@handlers $typename $expr $handlers_fn_name
+    Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$typename] = $handlers_fn_name
+    $typename, $handlers_fn_name
   end |> esc
 end
 
 macro handlers()
   modelname = Symbol(model_typename(__module__))
+  empty_block = Expr(:block)
   quote
-    Stipple.ReactiveTools.TYPES[$__module__] = Stipple.@type
-    Stipple.ReactiveTools.@handlers $modelname Stipple.ReactiveTools.REACTIVE_STORAGE[$__module__] __GF_AUTO_HANDLERS__
+    Stipple.ReactiveTools.@handlers $modelname $empty_block __GF_AUTO_HANDLERS__
   end |> esc
 end
 
 macro handlers(expr)
   delete_handlers!(__module__)
-  init_handlers(__module__)
 
   quote
     $expr
@@ -662,9 +607,6 @@ function get_varnames(app_expr::Vector, context::Module)
 end
 
 macro handlers(typename, expr, handlers_fn_name = :handlers)
-  newtype = endswith(String(typename), "_!_")
-  newtype && (typename = Symbol(String(typename)[1:end-3]))
-
   expr = wrap(expr, :block)
   i_start = 1
   handlercode = []
@@ -689,25 +631,13 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
     end
   end
 
-  # model_to_storage is only needed when we add variables to an existing type.
-  no_new_vars = findfirst(x -> x isa Expr, initcode) === nothing
-  # if we redefine a type newtype is true
-  if isdefined(__module__, typename) && no_new_vars && ! newtype
-    # model is already defined and no variables are added and we are not redefining a model type
-  else
-    # we need to define a type ...
-    storage = if ! newtype && isdefined(__module__, typename) && ! no_new_vars
-      @eval(__module__, Stipple.model_to_storage($typename))
-    else
-      Stipple.init_storage()
-    end
-    
-    varnames = get_varnames(initcode, __module__)
-  end
+  storage = Stipple.init_storage()
+  varnames = get_varnames(initcode, __module__)
 
   filter!(x -> !isa(x, LineNumberNode), initcode)
   parse_macros.(initcode, Ref(storage), Ref(__module__))
-  initcode_final = :(Stipple.@type($typename, $storage))
+  # if no initcode is provided assume that the model is already defined
+  initcode_final = isempty(initcode) ? Expr(:block) : :(Stipple.@type($typename, $storage))
 
   handlercode_final = []
   d = LittleDict(varnames .=> varnames)
@@ -844,15 +774,8 @@ function fieldnames_to_fieldcontent(expr, vars, replace_vars)
 end
 
 function get_known_vars(M::Module)
-  init_storage(M)
-  reactive_vars = Symbol[]
-  non_reactive_vars = Symbol[]
-  for (k, v) in REACTIVE_STORAGE[M]
-    k in Stipple.INTERNALFIELDS && continue
-    is_reactive = startswith(string(Stipple.split_expr(v)[2]), r"(Stipple\.)?R(eactive)?($|{)")
-    push!(is_reactive ? reactive_vars : non_reactive_vars, k)
-  end
-  reactive_vars, non_reactive_vars
+  modeltype = @eval M Stipple.@type
+  get_known_vars(modeltype)
 end
 
 function get_known_vars(storage::LittleDict)
@@ -908,11 +831,10 @@ macro onchange(var, expr)
 end
 
 macro onchange(location, vars, expr)
-  loc::Union{Module, Type{<:M}, LittleDict} where M<:ReactiveModel = @eval __module__ $location
+  loc::Union{Module, Type{<:ReactiveModel}, LittleDict} = @eval __module__ $location
   vars = wrap(vars, :tuple)
   expr = wrap(expr, :block)
 
-  loc isa Module && init_handlers(loc)
   known_reactive_vars, known_non_reactive_vars = get_known_vars(loc)
   known_vars = vcat(known_reactive_vars, known_non_reactive_vars)
   on_vars = fieldnames_to_fields(vars, known_vars)
@@ -930,7 +852,6 @@ macro onchange(location, vars, expr)
     end
   end
 
-  loc isa Module && push!(HANDLERS[__module__], ex)
   output = [ex]
   quote
     function __GF_AUTO_HANDLERS__ end
@@ -979,7 +900,6 @@ end
 macro onbutton(location, var, expr)
   loc::Union{Module, Type{<:ReactiveModel}} = @eval __module__ $location
   expr = wrap(expr, :block)
-  loc isa Module && init_handlers(loc)
 
   known_reactive_vars, known_non_reactive_vars = get_known_vars(loc)
   known_vars = vcat(known_reactive_vars, known_non_reactive_vars)
@@ -998,7 +918,6 @@ macro onbutton(location, var, expr)
   output = quote end
 
   if loc isa Module
-    push!(HANDLERS[__module__], ex)
     push!(output.args, :(function __GF_AUTO_HANDLERS__ end))
     push!(output.args, :(Base.delete_method.(methods(__GF_AUTO_HANDLERS__))))
   end
