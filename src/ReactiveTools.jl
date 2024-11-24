@@ -472,39 +472,6 @@ end
 
 #===#
 
-function binding(expr::Symbol, m::Module, @nospecialize(mode::Any = nothing); source = nothing, reactive = true)
-  binding(:($expr = $expr), m, mode; source, reactive)
-end
-
-function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); source = nothing, reactive = true)
-  (m == @__MODULE__) && return nothing
-
-  intmode = mode isa Integer ? Int(mode) : @eval Stipple.$mode
-  init_storage(m)
-
-  var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
-  REACTIVE_STORAGE[m][var] = field_expr
-
-  reactive || setmode!(REACTIVE_STORAGE[m][:modes__], intmode, var)
-  reactive && setmode!(REACTIVE_STORAGE[m][:modes__], PUBLIC, var)
-
-  # remove cached type and instance, update pages
-  update_storage(m)
-end
-
-function binding(expr::Expr, storage::LittleDict{Symbol, Expr}, @nospecialize(mode::Any = nothing); source = nothing,
-                  reactive = true, m::Module)
-  intmode = mode isa Integer ? Int(mode) : @eval Stipple.$mode
-
-  var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
-  storage[var] = field_expr
-
-  reactive || setmode!(storage[:modes__], intmode, var)
-  reactive && setmode!(storage[:modes__], PUBLIC, var)
-
-  storage
-end
-
 # this macro needs to run in a macro where `expr`is already defined
 macro define_var()
   quote
@@ -515,42 +482,47 @@ macro define_var()
   end |> esc
 end
 
-function parse_expression_macro(expr::Expr, storage::LittleDict, m::Module)
+function parse_macro_params(params)
+  mixin, prefix, postfix = if length(params) == 1 && params[1] isa Expr && hasproperty(params[1], :head) && params[1].head == :(::)
+    params[1].args[2], string(params[1].args[1]), ""
+  elseif length(params) == 1
+    params[1], "", ""
+  elseif length(params) == 2
+    params[1], string(params[2]), ""
+  elseif length(params) == 3
+    params[1], string(params[2]), string(params[3])
+  else
+    error("1, 2, or 3 arguments expected, found $(length(params))")
+  end
+  mixin, prefix, postfix
+end
+
+function parse_macros(expr::Expr, storage::LittleDict, m::Module)
   expr.head == :macrocall || return expr
   flag = :nothing
   fn = Symbol(String(expr.args[1])[2:end])
   mode = Dict(:in => PUBLIC, :out => READONLY, :jsnfn => JSFUNCTION, :private => PRIVATE, :mixin => 0)[fn]
   
   source = filter(x -> x isa LineNumberNode, expr.args)
+  source = isempty(source) ? "" : last(source)
   expr = striplines!(copy(expr))
   params = expr.args[2:end]
 
   if fn != :mixin
-    location = :nothing
-    if length(params) == 2
-      location, expr = params
-    elseif length(params) == 3
-      location, flag, expr = params
-    # elseif length(params) == 4
-    #   location, flag, _, expr = params
+    if length(params) == 1
+      expr = params
+    elseif length(params) == 2
+      flag, expr = params
     else
-      error("2, 3, or 4 arguments expected, found $(length(params))")
+      error("1 or 2 arguments expected, found $(length(params))")
     end
 
     reactive = flag != :non_reactive
     ex = [expr isa Symbol ? expr : copy(expr)]
 
-    Stipple.ReactiveTools.binding(ex[1], storage, mode; source, reactive, m)
   elseif fn == :mixin
-    prefix = ""
-    expr = params[end]
-    mixin = if hasproperty(expr, :head) && expr.head == :(::)
-      prefix = string(expr.args[1])
-      expr.args[2]
-    else
-      expr
-    end
-    mixin_storage = Stipple.model_to_storage(@eval(m, $mixin), prefix, "")
+    mixin, prefix, postfix = parse_macro_params(params)
+    mixin_storage = Stipple.model_to_storage(@eval(m, $mixin), prefix, postfix)
     merge!(storage, Stipple.merge_storage(storage, mixin_storage; context = m))
   else
     error("Unknown macro @$fn")
@@ -691,9 +663,9 @@ function get_varnames(app_expr::Vector, context::Module)
           res = Stipple.parse_expression(ex)
           push!(varnames, res isa Symbol ? res : res[1])
       elseif ex.args[1] == Symbol("@mixin")
-          prefix, mixin = ex.args[end] isa Symbol ? Any[nothing, ex.args[end]] : ex.args[end].args
+          mixin, prefix, postfix = parse_macro_params(ex.args[2:end])
           fnames = setdiff(@eval(context, collect($mixin isa LittleDict ? keys($mixin) : propertynames($mixin()))), Stipple.AUTOFIELDS, Stipple.INTERNALFIELDS)
-          prefix === nothing || (fnames = Symbol.(prefix, fnames))
+          prefix === nothing || (fnames = Symbol.(prefix, fnames, postfix))
           append!(varnames, fnames)
       end
   end
@@ -719,14 +691,11 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
           insert!(ex.args, pos, :__storage__)
         end
         push!(handlercode, expr.args[i_start:i]...)
-      else
-        if ex.head == :macrocall && ex.args[1] in Symbol.(["@in", "@out", "@private", "@readonly", "@jsfn", "@mixin"])
-          ex_index = isa.(ex.args, Union{Symbol, Expr})
-          pos = findall(ex_index)[2]
-          sum(ex_index) == 2 && ex.args[1] != Symbol("@mixin") && insert!.(Ref(ex.args), pos, [:_])
-          insert!(ex.args, pos, typename)
-        end
+      elseif ex.head == :macrocall && ex.args[1] in Symbol.(["@in", "@out", "@private", "@readonly", "@jsfn", "@mixin"])
         push!(initcode, expr.args[i_start:i]...)
+      else
+        println("Warning: Unrecognized macro in handlers: ", ex)
+        push!(handlercode, ex)
       end
       i_start = i + 1
     end
@@ -749,7 +718,7 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
   end
 
   filter!(x -> !isa(x, LineNumberNode), initcode)
-  parse_expression_macro.(initcode, Ref(storage), Ref(__module__))
+  parse_macros.(initcode, Ref(storage), Ref(__module__))
   initcode_final = :(Stipple.@type($typename, $storage))
 
   handlercode_final = []
