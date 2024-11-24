@@ -246,7 +246,7 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
   Rtype = isnothing(m) || ! isdefined(m, :R) ? :(Stipple.R) : :R
 
   (isa(expr, Expr) && contains(string(expr.head), "=")) ||
-    error("Invalid binding expression -- use it with variables assignment ex `@binding a = 2`")
+    error("Invalid binding expression -- use it with variables assignment ex `@in a = 2`")
 
   source = (source !== nothing ? String(strip(string(source), collect("#= "))) : "")
 

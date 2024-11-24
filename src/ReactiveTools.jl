@@ -162,17 +162,6 @@ function clear_type(m::Module)
   TYPES[m] = nothing
 end
 
-function delete_bindings!(m::Module)
-  clear_type(m)
-  delete!(REACTIVE_STORAGE, m)
-  nothing
-end
-
-function bindings(m)
-  init_storage(m)
-  REACTIVE_STORAGE[m]
-end
-
 function delete_handlers_fn(m::Module)
   if isdefined(m, :__GF_AUTO_HANDLERS__)
     Base.delete_method.(methods(m.__GF_AUTO_HANDLERS__))
@@ -213,7 +202,6 @@ end
 Deletes all reactive variables and code in a model.
 """
 macro clear()
-  delete_bindings!(__module__)
   delete_handlers!(__module__)
 end
 
@@ -482,7 +470,7 @@ macro define_var()
   end |> esc
 end
 
-function parse_macro_params(params)
+function parse_mixin_params(params)
   mixin, prefix, postfix = if length(params) == 1 && params[1] isa Expr && hasproperty(params[1], :head) && params[1].head == :(::)
     params[1].args[2], string(params[1].args[1]), ""
   elseif length(params) == 1
@@ -518,10 +506,10 @@ function parse_macros(expr::Expr, storage::LittleDict, m::Module)
     end
 
     reactive = flag != :non_reactive
-    ex = [expr isa Symbol ? expr : copy(expr)]
-
+    var, ex = parse_expression(params[1], mode, source)
+    storage[var] = ex
   elseif fn == :mixin
-    mixin, prefix, postfix = parse_macro_params(params)
+    mixin, prefix, postfix = parse_mixin_params(params)
     mixin_storage = Stipple.model_to_storage(@eval(m, $mixin), prefix, postfix)
     merge!(storage, Stipple.merge_storage(storage, mixin_storage; context = m))
   else
@@ -663,7 +651,7 @@ function get_varnames(app_expr::Vector, context::Module)
           res = Stipple.parse_expression(ex)
           push!(varnames, res isa Symbol ? res : res[1])
       elseif ex.args[1] == Symbol("@mixin")
-          mixin, prefix, postfix = parse_macro_params(ex.args[2:end])
+          mixin, prefix, postfix = parse_mixin_params(ex.args[2:end])
           fnames = setdiff(@eval(context, collect($mixin isa LittleDict ? keys($mixin) : propertynames($mixin()))), Stipple.AUTOFIELDS, Stipple.INTERNALFIELDS)
           prefix === nothing || (fnames = Symbol.(prefix, fnames, postfix))
           append!(varnames, fnames)
