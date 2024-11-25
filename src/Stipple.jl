@@ -1257,7 +1257,7 @@ using Stipple.ReactiveTools
 @stipple_precompile begin
   ui() = [cell("hello"), row("world"), htmldiv("Hello World")]
 
-  @eval @app PrecompileApp begin
+  @app PrecompileApp begin
     @in demo_i = 1
     @out demo_s = "Hi"
 
