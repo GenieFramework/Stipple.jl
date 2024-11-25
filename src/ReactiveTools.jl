@@ -447,9 +447,9 @@ function parse_macros(expr::Expr, storage::LittleDict, m::Module)
   
   source = filter(x -> x isa LineNumberNode, expr.args)
   source = isempty(source) ? "" : last(source)
-  expr = striplines!(copy(expr))
+  striplines!(expr)
   params = expr.args[2:end]
-
+  
   if fn != :mixin
     if length(params) == 1
       expr = params
@@ -460,7 +460,7 @@ function parse_macros(expr::Expr, storage::LittleDict, m::Module)
     end
 
     reactive = flag != :non_reactive
-    var, ex = parse_expression(params[1], mode, source)
+    var, ex = parse_expression(expr[1], mode, source)
     storage[var] = ex
   elseif fn == :mixin
     mixin, prefix, postfix = parse_mixin_params(params)
@@ -590,8 +590,8 @@ Return a list of all non-internal variable names used in a vector of var definit
 """
 function get_varnames(app_expr::Vector, context::Module)
   varnames = copy(Stipple.AUTOFIELDS)
-  app_expr = striplines(app_expr)
   for ex in app_expr
+      ex isa LineNumberNode && continue
       if ex.args[1] ∈ [Symbol("@in"), Symbol("@out"), Symbol("@jsfunction"), Symbol("@private")]
           res = Stipple.parse_expression(ex)
           push!(varnames, res isa Symbol ? res : res[1])

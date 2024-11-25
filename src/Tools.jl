@@ -217,22 +217,22 @@ end
 
 Remove all line number nodes from an expression or vector of expressions. See also `striplines`.
 """
-function striplines!(ex::Expr)
+function striplines!(ex::Expr; recursive::Bool = false)
   for i in reverse(eachindex(ex.args))
-    if isa(ex.args[i], LineNumberNode)
+    if isa(ex.args[i], LineNumberNode) && (ex.head != :macrocall || i > 1)
       deleteat!(ex.args, i)
-    elseif isa(ex.args[i], Expr)
+    elseif isa(ex.args[i], Expr) && recursive
       striplines!(ex.args[i])
     end
   end
   ex
 end
 
-function striplines!(exprs::Vector)
+function striplines!(exprs::Vector; recursive::Bool = false)
   for i in reverse(eachindex(exprs))
     if isa(exprs[i], LineNumberNode)
       deleteat!(exprs, i)
-    elseif isa(exprs[i], Expr)
+    elseif isa(exprs[i], Expr) && recursive
       striplines!(exprs[i])
     end
   end
@@ -244,4 +244,4 @@ end
 
 Return a copy of an expression with all line number nodes removed. See also `striplines!`.
 """
-striplines(ex) = striplines!(copy(ex))
+striplines(ex; recursive::Bool = false) = striplines!(copy(ex); recursive)
