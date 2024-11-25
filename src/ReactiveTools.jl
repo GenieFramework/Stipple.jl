@@ -449,7 +449,7 @@ function parse_macros(expr::Expr, storage::LittleDict, m::Module)
   source = isempty(source) ? "" : last(source)
   striplines!(expr)
   params = expr.args[2:end]
-  
+
   if fn != :mixin
     if length(params) == 1
       expr = params
@@ -636,8 +636,8 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
 
   filter!(x -> !isa(x, LineNumberNode), initcode)
   parse_macros.(initcode, Ref(storage), Ref(__module__))
-  # if no initcode is provided assume that the model is already defined
-  initcode_final = isempty(initcode) ? Expr(:block) : :(Stipple.@type($typename, $storage))
+  # if no initcode is provided and typename is already defined, don't overwrite the existing type and just declare the handlers function
+  initcode_final = isempty(initcode) && isdefined(__module__, typename) ? Expr(:block) : :(Stipple.@type($typename, $storage))
 
   handlercode_final = []
   d = LittleDict(varnames .=> varnames)
