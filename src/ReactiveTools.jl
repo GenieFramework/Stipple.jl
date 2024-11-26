@@ -403,7 +403,7 @@ The code block passed to @app implements the app's logic, handling the states of
 end
 ```
 """
-macro app(expr)
+macro app(expr = Expr(:block))
   modelname = Symbol(model_typename(__module__))
   storage = Stipple.init_storage()
   quote
@@ -515,10 +515,10 @@ macro init(args...)
   called_without_type = isnothing(type_pos)
 
   if called_without_type
-    type_expr = :(Stipple.@type())
-    insert!(init_args, Stipple.has_parameters(init_args) ? 2 : 1, type_expr)
+    typename = Symbol(model_typename(__module__))
+    insert!(init_args, Stipple.has_parameters(init_args) ? 2 : 1, typename)
   else
-    type_expr = init_args[type_pos]
+    typename = init_args[type_pos]
   end
 
   initfn = if isdefined(__module__, :init_from_storage) && Stipple.USE_MODEL_STORAGE[]
@@ -527,13 +527,16 @@ macro init(args...)
     :(Stipple.init)
   end
   handlersfn = if !called_without_type
-      :(Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$type_expr])
+      :(Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$typename])
   else
       :($__module__.__GF_AUTO_HANDLERS__)
   end
-  quote
+  output = quote
     $initfn($(init_args...)) |> $handlersfn
-  end |> esc
+  end
+  isdefined(__module__, typename) || pushfirst!(output.args, :(@eval $__module__ @app))
+  
+  output |> esc
 end
 
 macro app(typename, expr, handlers_fn_name = :handlers)
