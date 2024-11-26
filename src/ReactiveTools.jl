@@ -425,6 +425,7 @@ macro define_var()
 end
 
 function parse_mixin_params(params)
+  striplines!(params)
   mixin, prefix, postfix = if length(params) == 1 && params[1] isa Expr && hasproperty(params[1], :head) && params[1].head == :(::)
     params[1].args[2], string(params[1].args[1]), ""
   elseif length(params) == 1
@@ -514,46 +515,24 @@ macro init(args...)
   called_without_type = isnothing(type_pos)
 
   if called_without_type
-    type_pos = 0 # to prevent erroring in definition of 'handlersfn'
-    insert!(init_args, Stipple.has_parameters(init_args) ? 2 : 1, :(Stipple.@type()))
+    type_expr = :(Stipple.@type())
+    insert!(init_args, Stipple.has_parameters(init_args) ? 2 : 1, type_expr)
+  else
+    type_expr = init_args[type_pos]
   end
 
+  initfn = if isdefined(__module__, :init_from_storage) && Stipple.USE_MODEL_STORAGE[]
+    :($__module__.init_from_storage)
+  else
+    :(Stipple.init)
+  end
+  handlersfn = if !called_without_type
+      :(Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$type_expr])
+  else
+      :($__module__.__GF_AUTO_HANDLERS__)
+  end
   quote
-    local new_handlers = false
-
-    local initfn =
-    if isdefined($__module__, :init_from_storage) && Stipple.USE_MODEL_STORAGE[]
-      $__module__.init_from_storage
-    else
-      Stipple.init
-    end
-
-    local handlersfn =
-    if !$called_without_type
-      # writing '$(init_kwargs[type_pos])' generates an error during a pre-evaluation
-      # possibly from Revise?
-      # we use 'get' instead of 'getindex'
-      Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$(get(init_args, type_pos, "dummy"))]
-    else
-      if isdefined($__module__, :__GF_AUTO_HANDLERS__)
-        if length(methods($__module__.__GF_AUTO_HANDLERS__)) == 0
-          @eval(@handlers())
-          new_handlers = true
-        end
-        $__module__.__GF_AUTO_HANDLERS__
-      else
-        identity
-      end
-    end
-
-    instance = let model = initfn($(init_args...))
-        new_handlers ? Base.invokelatest(handlersfn, model) : handlersfn(model)
-    end
-    for p in Stipple.Pages._pages
-      p.context == $__module__ && (p.model = instance)
-    end
-
-    instance
+    $initfn($(init_args...)) |> $handlersfn
   end |> esc
 end
 
@@ -574,12 +553,10 @@ macro handlers()
 end
 
 macro handlers(expr)
-  delete_handlers!(__module__)
-
+  modelname = Symbol(model_typename(__module__))
   quote
-    $expr
-
-    @handlers
+    Stipple.ReactiveTools.delete_handlers!($__module__)
+    Stipple.ReactiveTools.@handlers $modelname $expr __GF_AUTO_HANDLERS__
   end |> esc
 end
 
