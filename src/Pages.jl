@@ -72,14 +72,19 @@ function Page(  route::Union{Route,String};
   if isempty(_pages)
     push!(_pages, page)
   else
-    for i in eachindex(_pages)
+    new_page = true
+    replaced = false
+    for i in reverse(eachindex(_pages))
       if _pages[i].route.path == route.path && _pages[i].route.method == route.method
+        # if already replaced then delete the duplicate
+        replaced && deleteat!(_pages, i)
         Router.delete!(Router.routename(_pages[i].route))
         _pages[i] = page
-      else
-        push!(_pages, page)
+        new_page = false
+        replaced = true
       end
     end
+    new_page && push!(_pages, page)
   end
 
   Router.route(route)
