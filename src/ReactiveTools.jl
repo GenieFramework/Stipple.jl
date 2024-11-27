@@ -534,7 +534,7 @@ macro init(args...)
   output = quote
     $initfn($(init_args...)) |> $handlersfn
   end
-  isdefined(__module__, typename) || pushfirst!(output.args, :(@eval $__module__ @app))
+  called_without_type && !isdefined(__module__, typename) && pushfirst!(output.args, :(@eval $__module__ @app))
   
   output |> esc
 end
