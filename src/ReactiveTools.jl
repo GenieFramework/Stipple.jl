@@ -532,7 +532,14 @@ macro init(args...)
       :($__module__.__GF_AUTO_HANDLERS__)
   end
   output = quote
-    $initfn($(init_args...)) |> $handlersfn
+    local instance = $initfn($(init_args...)) |> $handlersfn
+
+    # Update the model in all pages where it has been set as instance of an app.
+    # Where it has been set as ReactiveModel type, no change is required
+    for p in Stipple.Pages._pages
+      p.context == $__module__ && p.model isa $typename && (p.model = instance)
+    end
+    instance
   end
   called_without_type && !isdefined(__module__, typename) && pushfirst!(output.args, :(@eval $__module__ @app))
   
@@ -558,7 +565,6 @@ end
 macro handlers(expr)
   modelname = Symbol(model_typename(__module__))
   quote
-    Stipple.ReactiveTools.delete_handlers!($__module__)
     Stipple.ReactiveTools.@handlers $modelname $expr __GF_AUTO_HANDLERS__
   end |> esc
 end
@@ -834,8 +840,6 @@ macro onchange(location, vars, expr)
 
   output = [ex]
   quote
-    function __GF_AUTO_HANDLERS__ end
-    Base.delete_method.(methods(__GF_AUTO_HANDLERS__))
     $output[end]
   end |> esc
 end
@@ -891,19 +895,9 @@ macro onbutton(location, var, expr)
   expr = fieldnames_to_fieldcontent(expr, known_reactive_vars)
   expr = unmask(expr, known_vars)
 
-  ex = :(onbutton($var) do
+  :(onbutton($var) do
     $(expr.args...)
-  end)
-
-  output = quote end
-
-  if loc isa Module
-    push!(output.args, :(function __GF_AUTO_HANDLERS__ end))
-    push!(output.args, :(Base.delete_method.(methods(__GF_AUTO_HANDLERS__))))
-  end
-  push!(output.args, QuoteNode(ex))
-
-  output |> esc
+  end) |> esc
 end
 
 #===#
