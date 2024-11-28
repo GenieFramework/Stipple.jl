@@ -829,16 +829,10 @@ macro onchange(location, vars, expr)
   expr = unmask(expr, vcat(known_reactive_vars, known_non_reactive_vars))
 
   fn = length(vars.args) == 1 ? :on : :onany
-  ex = quote
-    $fn($(on_vars.args...)) do _...
+  :($fn($(on_vars.args...)) do _...
         $(expr.args...)
     end
-  end
-
-  output = [ex]
-  quote
-    $output[end]
-  end |> esc
+  ) |> QuoteNode
 end
 
 macro onchangeany(var, expr)
@@ -879,7 +873,7 @@ macro onbutton(var, expr)
 end
 
 macro onbutton(location, var, expr)
-  loc::Union{Module, Type{<:ReactiveModel}} = @eval __module__ $location
+  loc::Union{Module, Type{<:ReactiveModel}, LittleDict} = @eval __module__ $location
   expr = wrap(expr, :block)
 
   known_reactive_vars, known_non_reactive_vars = get_known_vars(loc)
@@ -894,7 +888,7 @@ macro onbutton(location, var, expr)
 
   :(onbutton($var) do
     $(expr.args...)
-  end) |> esc
+  end) |> QuoteNode
 end
 
 #===#
