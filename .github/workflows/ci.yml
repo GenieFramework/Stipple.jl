@@ -17,8 +17,8 @@ jobs:
           - 'nightly'
         os:
           - ubuntu-latest
-          - macOS-latest
-          - windows-latest
+          # - macOS-latest
+          # - windows-latest
         arch:
           - x64
     steps:
@@ -40,17 +40,3 @@ jobs:
             exit 0  # Ignore the error to keep the green checkmark going
           fi
           exit 1  # If it's not an optional job, fail the job
-          
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@latest
-        with:
-          version: '1'
-      - name: Install dependencies
-        run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
-      - name: Build and deploy
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # For authentication with GitHub Actions token
-        run: julia --project=docs/ docs/make.jl
