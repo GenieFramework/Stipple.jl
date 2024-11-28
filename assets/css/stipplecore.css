@@ -143,7 +143,6 @@
   margin: 0px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
 }
 
 .container { 
@@ -172,7 +171,7 @@
                         QUASAR COMPONENTS
 ================================================================== */
 
-.q-badge{
+.q-badge, .q-btn{
   width: max-content;
 }
 
