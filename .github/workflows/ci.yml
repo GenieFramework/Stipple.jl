@@ -27,16 +27,16 @@ jobs:
         with:
           version: ${{ matrix.version }}
           arch: ${{ matrix.arch }}
-      - uses: julia-actions/julia-buildpkg@latest
-      - uses: julia-actions/julia-runtest@latest
-
-      # Capture failure for optional jobs and continue
-      - name: Handle optional failures
-        if: ${{ failure() }}
+      - name: Run Tests
         run: |
-          if [[ "${{ matrix.version }}" == "nightly" || "${{ matrix.version }}" == "pre" ]]; then
-            echo "::warning::Optional matrix job failed for ${{ matrix.version }}."
-            echo "optional_fail=true" >> "${GITHUB_OUTPUT}"
-            exit 0  # Ignore the error to keep the green checkmark going
+          julia --project=. -e 'using Pkg; Pkg.build()' || exit_code_build=$? || true
+          julia --project=. -e 'using Pkg; Pkg.test()' || exit_code_test=$? || true
+          if [ "${exit_code_build:-0}" -ne 0 ] || [ "${exit_code_test:-0}" -ne 0 ]; then
+            if [[ "${{ matrix.version }}" == "nightly" || "${{ matrix.version }}" == "pre" ]]; then
+              echo "::warning::Optional matrix job failed for ${{ matrix.version }}."
+              exit 0  # Ignore failure for optional jobs
+            else
+              echo "Build or test failed"
+              exit 1  # Fail for stable versions
+            fi
           fi
-          exit 1  # If it's not an optional job, fail the job
