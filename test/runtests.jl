@@ -311,9 +311,6 @@ end
     s1 = string_get("http://localhost:$port/")
     s2 = string_get("http://localhost:$port/")
     s3 = string_get("http://localhost:$port/", cookies = false)
-    # execute without cookies twice due to strange behavior of the first request
-    # - only observed when running include("test/runtests.jl") in the REPL twice
-    s3 = string_get("http://localhost:$port/", cookies = false)
 
     s4 = string_get("http://localhost:$port/static")
     s5 = string_get("http://localhost:$port/static")
@@ -373,8 +370,6 @@ end
 
     s1 = string_get("http://localhost:$port/")
     s2 = string_get("http://localhost:$port/")
-    s3 = string_get("http://localhost:$port/", cookies = false)
-    # execute twice, see above
     s3 = string_get("http://localhost:$port/", cookies = false)
 
     s4 = string_get("http://localhost:$port/static")

@@ -97,21 +97,20 @@ function DEFAULT_LAYOUT(; title::String = "Genie App",
 end
 
 function model_typename(m::Module)
-  isdefined(m, :__typename__) ? m.__typename__[] : "$(m)_ReactiveModel"
+  isdefined(m, :__typename__) ? m.__typename__[] : Symbol("$(m)_ReactiveModel")
 end
 
 macro appname(expr)
   expr isa Symbol || (expr = Symbol(@eval(__module__, $expr)))
-  clear_type(__module__)
   ex = quote end
   if isdefined(__module__, expr)
     push!(ex.args, :(Stipple.ReactiveTools.delete_handlers_fn($__module__)))
     push!(ex.args, :(Stipple.ReactiveTools.delete_events($expr)))
   end
-  if isdefined(__module__, :__typename__) && __module__.__typename__ isa Ref{String}
-    push!(ex.args, :(__typename__[] = $(string(expr))))
+  if isdefined(__module__, :__typename__) && __module__.__typename__ isa Ref{Symbol}
+    push!(ex.args, :(__typename__[] = Symbol($(string(expr)))))
   else
-    push!(ex.args, :(const __typename__ = Ref{String}($(string(expr)))))
+    push!(ex.args, :(const __typename__ = Ref{Symbol}(Symbol($(string(expr))))))
     push!(ex.args, :(__typename__[]))
   end
   :($ex) |> esc
@@ -155,7 +154,7 @@ function delete_handlers_fn(m::Module)
 end
 
 function delete_events(m::Module)
-  modelname = Symbol(model_typename(m))
+  modelname = model_typename(m)
   M = @eval m $modelname
   delete_events(M) 
 end
@@ -205,7 +204,7 @@ end
 
 import Stipple.@type
 macro type()
-  modelname = Symbol(model_typename(__module__))
+  modelname = model_typename(__module__)
   esc(:($modelname))
 end
 
@@ -358,7 +357,7 @@ end
 import Stipple: @vars
 
 macro vars(expr)
-  modelname = Symbol(model_typename(__module__))
+  modelname = model_typename(__module__)
   storage = Stipple.init_storage()
   quote
     Stipple.ReactiveTools.@vars $modelname $expr
@@ -395,7 +394,7 @@ end
 ```
 """
 macro app(expr = Expr(:block))
-  modelname = Symbol(model_typename(__module__))
+  modelname = model_typename(__module__)
   storage = Stipple.init_storage()
   quote
     Stipple.ReactiveTools.@app $modelname $expr __GF_AUTO_HANDLERS__
@@ -506,35 +505,42 @@ macro init(args...)
   called_without_type = isnothing(type_pos)
 
   if called_without_type
-    typename = Symbol(model_typename(__module__))
+    typename = model_typename(__module__)
     insert!(init_args, Stipple.has_parameters(init_args) ? 2 : 1, typename)
   else
     typename = init_args[type_pos]
   end
 
-  initfn = if isdefined(__module__, :init_from_storage) && Stipple.USE_MODEL_STORAGE[]
-    :($__module__.init_from_storage)
-  else
-    :(Stipple.init)
-  end
-  handlersfn = if !called_without_type
-      :(Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$typename])
-  else
-      :($__module__.__GF_AUTO_HANDLERS__)
-  end
-  output = quote
-    local instance = $initfn($(init_args...)) |> $handlersfn
+  quote
+    Stipple.ReactiveTools.init_model($(init_args...))
+  end |> esc
+end
 
-    # Update the model in all pages where it has been set as instance of an app.
-    # Where it has been set as ReactiveModel type, no change is required
-    for p in Stipple.Pages._pages
-      p.context == $__module__ && p.model isa $typename && (p.model = instance)
-    end
-    instance
+function init_model(M::Type{<:ReactiveModel}, args...; context = nothing, kwargs...)
+  m = parentmodule(M)
+  initfn = if isdefined(m, :init_from_storage) && Stipple.USE_MODEL_STORAGE[]
+    m.init_from_storage
+  else
+    Stipple.init
   end
-  called_without_type && !isdefined(__module__, typename) && pushfirst!(output.args, :(@eval $__module__ @app))
-  
-  output |> esc
+  handlersfn = if context !== nothing && isdefined(M, :__GF_AUTO_HANDLERS__)
+    M.__GF_AUTO_HANDLERS__
+  else
+    Stipple.ReactiveTools.HANDLERS_FUNCTIONS[M]
+  end
+
+  model = initfn(M, args...; kwargs...) |> handlersfn
+
+  # Update the model in all pages where it has been set as instance of an app.
+  # Where it has been set as ReactiveModel type, no change is required
+  for p in Stipple.Pages._pages
+    p.context == m && p.model isa M && (p.model = model)
+  end
+  model
+end
+
+function init_model(m::Module, args...; kwargs...)
+  init_model(@eval(m, Stipple.@type), args...; context = m, kwargs...)
 end
 
 macro app(typename, expr, handlers_fn_name = :handlers)
@@ -546,7 +552,7 @@ macro app(typename, expr, handlers_fn_name = :handlers)
 end
 
 macro handlers()
-  modelname = Symbol(model_typename(__module__))
+  modelname = model_typename(__module__)
   empty_block = Expr(:block)
   quote
     Stipple.ReactiveTools.@handlers $modelname $empty_block __GF_AUTO_HANDLERS__
@@ -554,7 +560,7 @@ macro handlers()
 end
 
 macro handlers(expr)
-  modelname = Symbol(model_typename(__module__))
+  modelname = model_typename(__module__)
   quote
     Stipple.ReactiveTools.@handlers $modelname $expr __GF_AUTO_HANDLERS__
   end |> esc
@@ -920,25 +926,21 @@ macro page(expressions...)
         defaults = Dict(
             :layout => Stipple.ReactiveTools.DEFAULT_LAYOUT(),
             :context => __module__,
-            :model => nothing
+            :model => __module__
         )
     )
     model_parent, model_ind, model_expr = Stipple.locate_kwarg(args, :model)
     model = @eval(__module__, $model_expr)
 
-    if model === nothing || model isa DataType && model <: ReactiveModel
-      # remove all other kwargs that are not meant for `@init`
-      init_kwargs = Stipple.delete_kwargs(args, [:layout, :model, :context])
-
-      # add the type if model is a modeltype
-      if model !== nothing
-          insert!(init_kwargs, Stipple.has_parameters(init_kwargs) ? 2 : 1, model_expr)
+    if model isa Module
+      # the next lines are added for backward compatibility
+      # if the app is programmed according to the latest API,
+      # eval will not be called; will e removed in the future
+      typename = model_typename(__module__)
+      if !isdefined(__module__, typename)
+        @warn "App not yet defined, this is strongly discouraged, please define an app first"
+        @eval(__module__, @app)
       end
-
-      # modify the entry of the :model keyword by an init function with respective init_kwargs
-      model_parent[model_ind] = :($(Expr(:kw, :model, () -> @eval(__module__, Stipple.ReactiveTools.@init($(init_kwargs...))))))
-    else
-      nothing
     end
 
     :(Stipple.Pages.Page($(args...), $url, view = $view)) |> esc
