@@ -355,15 +355,6 @@ macro clear_debounce()
   :(Stipple.debounce(Stipple.@type(), nothing)) |> esc
 end
 
-function update_storage(m::Module)
-  clear_type(m)
-  # isempty(Stipple.Pages._pages) && return
-  # instance = @eval m Stipple.@type()
-  # for p in Stipple.Pages._pages
-  #   p.context == m && (p.model = instance)
-  # end
-end
-
 import Stipple: @vars
 
 macro vars(expr)
