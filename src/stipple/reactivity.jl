@@ -241,6 +241,12 @@ function find_assignment(expr)
   assignment
 end
 
+function get_varname(expr)
+  expr = find_assignment(expr)
+  var = expr.args[1]
+  var isa Symbol ? var : var.args[1]
+end
+
 function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = nothing, m::Union{Module, Nothing} = nothing)
   expr = find_assignment(expr)
   Rtype = isnothing(m) || ! isdefined(m, :R) ? :(Stipple.R) : :R
@@ -252,37 +258,28 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
 
   # args[end] instead of args[2] because of potential LineNumberNode
   var = expr.args[1]
-  if !isnothing(mode)
-    mode = mode isa Symbol && ! isdefined(m, mode) ? :(Stipple.$mode) : mode
-    type = if isa(var, Expr) && var.head == Symbol("::")
-      # change type T to type R{T}
-      var.args[end] = :($Rtype{$(var.args[end])})
-    else
-      try
-        # add type definition `::R{T}` to the var where T is the type of the default value
-        T = @eval(m === nothing ? @__MODULE__() : m, typeof($(expr.args[end])))
-        expr.args[1] = :($var::$Rtype{$T})
-        Rtype
-      catch ex
-        # if the default value is not defined, we can't infer the type
-        # so we just set the type to R{Any}
-        :($Rtype{Any})
-      end
-    end
-    expr.args[end] = :($type($(expr.args[end]), $mode, false, false, $source))
-  end
-
-  # if no type is defined, set the type of the default value
-  if expr.args[1] isa Symbol
+  mode === nothing && (mode = PRIVATE)
+  context = isnothing(m) ? @__MODULE__() : m
+  
+  mode = mode isa Symbol && ! isdefined(context, mode) ? :(Stipple.$mode) : mode
+  type = if isa(var, Expr) && var.head == Symbol("::")
+    # change type T to type R{T}
+    var.args[end] = :($Rtype{$(var.args[end])})
+  else # no type is defined, so determine it from the type of the default value
     try
-      T = @eval m typeof($(expr.args[end]))
-      expr.args[1] = :($(expr.args[1])::$T)
+      # add type definition `::R{T}` to the var where T is the type of the default value
+      T = @eval(context, $(expr.args[end])) |> typeof
+      expr.args[1] = :($var::$Rtype{$T})
+      Rtype
     catch ex
+      println("catch")
       # if the default value is not defined, we can't infer the type
-      # so we just set the type to Any
-      expr.args[1] = :($(expr.args[1])::Any)
+      # so we just set the type to R{Any}
+      :($Rtype{Any})
     end
   end
+  expr.args[end] = :($type($(expr.args[end]), $mode, false, false, $source))
+
   expr.args[1].args[1], expr
 end
 

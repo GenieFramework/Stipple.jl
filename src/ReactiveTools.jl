@@ -451,7 +451,7 @@ function parse_macros(expr::Expr, storage::LittleDict, m::Module)
     end
 
     reactive = flag != :non_reactive
-    var, ex = parse_expression(expr[1], mode, source)
+    var, ex = parse_expression(expr[1], mode, source, m)
     storage[var] = ex
   elseif fn == :mixin
     mixin, prefix, postfix = parse_mixin_params(params)
@@ -576,7 +576,7 @@ function get_varnames(app_expr::Vector, context::Module)
   for ex in app_expr
       ex isa LineNumberNode && continue
       if ex.args[1] ∈ [Symbol("@in"), Symbol("@out"), Symbol("@jsfunction"), Symbol("@private")]
-          res = Stipple.parse_expression(ex)
+          res = Stipple.get_varname(ex)
           push!(varnames, res isa Symbol ? res : res[1])
       elseif ex.args[1] == Symbol("@mixin")
           mixin, prefix, postfix = parse_mixin_params(ex.args[2:end])
