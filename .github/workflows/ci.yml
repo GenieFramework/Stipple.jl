@@ -5,7 +5,7 @@ on:
 jobs:
   test:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }}
-    continue-on-error: ${{ matrix.os == 'nightly' || matrix.os == 'pre'  }}
+    continue-on-error: ${{ matrix.version == 'nightly' || matrix.version == 'pre'  }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -34,8 +34,8 @@ jobs:
       - name: Handle optional failures
         if: ${{ failure() }}
         run: |
-          if [[ "${{ matrix.os }}" == "nightly" || "${{ matrix.os }}" == "pre" ]]; then
-            echo "::warning::Optional matrix job failed for ${{ matrix.os }}."
+          if [[ "${{ matrix.version }}" == "nightly" || "${{ matrix.version }}" == "pre" ]]; then
+            echo "::warning::Optional matrix job failed for ${{ matrix.version }}."
             echo "optional_fail=true" >> "${GITHUB_OUTPUT}"
             exit 0  # Ignore the error to keep the green checkmark going
           fi
