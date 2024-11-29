@@ -36,10 +36,11 @@ function js_methods(app::T)::String where {T<:ReactiveModel}
   ""
 end
 
+# deprecated, now part of the model
 function js_methods_events()::String
 """
   handle_event: function (event, handler) {
-    Genie.WebChannels.sendMessageTo(window.CHANNEL, 'events', {
+    Genie.WebChannels.sendMessageTo(GENIEMODEL.channel_, 'events', {
         'event': {
             'name': handler,
             'event': event
@@ -203,9 +204,9 @@ myreviver: function(key, value) { return (key.endsWith('_onebased') ? value - 1 
 """  
 function js_add_reviver(revivername::String)
   """
-  Genie.WebChannels.subscriptionHandlers.push(function(event) {
+  document.addEventListener('DOMContentLoaded', () => Genie.WebChannels.subscriptionHandlers.push(function(event) {
       Genie.Revivers.addReviver($revivername);
-  });
+  }));
   """
 end
 
@@ -221,9 +222,9 @@ It needs to be added to the dependencies of an app in order to be executed, e.g.
 """
 function js_initscript(initscript::String)
   """
-  Genie.WebChannels.subscriptionHandlers.push(function(event) {
+  document.addEventListener('DOMContentLoaded', () => Genie.WebChannels.subscriptionHandlers.push(function(event) {
       $(initscript)
-  });
+  }));
   """
 end
 

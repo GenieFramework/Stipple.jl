@@ -135,7 +135,7 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
   for field in fieldnames(typeof(app))
     f = getfield(app, field)
 
-    occursin(SETTINGS.private_pattern, String(field)) && continue
+    field != CHANNELFIELDNAME && occursin(SETTINGS.private_pattern, String(field)) && continue
     f isa Reactive && f.r_mode == PRIVATE && continue
 
     result[field] = Stipple.jsrender(f, field)
