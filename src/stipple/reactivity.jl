@@ -272,9 +272,9 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
       expr.args[1] = :($var::$Rtype{$T})
       Rtype
     catch ex
-      println("catch")
       # if the default value is not defined, we can't infer the type
       # so we just set the type to R{Any}
+      expr.args[1] = :($var::$Rtype{Any})
       :($Rtype{Any})
     end
   end
