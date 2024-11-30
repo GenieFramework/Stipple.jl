@@ -430,7 +430,7 @@ function parse_mixin_params(params)
   mixin, prefix, postfix
 end
 
-function parse_macros(expr::Expr, storage::LittleDict, m::Module)
+function parse_macros(expr::Expr, storage::LittleDict, m::Module, let_block::Expr = Expr(:block, :(_ = 0)))
   expr.head == :macrocall || return expr
   flag = :nothing
   fn = Symbol(String(expr.args[1])[2:end])
@@ -451,7 +451,7 @@ function parse_macros(expr::Expr, storage::LittleDict, m::Module)
     end
 
     reactive = flag != :non_reactive
-    var, ex = parse_expression(expr[1], mode, source, m)
+    var, ex = parse_expression(expr[1], mode, source, m, let_block)
     storage[var] = ex
   elseif fn == :mixin
     mixin, prefix, postfix = parse_mixin_params(params)
@@ -618,7 +618,8 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
   varnames = get_varnames(initcode, __module__)
 
   filter!(x -> !isa(x, LineNumberNode), initcode)
-  parse_macros.(initcode, Ref(storage), Ref(__module__))
+  let_block = Expr(:block, :(_ = 0))
+  parse_macros.(initcode, Ref(storage), Ref(__module__), Ref(let_block))
   # if no initcode is provided and typename is already defined, don't overwrite the existing type and just declare the handlers function
   initcode_final = isempty(initcode) && isdefined(__module__, typename) ? Expr(:block) : :(Stipple.@type($typename, $storage))
 

@@ -247,19 +247,47 @@ function get_varname(expr)
   var isa Symbol ? var : var.args[1]
 end
 
-function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = nothing, m::Union{Module, Nothing} = nothing)
+function assignment_to_conversion(expr)
+  expr = copy(expr)
+  expr.head = :call
+  pushfirst!(expr.args, :convert)
+  expr.args[2] = expr.args[2].args[2]
+  expr
+end
+
+function let_eval!(expr, let_block, m::Module)
+  with_type = expr.args[1] isa Expr && expr.args[1].head == :(::)
+  var = with_type ? expr.args[1].args[1] : expr.args[1]
+  let_expr = Expr(:let, let_block, Expr(:block, with_type ? assignment_to_conversion(expr) : expr.args[2]))
+  val = try
+    @eval m $let_expr
+  catch ex
+    with_type || @info "Could not infer type of $var, setting it to `Any`, consider adding a type annotation"
+    :__Any__
+  end
+  with_type || (T = typeof(val))
+  
+  val === :__Any__ || push!(let_block.args, :($var = R{$T}($val)))
+  T = val === :__Any__ ? Any : T
+  return val, T
+end
+
+function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = nothing, m::Union{Module, Nothing} = nothing, let_block::Union{Expr, Nothing} = nothing)
   expr = find_assignment(expr)
+  
   Rtype = isnothing(m) || ! isdefined(m, :R) ? :(Stipple.R) : :R
-
+  
   (isa(expr, Expr) && contains(string(expr.head), "=")) ||
-    error("Invalid binding expression -- use it with variables assignment ex `@in a = 2`")
-
+  error("Invalid binding expression -- use it with variables assignment ex `@in a = 2`")
+  
   source = (source !== nothing ? String(strip(string(source), collect("#= "))) : "")
-
+  
   # args[end] instead of args[2] because of potential LineNumberNode
   var = expr.args[1]
   mode === nothing && (mode = PRIVATE)
   context = isnothing(m) ? @__MODULE__() : m
+
+  let_block === nothing || ((val, T) = let_eval!(expr, let_block, m))
   
   mode = mode isa Symbol && ! isdefined(context, mode) ? :(Stipple.$mode) : mode
   type = if isa(var, Expr) && var.head == Symbol("::")
@@ -268,22 +296,27 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
   else # no type is defined, so determine it from the type of the default value
     try
       # add type definition `::R{T}` to the var where T is the type of the default value
-      T = @eval(context, $(expr.args[end])) |> typeof
+      T = let_block === nothing ? typeof(@eval(context, $(expr.args[end]))) : T
       expr.args[1] = :($var::$Rtype{$T})
       Rtype
     catch ex
       # if the default value is not defined, we can't infer the type
       # so we just set the type to R{Any}
+      @info "Could not infer type of $var, setting it to R{Any}"
       expr.args[1] = :($var::$Rtype{Any})
       :($Rtype{Any})
     end
   end
+
   expr.args[end] = :($type($(expr.args[end]), $mode, false, false, $source))
 
-  expr.args[1].args[1], expr
+  varname = expr.args[1].args[1]
+  # evaluate the expression in the context of the module and append the corresponding assignment to the let_block
+  #val = let_eval!(expr, let_block, context)
+  varname, expr
 end
 
-parse_expression(expr::Expr, mode = nothing, source = nothing, m = nothing) = parse_expression!(copy(expr), mode, source, m)
+parse_expression(expr::Expr, mode = nothing, source = nothing, m = nothing, let_block::Expr = Expr(:block, :(_ = 0))) = parse_expression!(copy(expr), mode, source, m, let_block)
 
 macro var_storage(expr)
   m = __module__
