@@ -130,7 +130,6 @@ function vue_integration(::Type{M};
                           debounce::Int = Stipple.JS_DEBOUNCE_TIME,
                           transport::Module = Genie.WebChannels)::String where {M<:ReactiveModel}
   model = Base.invokelatest(M)
-
   vue_app = json(model |> Stipple.render)
   vue_app = replace(vue_app, "\"$(getchannel(model))\"" => Stipple.channel_js_name)
 
@@ -157,89 +156,88 @@ function vue_integration(::Type{M};
 
   output =
   string(
-    "
-
-  function initStipple(rootSelector){
-    // components = Stipple.init($( core_theme ? "{theme: '$theme'}" : "" ));
-    const app = Vue.createApp($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ))
-    /* Object.entries(components).forEach(([key, value]) => {
-      app.component(key, value)
-    }); */
-    Stipple.init( app, $( core_theme ? "{theme: '$theme'}" : "" ));
-    $globalcomps
-    $comps
-    // gather legacy global options
-    app.prototype = {}
-    $(plugins(M))
-    // apply legacy global options
-    Object.entries(app.prototype).forEach(([key, value]) => {
-      app.config.globalProperties[key] = value
-    });
-    window.$vue_app_name = window.GENIEMODEL = app.mount(rootSelector);
-  } // end of initStipple
-
-    "
-
-    ,
-
-    "
-
-  function initWatchers(){
-    "
-
-    ,
-    join(
-      [Stipple.watch(string("window.", vue_app_name), field, Stipple.channel_js_name, debounce, model) for field in fieldnames(Stipple.get_concrete_type(M))
-        if Stipple.has_frontend_watcher(field, model)]
-    )
-    ,
-
-    "
-  } // end of initWatchers
-
-    "
-
-    ,
-
     """
-
-  window.parse_payload = function(payload){
-    if (payload.key) {
-       window.$(vue_app_name).updateField(payload.key, payload.value);
+    window.parse_payload = function(WebChannel, payload){
+      if (payload.key) {
+        WebChannel.parent.updateField(payload.key, payload.value);
+      }
     }
-  }
 
-  function app_ready() {
-      $vue_app_name.channel_ = window.CHANNEL;
-      $vue_app_name.isready = true;
-      Genie.Revivers.addReviver(window.$(vue_app_name).revive_jsfunction);
-      $(transport == Genie.WebChannels &&
-      "
+    function app_ready(app) {
+      if (app.WebChannel == Genie.AllWebChannels[0]) Genie.Revivers.addReviver(app.revive_jsfunction);
+      app.isready = true;
+    """,
+    transport == Genie.WebChannels &&
+    """
       try {
         if (Genie.Settings.webchannels_keepalive_frequency > 0) {
-          clearInterval($vue_app_name.keepalive_interval);
-          $vue_app_name.keepalive_interval = setInterval(keepalive, Genie.Settings.webchannels_keepalive_frequency);
+          keepaliveTimer(app.WebChannel, 0);
         }
       } catch (e) {
         if (Genie.Settings.env === 'dev') {
           console.error('Error setting WebSocket keepalive interval: ' + e);
         }
       }
-      ")
-
+    """,
+    """
       if (Genie.Settings.env === 'dev') {
         console.info('App starting');
       }
-  };
+    };
 
-  if ( window.autorun === undefined || window.autorun === true ) {
-    initStipple('#$vue_app_name');
-    initWatchers();
+    function initStipple$vue_app_name(appName, rootSelector, channel){
+      // components = Stipple.init($( core_theme ? "{theme: '$theme'}" : "" ));
+      const app = Vue.createApp($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ))
+      /* Object.entries(components).forEach(([key, value]) => {
+        app.component(key, value)
+      }); */
+      Stipple.init( app, $( core_theme ? "{theme: '$theme'}" : "" ));
+      $globalcomps
+      $comps
+      // gather legacy global options
+      app.prototype = {}
+      $(plugins(M))
+      // apply legacy global options
+      Object.entries(app.prototype).forEach(([key, value]) => {
+        app.config.globalProperties[key] = value
+      });
+      
+      const stippleApp = window[appName] = window.GENIEMODEL = app.mount(rootSelector);
+      stippleApp.WebChannel = Genie.initWebChannel(channel);
+      stippleApp.WebChannel.parent = stippleApp;
+      stippleApp.channel_ = channel;
 
-    Genie.WebChannels.subscriptionHandlers.push(function(event) {
-      app_ready();
-    });
-  }
+      return stippleApp;
+    } // end of initStipple
+
+    function initWatchers$vue_app_name(app){
+    """,
+    join(
+      [Stipple.watch("app", field, Stipple.channel_js_name, debounce, model) for field in fieldnames(Stipple.get_concrete_type(M))
+        if Stipple.has_frontend_watcher(field, model)]
+    ),
+
+    """
+    } // end of initWatchers
+
+    function create$vue_app_name(channel) {
+      window.counter$vue_app_name = window.counter$vue_app_name || 1
+      const appName = '$vue_app_name' + ((counter$vue_app_name == 1) ? '' : '_' + window.counter$vue_app_name)
+      const rootSelector = '#$vue_app_name' + ((counter$vue_app_name == 1) ? '' : '-' + window.counter$vue_app_name)
+      counter$vue_app_name++
+
+      if ( window.autorun === undefined || window.autorun === true ) {
+        app = initStipple$vue_app_name(appName, rootSelector, channel);
+        initWatchers$vue_app_name(app);
+
+        app.WebChannel.subscriptionHandlers.push(function(event) {
+          app_ready(app);
+        });
+      }
+    }
+
+    // create$vue_app_name()
+    // is called via script with addEventListener to support multiple apps
   """
   )
 
