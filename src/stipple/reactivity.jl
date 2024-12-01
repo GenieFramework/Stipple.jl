@@ -255,10 +255,11 @@ function assignment_to_conversion(expr)
   expr
 end
 
-function let_eval!(expr, let_block, m::Module)
+function let_eval!(expr, let_block, m::Module, is_non_reactive::Bool = true)
+  Rtype = isnothing(m) || ! isdefined(m, :R) ? :(Stipple.R) : :R
   with_type = expr.args[1] isa Expr && expr.args[1].head == :(::)
   var = with_type ? expr.args[1].args[1] : expr.args[1]
-  let_expr = Expr(:let, let_block, Expr(:block, with_type ? assignment_to_conversion(expr) : expr.args[2]))
+  let_expr = Expr(:let, let_block, Expr(:block, with_type ? assignment_to_conversion(expr) : expr.args[end]))
   val = try
     @eval m $let_expr
   catch ex
@@ -267,13 +268,16 @@ function let_eval!(expr, let_block, m::Module)
   end
   
   T = val === :__Any__ ? Any : typeof(val)
-  val === :__Any__ || push!(let_block.args, :($var = R{$T}($val)))
+  val === :__Any__ || push!(let_block.args, is_non_reactive ? :(var = $val) : :($var = $Rtype{$T}($val)))
   return val, T
 end
 
 # deterimine the variables that need to be evaluated to infer the type of the variable
 function required_evals!(expr, vars::Set)
+  expr isa LineNumberNode && return vars
   expr = find_assignment(expr)
+  # @mixin statements are currently not evaluated
+  expr === nothing && return vars
   if expr.args[1] isa Symbol
     x = expr.args[1]
     push!(vars, x)
@@ -299,6 +303,7 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
   var = expr.args[1]
   varname = var isa Expr ? var.args[1] : var
 
+  is_non_reactive = mode === nothing
   mode === nothing && (mode = PRIVATE)
   context = isnothing(m) ? @__MODULE__() : m
 
@@ -306,28 +311,28 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
   # bt only if var is in the set of required 'vars'
   val = 0
   T = DataType
-  let_block !== nothing && varname ∈ vars && ((val, T) = let_eval!(expr, let_block, m))
+  let_block !== nothing && varname ∈ vars && ((val, T) = let_eval!(expr, let_block, m, is_non_reactive))
   
   mode = mode isa Symbol && ! isdefined(context, mode) ? :(Stipple.$mode) : mode
-  type = if isa(var, Expr) && var.head == Symbol("::")
+  type = if isa(var, Expr) && var.head == Symbol("::") && ! is_non_reactive
     # change type T to type R{T}
     var.args[end] = :($Rtype{$(var.args[end])})
   else # no type is defined, so determine it from the type of the default value
     try
       # add type definition `::R{T}` to the var where T is the type of the default value
       T = let_block === nothing ? typeof(@eval(context, $(expr.args[end]))) : T
-      expr.args[1] = :($var::$Rtype{$T})
-      Rtype
+      expr.args[1] = is_non_reactive ? :($var::$T) : :($var::$Rtype{$T})
+      is_non_reactive ? T : Rtype
     catch ex
       # if the default value is not defined, we can't infer the type
       # so we just set the type to R{Any}
       @info "Could not infer type of $var, setting it to R{Any}"
-      expr.args[1] = :($var::$Rtype{Any})
-      :($Rtype{Any})
+      expr.args[1] = is_non_reactive : :($var::Any) : :($var::$Rtype{Any})
+      is_non_reactive ? :($var::Any) : :($Rtype{Any})
     end
   end
 
-  expr.args[end] = :($type($(expr.args[end]), $mode, false, false, $source))
+  is_non_reactive || (expr.args[end] = :($type($(expr.args[end]), $mode, false, false, $source)))
   varname, expr
 end
 
@@ -342,6 +347,9 @@ macro var_storage(expr)
   storage = init_storage()
 
   source = nothing
+  required_vars = Set()
+  let_block = Expr(:block, :(_ = 0))
+  required_evals!.(expr.args, Ref(required_vars))
   for e in expr.args
       if e isa LineNumberNode
           source = e
@@ -360,7 +368,7 @@ macro var_storage(expr)
             e.args[end] = e.args[end].args[1]
           end
         end
-        var, ex = parse_expression!(e, reactive ? mode : nothing, source, m)
+        var, ex = parse_expression!(e, reactive ? mode : nothing, source, m, let_block, required_vars)
         # prevent overwriting of control fields
         var ∈ keys(Stipple.init_storage()) && continue
         if reactive == false
