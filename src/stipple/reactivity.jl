@@ -265,14 +265,27 @@ function let_eval!(expr, let_block, m::Module)
     with_type || @info "Could not infer type of $var, setting it to `Any`, consider adding a type annotation"
     :__Any__
   end
-  with_type || (T = typeof(val))
   
+  T = val === :__Any__ ? Any : typeof(val)
   val === :__Any__ || push!(let_block.args, :($var = R{$T}($val)))
-  T = val === :__Any__ ? Any : T
   return val, T
 end
 
-function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = nothing, m::Union{Module, Nothing} = nothing, let_block::Union{Expr, Nothing} = nothing)
+# deterimine the variables that need to be evaluated to infer the type of the variable
+function required_evals!(expr, vars::Set)
+  expr = find_assignment(expr)
+  if expr.args[1] isa Symbol
+    x = expr.args[1]
+    push!(vars, x)
+  end
+  MacroTools.postwalk(expr.args[end]) do ex
+    MacroTools.@capture(ex, x_[]) && push!(vars, x)
+    ex
+  end
+  return vars
+end
+
+function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = nothing, m::Union{Module, Nothing} = nothing, let_block::Union{Expr, Nothing} = nothing, vars::Set = Set())
   expr = find_assignment(expr)
   
   Rtype = isnothing(m) || ! isdefined(m, :R) ? :(Stipple.R) : :R
@@ -284,10 +297,16 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
   
   # args[end] instead of args[2] because of potential LineNumberNode
   var = expr.args[1]
+  varname = var isa Expr ? var.args[1] : var
+
   mode === nothing && (mode = PRIVATE)
   context = isnothing(m) ? @__MODULE__() : m
 
-  let_block === nothing || ((val, T) = let_eval!(expr, let_block, m))
+  # evaluate the expression in the context of the module and append the corresponding assignment to the let_block
+  # bt only if var is in the set of required 'vars'
+  val = 0
+  T = DataType
+  let_block !== nothing && varname ∈ vars && ((val, T) = let_eval!(expr, let_block, m))
   
   mode = mode isa Symbol && ! isdefined(context, mode) ? :(Stipple.$mode) : mode
   type = if isa(var, Expr) && var.head == Symbol("::")
@@ -309,14 +328,10 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
   end
 
   expr.args[end] = :($type($(expr.args[end]), $mode, false, false, $source))
-
-  varname = expr.args[1].args[1]
-  # evaluate the expression in the context of the module and append the corresponding assignment to the let_block
-  #val = let_eval!(expr, let_block, context)
   varname, expr
 end
 
-parse_expression(expr::Expr, mode = nothing, source = nothing, m = nothing, let_block::Expr = Expr(:block, :(_ = 0))) = parse_expression!(copy(expr), mode, source, m, let_block)
+parse_expression(expr::Expr, mode = nothing, source = nothing, m = nothing, let_block::Expr = nothing, vars::Set = Set()) = parse_expression!(copy(expr), mode, source, m, let_block, vars)
 
 macro var_storage(expr)
   m = __module__
