@@ -20,6 +20,8 @@ const PRECOMPILE = Ref(false)
 const ALWAYS_REGISTER_CHANNELS = Ref(true)
 const USE_MODEL_STORAGE = Ref(true)
 
+import MacroTools
+
 """
 Disables the automatic storage and retrieval of the models in the session.
 Useful for large models.
