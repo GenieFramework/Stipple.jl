@@ -560,3 +560,35 @@ end
     remove_css(my_css, byname = true)
     @test findfirst(==(my_css), Stipple.Layout.THEMES[]) === nothing
 end
+
+@testset "Exporting and loading model field values" begin
+    @app TestApp2 begin
+        @in i = 100
+        @out s = "Hello"
+        @private x = 4
+    end
+
+    model = @init TestApp2
+
+    exported_values = Stipple.ModelStorage.model_values(model)
+    @test exported_values[:i] == 100
+    @test exported_values[:s] == "Hello"
+    @test exported_values[:x] == 4
+
+    values_json = JSON3.write(exported_values)
+    exported_values_json = Stipple.ModelStorage.model_values(model, json = true)
+    @test values_json == exported_values_json
+
+    values_dict = Dict(:i => 20, :s => "world", :x => 5)
+    Stipple.ModelStorage.load_model_values!(model, values_dict)
+    @test model.i[] == 20
+    @test model.s[] == "world"
+    @test model.x[] == 5
+
+    values_json = Dict(:i => 30, :s => "zero", :x => 50) |> JSON3.write |> string
+    Stipple.ModelStorage.load_model_values!(model, values_json)
+    @test model.i[] == 30
+    @test model.s[] == "zero"
+    @test model.x[] == 50
+
+end
