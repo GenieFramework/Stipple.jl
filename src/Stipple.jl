@@ -572,38 +572,6 @@ function init(t::Type{M};
         else
           return "An error has occured -- please check the logs"
         end
-
-        field = Symbol(payload["field"])
-
-        #check if field exists
-        hasfield(CM, field) || return ok_response
-
-        valtype = Dict(zip(fieldnames(CM), CM.types))[field]
-        val = valtype <: Reactive ? getfield(model, field) : Ref{valtype}(getfield(model, field))
-
-        # reject non-public types
-        ( isprivate(field, model) || isreadonly(field, model) ) && return ok_response
-
-        newval = convertvalue(val, payload["newval"])
-        oldval = try
-          convertvalue(val, payload["oldval"])
-        catch ex
-          val[]
-        end
-
-        push!(model, field => newval; channel = channel, except = client)
-        LAST_ACTIVITY[Symbol(channel)] = now()
-
-        try
-          update!(model, field, newval, oldval)
-        catch ex
-          # send the error to the frontend
-          if Genie.Configuration.isdev()
-            return ex
-          else
-            return "An error has occured -- please check the logs"
-          end
-        end
       end
       ok_response
     end
