@@ -604,9 +604,8 @@ function init(t::Type{M};
             return "An error has occured -- please check the logs"
           end
         end
-
-        ok_response
       end
+      ok_response
     end
 
     ch = "/$channel/keepalive"
