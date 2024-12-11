@@ -389,9 +389,7 @@ const MODELDEPID = "!!MODEL!!"
 const CHANNELPARAM = :CHANNEL__
 
 
-function sessionid(; encrypt::Bool = true) :: String
-  use_model_storage() || error("Model storage is disabled")
-
+function sessionid(; encrypt::Bool = true) :: Union{String,Nothing}
   sessid = Stipple.ModelStorage.Sessions.GenieSession.session().id
 
   encrypt ? Genie.Encryption.encrypt(sessid) : sessid
