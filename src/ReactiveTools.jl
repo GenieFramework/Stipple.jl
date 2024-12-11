@@ -515,11 +515,20 @@ end
 
 function init_model(M::Type{<:ReactiveModel}, args...; context = nothing, kwargs...)
   m = parentmodule(M)
-  initfn = if isdefined(m, :init_from_storage) && Stipple.USE_MODEL_STORAGE[]
-    m.init_from_storage
-  else
-    Stipple.init
+
+  initfn = begin
+    if Stipple.use_model_storage() && $__module__ === Stipple
+      Stipple.ModelStorage.Sessions.init_from_storage
+    elseif isdefined($__module__, :Stipple) && isdefined($__module__.Stipple, :ModelStorage) && isdefined($__module__.Stipple.ModelStorage, :Sessions) && isdefined($__module__.Stipple.ModelStorage.Sessions, :init_from_storage) && Stipple.use_model_storage()
+      $__module__.Stipple.ModelStorage.Sessions.init_from_storage
+    elseif isdefined($__module__, :init_from_storage) && Stipple.use_model_storage()
+      $__module__.init_from_storage
+    else
+      Stipple.init
+    end
   end
+
+
   handlersfn = if context !== nothing && isdefined(M, :__GF_AUTO_HANDLERS__)
     M.__GF_AUTO_HANDLERS__
   else
