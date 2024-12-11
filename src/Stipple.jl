@@ -20,6 +20,8 @@ const PRECOMPILE = Ref(false)
 const ALWAYS_REGISTER_CHANNELS = Ref(true)
 const USE_MODEL_STORAGE = Ref(true)
 
+import MacroTools
+
 """
 Disables the automatic storage and retrieval of the models in the session.
 Useful for large models.
@@ -113,7 +115,7 @@ using .NamedTuples
 export JSONParser, JSONText, json, @json, jsfunction, @jsfunction_str
 
 const config = Genie.config
-const channel_js_name = "window.CHANNEL"
+const channel_js_name = "'not_assigned'"
 
 const OptDict = OrderedDict{Symbol, Any}
 opts(;kwargs...) = OptDict(kwargs...)
@@ -342,10 +344,10 @@ changed on the frontend, it is pushed over to the backend using `channel`, at a 
 function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounce::Int, model::M; jsfunction::String = "")::String where {M<:ReactiveModel}
   js_channel = isempty(channel) ?
                 "window.Genie.Settings.webchannels_default_route" :
-                (channel == Stipple.channel_js_name ? Stipple.channel_js_name : "'$channel'")
+                "$vue_app_name.channel_"
 
   isempty(jsfunction) &&
-    (jsfunction = "Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal, 'sesstoken': document.querySelector(\"meta[name='sesstoken']\")?.getAttribute('content')}});")
+    (jsfunction = "$vue_app_name.push('$fieldname')")
 
   output = IOBuffer()
   if fieldname == :isready
@@ -812,11 +814,18 @@ function injectdeps(output::Vector{AbstractString}, M::Type{<:ReactiveModel}) ::
   output
 end
 
-
+# no longer needed, replaced by initscript
 function channelscript(channel::String) :: String
-  Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"])
+  Genie.Renderer.Html.script(["""
+  document.addEventListener('DOMContentLoaded', () => window.Genie.initWebChannel('$channel') );
+  """])
 end
 
+function initscript(vue_app_name, channel) :: String
+  Genie.Renderer.Html.script(["""
+  document.addEventListener('DOMContentLoaded', () => window.create$vue_app_name('$channel') );
+  """])
+end
 
 """
     function deps(channel::String = Genie.config.webchannels_default_route)
@@ -826,7 +835,7 @@ Outputs the HTML code necessary for injecting the dependencies in the page (the 
 function deps(m::M) :: Vector{String} where {M<:ReactiveModel}
   channel = getchannel(m)
   output = [
-    channelscript(channel),
+    initscript(vm(m), channel),
     (is_channels_webtransport() ? Genie.Assets.channels_script_tag(channel) : Genie.Assets.webthreads_script_tag(channel)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="underscore-min")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.global.prod" : "vue.global"))),

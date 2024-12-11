@@ -205,9 +205,49 @@ macro stipple_precompile(setup, workload)
 end
 
 macro stipple_precompile(workload)
+    # wrap @app calls in @eval to avoid precompilation errors
+    for (i, ex) in enumerate(workload.args)
+        if ex isa Expr && ex.head == :macrocall && ex.args[1] == Symbol("@app")
+            workload.args[i] = :(@eval $(ex))#Expr(:macrocall, Symbol("@eval"), ex.args)
+        end
+    end
     quote
         @stipple_precompile begin end begin
             $workload
         end
     end
 end
+
+"""
+    striplines!(ex::Union{Expr, Vector})
+
+Remove all line number nodes from an expression or vector of expressions. See also `striplines`.
+"""
+function striplines!(ex::Expr; recursive::Bool = false)
+  for i in reverse(eachindex(ex.args))
+    if isa(ex.args[i], LineNumberNode) && (ex.head != :macrocall || i > 1)
+      deleteat!(ex.args, i)
+    elseif isa(ex.args[i], Expr) && recursive
+      striplines!(ex.args[i])
+    end
+  end
+  ex
+end
+
+function striplines!(exprs::Vector; recursive::Bool = false)
+  for i in reverse(eachindex(exprs))
+    if isa(exprs[i], LineNumberNode)
+      deleteat!(exprs, i)
+    elseif isa(exprs[i], Expr) && recursive
+      striplines!(exprs[i])
+    end
+  end
+  exprs
+end
+
+"""
+    striplines(ex::Union{Expr, Vector})
+
+Return a copy of an expression with all line number nodes removed. See also `striplines!`.
+"""
+striplines(ex; recursive::Bool = false) = striplines!(copy(ex); recursive)

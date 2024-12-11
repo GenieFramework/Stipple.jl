@@ -5,10 +5,7 @@ using MacroTools
 using MacroTools: postwalk
 using OrderedCollections
 import Genie
-import Stipple: deletemode!, parse_expression!, init_storage
-
-# definition of variables
-export @readonly, @private, @in, @out, @jsfn, @readonly!, @private!, @in!, @out!, @jsfn!, @mixin
+import Stipple: deletemode!, parse_expression!, parse_expression, init_storage, striplines, striplines!
 
 #definition of handlers/events
 export @onchange, @onbutton, @event, @notify
@@ -32,12 +29,6 @@ export @before_create, @created, @before_mount, @mounted, @before_update, @updat
 
 
 export DEFAULT_LAYOUT, Page
-
-export @onchangeany # deprecated
-
-const REACTIVE_STORAGE = LittleDict{Module,LittleDict{Symbol,Expr}}()
-const HANDLERS = LittleDict{Module,Vector{Expr}}()
-const TYPES = LittleDict{Module,Union{<:DataType,Nothing}}()
 
 const HANDLERS_FUNCTIONS = LittleDict{Type{<:ReactiveModel},Function}()
 
@@ -106,21 +97,20 @@ function DEFAULT_LAYOUT(; title::String = "Genie App",
 end
 
 function model_typename(m::Module)
-  isdefined(m, :__typename__) ? m.__typename__[] : "$(m)_ReactiveModel"
+  isdefined(m, :__typename__) ? m.__typename__[] : Symbol("$(m)_ReactiveModel")
 end
 
 macro appname(expr)
   expr isa Symbol || (expr = Symbol(@eval(__module__, $expr)))
-  clear_type(__module__)
   ex = quote end
   if isdefined(__module__, expr)
     push!(ex.args, :(Stipple.ReactiveTools.delete_handlers_fn($__module__)))
     push!(ex.args, :(Stipple.ReactiveTools.delete_events($expr)))
   end
-  if isdefined(__module__, :__typename__) && __module__.__typename__ isa Ref{String}
-    push!(ex.args, :(__typename__[] = $(string(expr))))
+  if isdefined(__module__, :__typename__) && __module__.__typename__ isa Ref{Symbol}
+    push!(ex.args, :(__typename__[] = Symbol($(string(expr)))))
   else
-    push!(ex.args, :(const __typename__ = Ref{String}($(string(expr)))))
+    push!(ex.args, :(const __typename__ = Ref{Symbol}(Symbol($(string(expr))))))
     push!(ex.args, :(__typename__[]))
   end
   :($ex) |> esc
@@ -130,13 +120,6 @@ macro appname()
   # reset appname to default
   appname = "$(__module__)_ReactiveModel"
   :(isdefined($__module__, :__typename__) ? @appname($appname) : $appname) |> esc
-end
-
-function Stipple.init_storage(m::Module)
-  (m == @__MODULE__) && return nothing
-  haskey(REACTIVE_STORAGE, m) || (REACTIVE_STORAGE[m] = Stipple.init_storage())
-  haskey(TYPES, m) || (TYPES[m] = nothing)
-  REACTIVE_STORAGE[m]
 end
 
 function Stipple.setmode!(expr::Expr, mode::Int, fieldnames::Symbol...)
@@ -164,21 +147,6 @@ end
 
 #===#
 
-function clear_type(m::Module)
-  TYPES[m] = nothing
-end
-
-function delete_bindings!(m::Module)
-  clear_type(m)
-  delete!(REACTIVE_STORAGE, m)
-  nothing
-end
-
-function bindings(m)
-  init_storage(m)
-  REACTIVE_STORAGE[m]
-end
-
 function delete_handlers_fn(m::Module)
   if isdefined(m, :__GF_AUTO_HANDLERS__)
     Base.delete_method.(methods(m.__GF_AUTO_HANDLERS__))
@@ -186,7 +154,9 @@ function delete_handlers_fn(m::Module)
 end
 
 function delete_events(m::Module)
-  haskey(TYPES, m) && TYPES[m] isa DataType && delete_events(TYPES[m])
+  modelname = model_typename(m)
+  M = @eval m $modelname
+  delete_events(M) 
 end
 
 function delete_events(::Type{M}) where M
@@ -203,7 +173,6 @@ function delete_events(::Type{M}) where M
 end
 
 function delete_handlers!(m::Module)
-  delete!(HANDLERS, m)
   delete_handlers_fn(m)
   delete_events(m)
   nothing
@@ -219,32 +188,7 @@ end
 Deletes all reactive variables and code in a model.
 """
 macro clear()
-  delete_bindings!(__module__)
   delete_handlers!(__module__)
-end
-
-macro clear(args...)
-  haskey(REACTIVE_STORAGE, __module__) || return
-  for arg in args
-    arg in [Stipple.CHANNELFIELDNAME, :modes__] && continue
-    delete!(REACTIVE_STORAGE[__module__], arg)
-  end
-  deletemode!(REACTIVE_STORAGE[__module__][:modes__], args...)
-
-  update_storage(__module__)
-
-  REACTIVE_STORAGE[__module__]
-end
-
-"""
-```julia
-@clear_vars
-```
-
-Deletes all reactive variables in a model.
-"""
-macro clear_vars()
-  delete_bindings!(__module__)
 end
 
 """
@@ -260,16 +204,8 @@ end
 
 import Stipple.@type
 macro type()
-  Stipple.init_storage(__module__)
-  type = if TYPES[__module__] !== nothing
-    TYPES[__module__]
-  else
-    modelname = Symbol(model_typename(__module__))
-    storage = REACTIVE_STORAGE[__module__]
-    TYPES[__module__] = @eval(__module__, Stipple.@type($modelname, $storage))
-  end
-
-  esc(:($type))
+  modelname = model_typename(__module__)
+  esc(:($modelname))
 end
 
 import Stipple.@clear_cache
@@ -418,31 +354,14 @@ macro clear_debounce()
   :(Stipple.debounce(Stipple.@type(), nothing)) |> esc
 end
 
-function update_storage(m::Module)
-  clear_type(m)
-  # isempty(Stipple.Pages._pages) && return
-  # instance = @eval m Stipple.@type()
-  # for p in Stipple.Pages._pages
-  #   p.context == m && (p.model = instance)
-  # end
-end
-
-import Stipple: @vars, @add_vars
+import Stipple: @vars
 
 macro vars(expr)
-  init_storage(__module__)
-
-  REACTIVE_STORAGE[__module__] = @eval(__module__, Stipple.@var_storage($expr))
-
-  update_storage(__module__)
-  REACTIVE_STORAGE[__module__]
-end
-
-macro add_vars(expr)
-  init_storage(__module__)
-  REACTIVE_STORAGE[__module__] = Stipple.merge_storage(REACTIVE_STORAGE[__module__], @eval(__module__, Stipple.@var_storage($expr)); context = __module__)
-
-  update_storage(__module__)
+  modelname = model_typename(__module__)
+  storage = Stipple.init_storage()
+  quote
+    Stipple.ReactiveTools.@vars $modelname $expr
+  end |> esc
 end
 
 macro model()
@@ -474,71 +393,16 @@ The code block passed to @app implements the app's logic, handling the states of
 end
 ```
 """
-macro app(expr)
-  delete_bindings!(__module__)
-  delete_handlers!(__module__)
-
-  init_handlers(__module__)
-  init_storage(__module__)
-
+macro app(expr = Expr(:block))
+  modelname = model_typename(__module__)
+  storage = Stipple.init_storage()
   quote
-    $expr
-
-    Stipple.ReactiveTools.@handlers
+    Stipple.ReactiveTools.@app $modelname $expr __GF_AUTO_HANDLERS__
+    $modelname
   end |> esc
 end
 
 #===#
-
-function binding(expr::Symbol, m::Module, @nospecialize(mode::Any = nothing); source = nothing, reactive = true)
-  binding(:($expr = $expr), m, mode; source, reactive)
-end
-
-function binding(expr::Expr, m::Module, @nospecialize(mode::Any = nothing); source = nothing, reactive = true)
-  (m == @__MODULE__) && return nothing
-
-  intmode = mode isa Integer ? Int(mode) : @eval Stipple.$mode
-  init_storage(m)
-
-  var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
-  REACTIVE_STORAGE[m][var] = field_expr
-
-  reactive || setmode!(REACTIVE_STORAGE[m][:modes__], intmode, var)
-  reactive && setmode!(REACTIVE_STORAGE[m][:modes__], PUBLIC, var)
-
-  # remove cached type and instance, update pages
-  update_storage(m)
-end
-
-function binding(expr::Expr, storage::LittleDict{Symbol, Expr}, @nospecialize(mode::Any = nothing); source = nothing,
-                  reactive = true, m::Module)
-  intmode = mode isa Integer ? Int(mode) : @eval Stipple.$mode
-
-  var, field_expr = parse_expression!(expr, reactive ? mode : nothing, source, m)
-  storage[var] = field_expr
-
-  reactive || setmode!(storage[:modes__], intmode, var)
-  reactive && setmode!(storage[:modes__], PUBLIC, var)
-
-  storage
-end
-
-# this macro needs to run in a macro where `expr`is already defined
-macro report_val()
-  quote
-    val = expr isa Symbol ? expr : expr.args[2]
-    issymbol = val isa Symbol
-    :(if $issymbol
-      if isdefined(@__MODULE__, $(QuoteNode(val)))
-        $val
-      else
-        @info(string("Warning: Variable '", $(QuoteNode(val)), "' not yet defined"))
-      end
-    else
-      Stipple.Observables.to_value($val)
-    end) |> esc
-  end |> esc
-end
 
 # this macro needs to run in a macro where `expr`is already defined
 macro define_var()
@@ -550,143 +414,55 @@ macro define_var()
   end |> esc
 end
 
-# works with
-# @in a = 2
-# @in a::Vector = [1, 2, 3]
-# @in a::Vector{Int} = [1, 2, 3]
-
-# the @in, @out and @private macros below are defined so a docstring can be attached
-# the actual macro definition is done in the for loop further down
-"""
-```julia
-@in(expr)
-```
-
-Declares a reactive variable that is public and can be written to from the UI.
-
-**Usage**
-```julia
-@app begin
-    @in N = 0
-end
-```
-"""
-macro in end
-
-"""
-```julia
-@out(expr)
-```
-
-Declares a reactive variable that is public and readonly.
-
-**Usage**
-```julia
-@app begin
-    @out N = 0
-end
-```
-"""
-macro out end
-
-"""
-```julia
-@private(expr)
-```
-
-Declares a non-reactive variable that cannot be accessed by UI code.
-
-**Usage**
-```julia
-@app begin
-    @private N = 0
-end
-```
-"""
-macro private end
-
-for (fn, mode) in [(:in, :PUBLIC), (:out, :READONLY), (:jsnfn, :JSFUNCTION), (:private, :PRIVATE)]
-  fn! = Symbol(fn, "!")
-  Core.eval(@__MODULE__, quote
-
-    macro $fn!(expr)
-      binding(expr isa Symbol ? expr : copy(expr), __module__, $mode; source = __source__)
-      esc(:($expr))
-    end
-
-    macro $fn!(flag, expr)
-      flag != :non_reactive && return esc(:(ReactiveTools.$fn!($flag, _, $expr)))
-      binding(expr isa Symbol ? expr : copy(expr), __module__, $mode; source = __source__, reactive = false)
-      esc(:($expr))
-    end
-
-    macro $fn(location, flag, expr)
-      reactive = flag != :non_reactive
-      ex = [expr isa Symbol ? expr : copy(expr)]
-      loc = location isa Symbol ? QuoteNode(location) : location
-
-      quote
-        local location = isdefined($__module__, $loc) ? eval($loc) : $loc
-        local storage = location isa DataType ? Stipple.model_to_storage(location) : location isa LittleDict ? location : Stipple.init_storage()
-
-        Stipple.ReactiveTools.binding($ex[1], storage, $$mode; source = $__source__, reactive = $reactive, m = $__module__)
-        location isa DataType || location isa Symbol ? eval(:(Stipple.@type($$loc, $storage))) : location
-      end |> esc
-    end
-
-    macro $fn(expr)
-      binding(expr isa Symbol ? expr : copy(expr), __module__, $mode; source = __source__)
-      @report_val()
-    end
-
-    macro $fn(flag, expr)
-      flag != :non_reactive && return esc(:(ReactiveTools.@fn($flag, _, $expr)))
-      binding(expr isa Symbol ? expr : copy(expr), __module__, $mode; source = __source__, reactive = false)
-      @report_val()
-    end
-  end)
-end
-
-macro mixin(expr, prefix = "", postfix = "")
-  # if prefix is not a String then call the @mixin version for generic model types
-  prefix isa String || return quote
-    @mixin $expr $prefix $postfix ""
+function parse_mixin_params(params)
+  striplines!(params)
+  mixin, prefix, postfix = if length(params) == 1 && params[1] isa Expr && hasproperty(params[1], :head) && params[1].head == :(::)
+    params[1].args[2], string(params[1].args[1]), ""
+  elseif length(params) == 1
+    params[1], "", ""
+  elseif length(params) == 2
+    params[1], string(params[2]), ""
+  elseif length(params) == 3
+    params[1], string(params[2]), string(params[3])
+  else
+    error("1, 2, or 3 arguments expected, found $(length(params))")
   end
-
-  storage = init_storage(__module__)
-
-  Stipple.ReactiveTools.update_storage(__module__)
-  Core.eval(__module__, quote
-    Stipple.ReactiveTools.@mixin $storage $expr $prefix $postfix
-  end)
-  quote end
+  mixin, prefix, postfix
 end
 
-macro mixin(location, expr, prefix, postfix)
-  if hasproperty(expr, :head) && expr.head == :(::)
-    prefix = string(expr.args[1])
-    expr = expr.args[2]
+function parse_macros(expr::Expr, storage::LittleDict, m::Module, let_block::Expr = nothing, vars::Set = Set())
+  expr.head == :macrocall || return expr
+  flag = :nothing
+  fn = Symbol(String(expr.args[1])[2:end])
+  mode = Dict(:in => PUBLIC, :out => READONLY, :jsnfn => JSFUNCTION, :private => PRIVATE, :mixin => 0)[fn]
+  
+  source = filter(x -> x isa LineNumberNode, expr.args)
+  source = isempty(source) ? "" : last(source)
+  striplines!(expr)
+  params = expr.args[2:end]
+
+  if fn != :mixin
+    if length(params) == 1
+      expr = params
+    elseif length(params) == 2
+      flag, expr = params
+    else
+      error("1 or 2 arguments expected, found $(length(params))")
+    end
+
+    reactive = flag != :non_reactive
+    var, ex = parse_expression(expr[1], mode, source, m, let_block, vars)
+    storage[var] = ex
+  elseif fn == :mixin
+    mixin, prefix, postfix = parse_mixin_params(params)
+    mixin_storage = Stipple.model_to_storage(@eval(m, $mixin), prefix, postfix)
+    merge!(storage, Stipple.merge_storage(storage, mixin_storage; context = m))
+  else
+    error("Unknown macro @$fn")
   end
-  loc = location isa Symbol ? QuoteNode(location) : location
-
-  x = Core.eval(__module__, expr)
-  quote
-    local location = $loc isa Symbol && isdefined($__module__, $loc) ? $__module__.$(loc isa QuoteNode ? loc.value : loc) : $loc
-    local storage = location isa DataType ? Stipple.model_to_storage(location) : location isa LittleDict ? location : Stipple.init_storage()
-    M = $x isa DataType ? $x : typeof($x) # really needed?
-    local mixin_storage = Stipple.model_to_storage(M, $(QuoteNode(prefix)), $postfix)
-
-    merge!(storage, Stipple.merge_storage(storage, mixin_storage; context = @__MODULE__))
-    location isa DataType || location isa Symbol ? eval(:(Stipple.@type($$loc, $storage))) : location
-    mixin_storage
-  end |> esc
 end
 
 #===#
-
-function init_handlers(m::Module)
-  get!(Vector{Expr}, HANDLERS, m)
-end
 
 """
         @init(kwargs...)
@@ -729,92 +505,95 @@ macro init(args...)
   called_without_type = isnothing(type_pos)
 
   if called_without_type
-    type_pos = 0 # to prevent erroring in definition of 'handlersfn'
-    insert!(init_args, Stipple.has_parameters(init_args) ? 2 : 1, :(Stipple.@type()))
+    typename = model_typename(__module__)
+    insert!(init_args, Stipple.has_parameters(init_args) ? 2 : 1, typename)
+  else
+    typename = init_args[type_pos]
   end
 
   quote
-    local new_handlers = false
-
-    local initfn =
-    if isdefined($__module__, :init_from_storage) && Stipple.USE_MODEL_STORAGE[]
-      $__module__.init_from_storage
-    else
-      Stipple.init
-    end
-
-    local handlersfn =
-    if !$called_without_type
-      # writing '$(init_kwargs[type_pos])' generates an error during a pre-evaluation
-      # possibly from Revise?
-      # we use 'get' instead of 'getindex'
-      Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$(get(init_args, type_pos, "dummy"))]
-    else
-      if isdefined($__module__, :__GF_AUTO_HANDLERS__)
-        if length(methods($__module__.__GF_AUTO_HANDLERS__)) == 0
-          @eval(@handlers())
-          new_handlers = true
-        end
-        $__module__.__GF_AUTO_HANDLERS__
-      else
-        identity
-      end
-    end
-
-    instance = let model = initfn($(init_args...))
-        new_handlers ? Base.invokelatest(handlersfn, model) : handlersfn(model)
-    end
-    for p in Stipple.Pages._pages
-      p.context == $__module__ && (p.model = instance)
-    end
-
-    instance
+    Stipple.ReactiveTools.init_model($(init_args...))
   end |> esc
 end
 
+function init_model(M::Type{<:ReactiveModel}, args...; context = nothing, kwargs...)
+  m = parentmodule(M)
+  initfn = if isdefined(m, :init_from_storage) && Stipple.USE_MODEL_STORAGE[]
+    m.init_from_storage
+  else
+    Stipple.init
+  end
+  handlersfn = if context !== nothing && isdefined(M, :__GF_AUTO_HANDLERS__)
+    M.__GF_AUTO_HANDLERS__
+  else
+    Stipple.ReactiveTools.HANDLERS_FUNCTIONS[M]
+  end
+
+  model = initfn(M, args...; kwargs...) |> handlersfn
+
+  # Update the model in all pages where it has been set as instance of an app.
+  # Where it has been set as ReactiveModel type, no change is required
+  for p in Stipple.Pages._pages
+    p.context == m && p.model isa M && (p.model = model)
+  end
+  model
+end
+
+function init_model(m::Module, args...; kwargs...)
+  init_model(@eval(m, Stipple.@type), args...; context = m, kwargs...)
+end
+
 macro app(typename, expr, handlers_fn_name = :handlers)
-  # indicate to the @handlers macro that old typefields have to be cleared
-  # (avoids model_to_storage)
-  newtypename = Symbol(typename, "_!_")
   quote
-    let model = Stipple.ReactiveTools.@handlers $newtypename $expr $handlers_fn_name
-      Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$typename] = $handlers_fn_name
-      model
-    end
+    Stipple.ReactiveTools.@handlers $typename $expr $handlers_fn_name
+    Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$typename] = $handlers_fn_name
+    $typename, $handlers_fn_name
   end |> esc
 end
 
 macro handlers()
-  handlers = init_handlers(__module__)
-
+  modelname = model_typename(__module__)
+  empty_block = Expr(:block)
   quote
-    function __GF_AUTO_HANDLERS__(__model__)
-      $(handlers...)
-
-      return __model__
-    end
+    Stipple.ReactiveTools.@handlers $modelname $empty_block __GF_AUTO_HANDLERS__
   end |> esc
 end
 
 macro handlers(expr)
-  delete_handlers!(__module__)
-  init_handlers(__module__)
-
+  modelname = model_typename(__module__)
   quote
-    $expr
-
-    @handlers
+    Stipple.ReactiveTools.@handlers $modelname $expr __GF_AUTO_HANDLERS__
   end |> esc
 end
 
-macro handlers(typename, expr, handlers_fn_name = :handlers)
-  newtype = endswith(String(typename), "_!_")
-  newtype && (typename = Symbol(String(typename)[1:end-3]))
+"""
+    get_varnames(app_expr::Vector, context::Module)
 
+Return a list of all non-internal variable names used in a vector of var definitions lines.
+"""
+function get_varnames(app_expr::Vector, context::Module)
+  varnames = copy(Stipple.AUTOFIELDS)
+  for ex in app_expr
+      ex isa LineNumberNode && continue
+      if ex.args[1] ∈ [Symbol("@in"), Symbol("@out"), Symbol("@jsfunction"), Symbol("@private")]
+          res = Stipple.get_varname(ex)
+          push!(varnames, res isa Symbol ? res : res[1])
+      elseif ex.args[1] == Symbol("@mixin")
+          mixin, prefix, postfix = parse_mixin_params(ex.args[2:end])
+          fnames = setdiff(@eval(context, collect($mixin isa LittleDict ? keys($mixin) : propertynames($mixin()))), Stipple.AUTOFIELDS, Stipple.INTERNALFIELDS)
+          prefix === nothing || (fnames = Symbol.(prefix, fnames, postfix))
+          append!(varnames, fnames)
+      end
+  end
+  @assert(length(unique(varnames)) == length(varnames), "Duplicate field names detected")
+  varnames
+end
+
+macro handlers(typename, expr, handlers_fn_name = :handlers)
   expr = wrap(expr, :block)
   i_start = 1
   handlercode = []
-  initcode = quote end
+  initcode = []
 
   for (i, ex) in enumerate(expr.args)
     if ex isa Expr
@@ -822,68 +601,57 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
         ex_index = .! isa.(ex.args, LineNumberNode)
         if sum(ex_index) < 4
           pos = findall(ex_index)[2]
-          insert!(ex.args, pos, typename)
-        end
-        push!(handlercode, expr.args[i_start:i]...)
-      else
-        if ex.head == :macrocall && ex.args[1] in Symbol.(["@in", "@out", "@private", "@readonly", "@jsfn", "@mixin"])
-          ex_index = isa.(ex.args, Union{Symbol, Expr})
-          pos = findall(ex_index)[2]
-          sum(ex_index) == 2 && ex.args[1] != Symbol("@mixin") && insert!(ex.args, pos, :_)
           insert!(ex.args, pos, :__storage__)
         end
-        push!(initcode.args, expr.args[i_start:i]...)
+        push!(handlercode, expr.args[i_start:i]...)
+      elseif ex.head == :macrocall && ex.args[1] in Symbol.(["@in", "@out", "@private", "@readonly", "@jsfn", "@mixin"])
+        push!(initcode, expr.args[i_start:i]...)
+      else
+        println("Warning: Unrecognized macro in handlers: ", ex)
+        push!(handlercode, ex)
       end
       i_start = i + 1
     end
   end
 
-  # model_to_storage is only needed when we add variables to an existing type.
-  no_new_vars = findfirst(x -> x isa Expr, initcode.args) === nothing
-  # if we redefine a type newtype is true
-  if isdefined(__module__, typename) && no_new_vars && ! newtype
-    # model is already defined and no variables are added and we are not redefining a model type
-  else
-    # we need to define a type ...
-    storage = if ! newtype && isdefined(__module__, typename) && ! no_new_vars
-      @eval(__module__, Stipple.model_to_storage($typename))
-    else
-      Stipple.init_storage()
-    end
-    initcode = quote
-      # define a local variable __storage__ with the value of storage
-      # that will be used by the macro afterwards
-      __storage__ = $storage
-      # add more definitions to __storage___
-      $(initcode.args...)
-    end
+  storage = Stipple.init_storage()
+  varnames = get_varnames(initcode, __module__)
 
-    # needs to be executed before evaluation of handler code
-    # because the handler code depends on the model fields.
-    @eval __module__ begin
-      # execution of initcode will fill up the __storage__
-      $initcode
-      Stipple.@type($typename, values(__storage__))
-    end
-  end
+  filter!(x -> !isa(x, LineNumberNode), initcode)
+  let_block = Expr(:block, :(_ = 0))
+  required_vars = Set()
+  Stipple.required_evals!.(initcode, Ref(required_vars))
+  parse_macros.(initcode, Ref(storage), Ref(__module__), Ref(let_block), Ref(required_vars))
+  # if no initcode is provided and typename is already defined, don't overwrite the existing type and just declare the handlers function
+  initcode_final = isempty(initcode) && isdefined(__module__, typename) ? Expr(:block) : :(Stipple.@type($typename, $storage))
 
   handlercode_final = []
+  d = LittleDict(varnames .=> varnames)
+  d_expr = :($d)
   for ex in handlercode
     if ex isa Expr
+      replace!(ex.args, :__storage__ => d_expr)
       push!(handlercode_final, @eval(__module__, $ex))
     else
       push!(handlercode_final, ex)
     end
   end
+  
+  # println("initcode: ", initcode)
+  # println("initcode_final: ", initcode_final)
+  # println("handlercode: ", handlercode)
+  # println("handlercode_final: ", handlercode_final)
 
   quote
+    $(initcode_final)
     Stipple.ReactiveTools.delete_events($typename)
-
+    
     function $handlers_fn_name(__model__)
       $(handlercode_final...)
 
       __model__
     end
+    Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$typename] = $handlers_fn_name
     ($typename, $handlers_fn_name)
   end |> esc
 end
@@ -992,12 +760,16 @@ function fieldnames_to_fieldcontent(expr, vars, replace_vars)
 end
 
 function get_known_vars(M::Module)
-  init_storage(M)
+  modeltype = @eval M Stipple.@type
+  get_known_vars(modeltype)
+end
+
+function get_known_vars(storage::LittleDict)
   reactive_vars = Symbol[]
   non_reactive_vars = Symbol[]
-  for (k, v) in REACTIVE_STORAGE[M]
+  for (k, v) in storage
     k in Stipple.INTERNALFIELDS && continue
-    is_reactive = startswith(string(Stipple.split_expr(v)[2]), r"(Stipple\.)?R(eactive)?($|{)")
+    is_reactive = v isa Symbol ? true : startswith(string(Stipple.split_expr(v)[2]), r"(Stipple\.)?R(eactive)?($|{)")
     push!(is_reactive ? reactive_vars : non_reactive_vars, k)
   end
   reactive_vars, non_reactive_vars
@@ -1045,43 +817,25 @@ macro onchange(var, expr)
 end
 
 macro onchange(location, vars, expr)
-  loc::Union{Module, Type{<:M}} where M<:ReactiveModel = @eval __module__ $location
+  loc::Union{Module, Type{<:ReactiveModel}, LittleDict} = @eval __module__ $location
   vars = wrap(vars, :tuple)
   expr = wrap(expr, :block)
 
-  loc isa Module && init_handlers(loc)
   known_reactive_vars, known_non_reactive_vars = get_known_vars(loc)
   known_vars = vcat(known_reactive_vars, known_non_reactive_vars)
   on_vars = fieldnames_to_fields(vars, known_vars)
 
   expr, used_vars = mask(expr, known_vars)
-  do_vars = Symbol[]
 
-  for a in vars.args
-    push!(do_vars, a isa Symbol && ! in(a, used_vars) ? a : :_)
-  end
-
-  replace_reactive_vars = setdiff(known_reactive_vars, do_vars)
-  replace_non_reactive_vars = setdiff(known_non_reactive_vars, do_vars)
-
-  expr = fieldnames_to_fields(expr, known_non_reactive_vars, replace_non_reactive_vars)
-  expr = fieldnames_to_fieldcontent(expr, known_reactive_vars, replace_reactive_vars)
-  expr = unmask(expr, vcat(replace_reactive_vars, replace_non_reactive_vars))
+  expr = fieldnames_to_fields(expr, known_non_reactive_vars)
+  expr = fieldnames_to_fieldcontent(expr, known_reactive_vars)
+  expr = unmask(expr, vcat(known_reactive_vars, known_non_reactive_vars))
 
   fn = length(vars.args) == 1 ? :on : :onany
-  ex = quote
-    $fn($(on_vars.args...)) do $(do_vars...)
+  :($fn($(on_vars.args...)) do _...
         $(expr.args...)
     end
-  end
-
-  loc isa Module && push!(HANDLERS[__module__], ex)
-  output = [ex]
-  quote
-    function __GF_AUTO_HANDLERS__ end
-    Base.delete_method.(methods(__GF_AUTO_HANDLERS__))
-    $output[end]
-  end |> esc
+  ) |> QuoteNode
 end
 
 macro onchangeany(var, expr)
@@ -1122,9 +876,8 @@ macro onbutton(var, expr)
 end
 
 macro onbutton(location, var, expr)
-  loc::Union{Module, Type{<:ReactiveModel}} = @eval __module__ $location
+  loc::Union{Module, Type{<:ReactiveModel}, LittleDict} = @eval __module__ $location
   expr = wrap(expr, :block)
-  loc isa Module && init_handlers(loc)
 
   known_reactive_vars, known_non_reactive_vars = get_known_vars(loc)
   known_vars = vcat(known_reactive_vars, known_non_reactive_vars)
@@ -1136,20 +889,9 @@ macro onbutton(location, var, expr)
   expr = fieldnames_to_fieldcontent(expr, known_reactive_vars)
   expr = unmask(expr, known_vars)
 
-  ex = :(onbutton($var) do
+  :(onbutton($var) do
     $(expr.args...)
-  end)
-
-  output = quote end
-
-  if loc isa Module
-    push!(HANDLERS[__module__], ex)
-    push!(output.args, :(function __GF_AUTO_HANDLERS__ end))
-    push!(output.args, :(Base.delete_method.(methods(__GF_AUTO_HANDLERS__))))
-  end
-  push!(output.args, QuoteNode(ex))
-
-  output |> esc
+  end) |> QuoteNode
 end
 
 #===#
@@ -1181,25 +923,21 @@ macro page(expressions...)
         defaults = Dict(
             :layout => Stipple.ReactiveTools.DEFAULT_LAYOUT(),
             :context => __module__,
-            :model => nothing
+            :model => __module__
         )
     )
     model_parent, model_ind, model_expr = Stipple.locate_kwarg(args, :model)
     model = @eval(__module__, $model_expr)
 
-    if model === nothing || model isa DataType && model <: ReactiveModel
-      # remove all other kwargs that are not meant for `@init`
-      init_kwargs = Stipple.delete_kwargs(args, [:layout, :model, :context])
-
-      # add the type if model is a modeltype
-      if model !== nothing
-          insert!(init_kwargs, Stipple.has_parameters(init_kwargs) ? 2 : 1, model_expr)
+    if model isa Module
+      # the next lines are added for backward compatibility
+      # if the app is programmed according to the latest API,
+      # eval will not be called; will e removed in the future
+      typename = model_typename(__module__)
+      if !isdefined(__module__, typename)
+        @warn "App not yet defined, this is strongly discouraged, please define an app first"
+        @eval(__module__, @app)
       end
-
-      # modify the entry of the :model keyword by an init function with respective init_kwargs
-      model_parent[model_ind] = :($(Expr(:kw, :model, () -> @eval(__module__, Stipple.ReactiveTools.@init($(init_kwargs...))))))
-    else
-      nothing
     end
 
     :(Stipple.Pages.Page($(args...), $url, view = $view)) |> esc
