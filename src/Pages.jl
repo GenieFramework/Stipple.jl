@@ -42,9 +42,11 @@ function Page(  route::Union{Route,String};
             Core.eval(context, model)
           elseif isa(model, Module)
             context = model
-            () -> @eval(context, Stipple.ReactiveTools.@init(debounce = $debounce, transport = $transport, core_theme = $core_theme))
+            () -> Stipple.ReactiveTools.init_model(context; debounce, transport, core_theme)
           elseif model isa DataType
-            () -> @eval(context, Stipple.ReactiveTools.@init($model; debounce = $debounce, transport = $transport, core_theme = $core_theme))
+            # as model is being redefined, we need to create a copy
+            mymodel = model
+            () -> Stipple.ReactiveTools.init_model(mymodel; debounce, transport, core_theme)
           else
             model
           end
@@ -67,7 +69,7 @@ function Page(  route::Union{Route,String};
 
   route.action = () -> (isa(view, Function) ? html! : html)(view; layout, context, model = (isa(model, Function) ? Base.invokelatest(model) : model), kwargs...)
 
-  page = Page(route, view, typeof((isa(model, Function) || isa(model, DataType) ? Base.invokelatest(model) : model)), layout, context)
+  page = Page(route, view, model, layout, context)
 
   if isempty(_pages)
     push!(_pages, page)
