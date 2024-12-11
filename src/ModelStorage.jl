@@ -53,8 +53,6 @@ function load_model_values!(model::M, values::Dict{Symbol, Any}) where M
 
       if model_field isa Reactive
         model_field[] = value
-      else 
-        @warn "Field $field is not reactive, skipping."
       end
     end
   end
