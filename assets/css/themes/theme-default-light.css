@@ -1,0 +1,747 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+:root.stipple-core{
+    --st-color-primary: #0da2e7;
+    --st-color-neutral: #d6d6d6;
+    --st-color-field-border: #d6d6d6;
+    --st-color-field-text-dimmed: #fffffffa;
+    --st-color-field-background-dimmed: #00000010;
+    --st-shadow-color: #00000061;
+  }
+  :root.stipple-core{
+    --st-dashboard-bg-0: #eff2f5;
+    --st-dashboard-bg-1: #ffffff;
+    --st-dashboard-bg-2: #ffffff;
+  }
+  :root.stipple-core{
+    --st-text-1: #1a2748;
+    --st-text-2: #6b7280;
+    --st-text-3: #777f92;
+    --st-font-family: Outfit;
+    --st-font-size: 14px;
+    --st-font-size-4xl: 2.5rem;
+    --st-font-size-3xl: 2.1rem;
+    --st-font-size-2xl: 1.8rem;
+    --st-font-size-xl: 1.5rem;
+    --st-font-size-lg: 1.2rem;
+    --st-font-size-md: 1rem;
+    --st-font-size-sm: 0.8rem;
+    --st-font-size-xs: 0.6rem;
+  }
+  :root.stipple-core h1, :root.stipple-core h2, :root.stipple-core h3, :root.stipple-core h4, :root.stipple-core h5, :root.stipple-core h6{
+    color: var(--st-text-1);
+    font-weight: 600;
+  }
+  :root.stipple-core .st-module{
+    background: var(--st-dashboard-bg-1);
+    box-shadow: var(--st-shadow-md);
+  }
+  :root.stipple-core{
+    --st-color-secondary: #1285f8;
+    --st-color-accent: #458fe3;
+    --st-color-dark: #1c1c1c;
+    --st-color-info: #32cdec;
+    --st-color-white: #ffffff;
+    --st-color-black: #313030;
+    --st-color-positive: #21ba45;
+    --st-color-negative: #c20017;
+    --st-color-warning: #f2c036;
+    --st-color-dark-page: #121212;
+    --st-color-neutral-alt: #d1d1d1;
+    --q-primary: var(--st-color-primary);
+    --q-secondary: var(--st-color-secondary);
+    --q-accent: var(--st-color-accent);
+    --q-positive: var(--st-color-positive);
+    --q-negative: var(--st-color-negative);
+    --q-info: var(--st-color-info);
+    --q-warning: var(--st-color-warning);
+    --q-dark: var(--st-color-dark);
+    --q-white: var(--st-color-white);
+    --q-black: var(--st-color-black);
+    --q-dark-page: var(--st-color-dark-page);
+    --st-filter-light: none;
+    --st-filter-dark: invert(1) saturate(0) brightness(2);
+  }
+  a{
+    color: var(--st-color-primary);
+  }
+  :root.stipple-core h1{
+    font-size: var(--st-font-size-4xl);
+  }
+  :root.stipple-core h2{
+    font-size: var(--st-font-size-3xl);
+  }
+  :root.stipple-core h3{
+    font-size: var(--st-font-size-2xl);
+  }
+  :root.stipple-core h4{
+    font-size: var(--st-font-size-xl);
+  }
+  :root.stipple-core h5{
+    font-size: var(--st-font-size-lg);
+  }
+  :root.stipple-core h6{
+    font-size: var(--st-font-size-md);
+  }
+  :root.stipple-core ._genie_logo{
+    filter: var(--st-filter-light);
+  }
+
+  
+  
+  /* **************************************************************** */
+  /*                    VARIABLES IN THEME EDITOR                     */
+  /* **************************************************************** */
+
+:root.stipple-core {
+    --st-font-size-4xl: 2.5rem;
+    --st-font-size-3xl: 2.1rem;
+    --st-font-size-2xl: 1.8rem;
+    --st-font-size-xl: 1.5rem;
+    --st-font-size-lg: 1.2rem;
+    --st-font-size-md: 1rem;
+    --st-font-size-sm: 0.8rem;
+    --st-font-size-xs: 0.6rem;
+  }
+  
+  
+  
+  /*===================================================================
+                        APPLICATION
+  ================================================================== */
+  .stipple-core {
+    .q-btn.q-btn--active:enabled:not(.disabled):not(.q-btn--push),
+    .q-btn:active:enabled:not(.disabled):not(.q-btn--push) {
+      box-shadow: none !important;
+    }
+    .q-btn--actionable.q-btn--standard.q-btn--active .q-btn__wrapper:before,
+    .q-btn--actionable.q-btn--standard:active .q-btn__wrapper:before {
+      box-shadow: none !important;
+    }
+  
+  
+  
+    h1, h2, h3, h4, h5, h6{
+      line-height: normal;
+      margin: 0px;
+      color: var(--st-text-1);
+    }
+    
+    /* ---------- Module ---------- */
+  
+    .st-module {
+      box-shadow: var(--st-shadow-md);
+      border-radius: var(--st-border-radius-md);
+      background: var(--st-dashboard-bg-1 );
+      margin: var(--st-spacing-md);
+      padding: var(--st-spacing-lg);
+      box-sizing: border-box; flex: 1;
+      transition: background 0.3s;
+    }
+  
+    .st-module-title {
+      font-size: var(--st-font-size-lg);
+      font-weight: bold;
+      color: var(--st-text-1);
+      margin-top: 0px;
+      margin-bottom: var(--st-spacing-md);
+    }
+    
+    
+  
+    
+    /*===================================================================
+                          Containers & Common
+    ================================================================== */
+  
+    /* ---------- Common  ---------- */
+    hr{
+      border: solid 0.5px var(--st-color-neutral);
+    }
+    
+    .container > .row, .st-dashboard > .row {
+      padding: 0;
+    }
+  
+    body > .container {
+      padding: 0 20px;
+      margin: 0 auto;
+    }
+  
+    @media (max-width: 999px) {    
+      body > .container {
+          padding: 0 10px;
+        }
+    }
+    @media (max-width: 599px) {
+      body > .container {
+          padding: 0 5px;
+        }
+    }
+  
+    /*===================================================================
+                              FIELDS
+    ================================================================== */
+    fieldset {
+      border: none;
+    }
+    .q-field {
+      font-size: 14px;
+    }
+    .q-field__bottom{
+        color: var(--st-text-3);
+      }
+    .q-file .q-field__native{
+        white-space: nowrap;
+        overflow: hidden;
+    }
+    .q-field__input, .q-field__native, .q-field__prefix, .q-field__suffix {
+      color: var(--st-text-2);
+    }
+    .q-field__control, .q-field--auto-height .q-field__control, .q-field__marginal {
+      height: 36px;
+      min-height: 36px;
+      color: var(--st-text-2);
+    }
+  
+    .q-field--auto-height.q-field--labeled .q-field__control-container {
+      padding-top: 0;
+    }
+  
+    .q-field--auto-height .q-field__control, .q-field--auto-height .q-field__native {
+      min-height: 36px;
+    }
+  
+   .q-field--labeled .q-field__native, .q-field--labeled .q-field__prefix, .q-field--labeled .q-field__suffix {
+      padding-top: unset;
+      padding-bottom: unset;
+   }
+
+   .q-field--labeled {
+    padding-top: 25px;
+  }
+  
+   .q-field--float .q-field__label, .q-field__label {
+      color: var(--st-text-1);
+      transform: translateY(-190%) scale(1);
+      font-weight: 500;
+      left: -10px;
+      max-width: 100%;
+      font-size: var(--st-font-size-md);
+   }
+  
+   .q-field--labeled.q-field--standard .q-field__label, 
+   .q-field--labeled.q-field--borderless .q-field__label {
+      left: 0px;
+   }
+   
+   .q-field--filled.q-field--rounded .q-field__control {
+      border-radius: 18px 18px 0 0;
+   }
+
+   .q-field--filled .q-field__control{
+    background-color: var(--st-color-field-background-dimmed);
+   }
+  
+   .q-field .q-field__control:before {
+      border-color: var(--st-color-field-border);
+    }
+    .q-field.q-field--highlighted .q-field__control:after {
+      border-color: var(--st-color-primary);
+      border-width: 1px;
+    }
+    .q-field--outlined .q-field__control:hover:before {
+      border-color: color-mix(in srgb, var(--st-color-primary), transparent 50%);
+    }
+  
+  
+    /*===================================================================
+                              PLOTLY
+    ================================================================== */
+    .plot-container.plotly svg.main-svg{
+      background: none !important;
+    }
+    .plot-container.plotly svg.main-svg g.infolayer g.legend rect.bg{
+      fill: none !important;
+    }
+    .plot-container.plotly svg.main-svg g.infolayer g.rangeslider-container rect.rangeslider-bg{
+      fill: #00000030 !important;
+    }
+    .plot-container.plotly svg.main-svg g.infolayer g.rangeslider-container rect.rangeslider-mask-min,
+    .plot-container.plotly svg.main-svg g.infolayer g.rangeslider-container rect.rangeslider-mask-max{
+      fill: var(--st-dashboard-bg-1) !important;
+      fill-opacity: 0.8 !important;
+    }
+    .plot-container.plotly div.modebar-container > div.modebar{
+     
+    }
+    .plot-container.plotly div.modebar-container > div.modebar > div.modebar-group{
+      background-color: var(--st-dashboard-bg-1) !important;
+    }
+    .plot-container.plotly div.modebar-container > div.modebar > div.modebar-group > a.modebar-btn > svg.icon > path{
+      fill: color-mix(in srgb, var(--st-color-primary), transparent 80%) !important;
+    }
+    .plot-container.plotly div.modebar-container > div.modebar > div.modebar-group > a.modebar-btn:hover > svg.icon > path{
+      fill: var(--st-color-primary) !important;
+    }
+    .plot-container.plotly svg.main-svg g.infolayer g.rangeslider-container rect.rangeslider-mask-max{
+      fill: var(--st-dashboard-bg-1) !important;
+      fill-opacity: 0.8 !important;
+    }
+    .plot-container.plotly svg.main-svg g.treemaplayer g.slice path.surface, 
+    .plot-container.plotly svg.main-svg g.funnelarealayer g.slice path.surface{
+      stroke: var(--st-dashboard-bg-1) !important;
+    }
+    .plot-container.plotly text{
+      font-family: var(--st-font-family) !important;
+    }
+  
+    .plot-container.plotly svg.main-svg g.infolayer text{
+      fill: var(--st-text-1) !important;
+    }
+    .plot-container.plotly svg.main-svg g.cartesianlayer g.zerolinelayer path, 
+    .plot-container.plotly svg.main-svg g.cartesianlayer g.zerolinelayer path{
+      stroke: color-mix(in srgb, var(--st-color-neutral), transparent 0%) !important;
+    }
+    .plot-container.plotly svg.main-svg g.cartesianlayer g.gridlayer path{
+      stroke: color-mix(in srgb, var(--st-color-neutral), transparent 60%) !important;
+    }
+    .plot-container.plotly svg.main-svg g.cartesianlayer g.xtick text, 
+    .plot-container.plotly svg.main-svg g.cartesianlayer g.ytick text{
+      fill: var(--st-text-2) !important;
+    }
+  
+    /*===================================================================
+                        Button, Badge, Banner, chip...
+    ================================================================== */
+    .q-badge {
+      font-size: var(--st-font-size-md);
+      font-weight: var(--st-font-weight-bold);
+      padding: 4px 6px;
+    }
+    .q-btn .q-badge.q-badge--floating {
+      padding-top: 1px;
+      padding-bottom: 1px;
+    }
+    .q-banner {
+      border-radius: 5px;
+      font-weight: var(--st-font-weight-bold);
+    }
+    .q-ripple {
+      display: none;
+    }
+    
+    .q-btn .q-btn__wrapper:before {
+      box-shadow: none;
+    }
+    .q-btn.q-btn--active:enabled:not(.disabled):not(.q-btn--push):not(.q-btn--outline),
+    .q-btn:active:enabled:not(.disabled):not(.q-btn--push):not(.q-btn--outline) {
+      box-shadow: inset 0 3px 0 rgba(0, 0, 0, 0.3);
+    }
+    .q-btn.q-btn--active .q-btn__wrapper:before,
+    .q-btn:active .q-btn__wrapper:before {
+      box-shadow: none;
+    }
+    .q-btn {
+      font-weight: var(--st-font-weight-bold);
+    }
+    .q-btn-group {
+      box-shadow: none;
+    }
+    .q-chip{
+      background: var(--st-color-primary) !important;
+      color: var(--st-color-field-text-dimmed);
+      font-weight: var(--st-font-weight-bold);
+  
+      .q-chip__icon {
+        color: var(--st-color-field-text-dimmed);
+      }
+    }
+  
+    /*===================================================================
+                          MISC (File, Skeleton)
+    ================================================================== */
+    
+    .q-skeleton {
+      background: var(--st-skeleton);
+    }
+    .q-knob, .q-rating{
+      color: var(--st-color-primary);
+    }
+    
+    .q-avatar{
+      .q-avatar__content {
+        background: var(--st-color-primary) !important;
+        color: var(--st-color-field-text-dimmed);
+      }
+    }
+
+    .q-uploader{
+        max-width: 100%;
+        width: 100%;
+    }
+    
+    /*===================================================================
+                                Scrolls
+    ================================================================== */
+    .q-scrollarea {
+      padding-right: 20px;
+    }
+    .q-scrollarea .q-scrollarea__thumb {
+      border-radius: 5px;
+      width: 4px;
+      opacity: 0.8;
+    }
+  
+    /*===================================================================
+                            Menu, Item, Date, Time, Uploader, Card
+    ================================================================== */
+    .q-menu, .q-date, .q-time, .q-uploader, .q-card {
+      background-color: var( --st-dashboard-bg-2 );
+    }
+    
+    .q-menu .q-item{
+      min-height: var( --st-component-height-lg);
+    }
+    .q-item.q-manual-focusable--focused > .q-focus-helper {
+      opacity: 0.15;
+    }
+    .q-item__section--side {
+      min-width: 20px;
+      padding-right: 10px;
+    }
+  
+    
+    
+    
+    /*===================================================================
+                          Radio, Checkbox
+    ================================================================== */
+  .q-checkbox__bg {
+      border-radius: 3px;
+    }
+    
+    .q-radio, .q-checkbox {
+      margin-top: var(--st-spacing-xs);
+      margin-right: var(--st-spacing-md);
+      margin-bottom: var(--st-spacing-xs);
+      margin-left: var(--st-spacing-xs);
+      .q-radio__inner, .q-checkbox__inner {   
+        width: 0.42em;   height: 0.42em;  min-width: 0.42em;       
+        .q-radio__bg, .q-checkbox__bg {    
+          width: 100%;    height: 100%;   left: 0;  top: 0;    
+        }
+      }
+      .q-checkbox__inner--falsy {   
+        .q-checkbox__bg {
+          border: 1.7px solid var(--st-color-neutral);
+        }
+      }
+      .q-radio__inner--falsy{   
+        .q-radio__bg path {
+            fill: var(--st-color-neutral);
+        }
+      }
+      .q-radio__label, .q-checkbox__label {   padding-left: 0.5em;  }
+    }
+     
+  
+    /*===================================================================
+                            Date-Time
+    ================================================================== */
+  .q-date,
+  .q-time {
+      box-shadow: none;
+    }
+  
+  
+    /*===================================================================
+                          Focusable
+    ================================================================== */
+    .q-focusable:focus>.q-focus-helper, .q-hoverable:hover>.q-focus-helper, .q-manual-focusable--focused>.q-focus-helper {
+      background: var(--st-color-primary) !important;
+    }
+  
+    
+    .q-item--active, .q-item.q-router-link--active {
+      font-weight: var(--st-font-weight-bold);
+      color: var(--st-color-primary) !important;
+    }
+    
+  
+  
+    /*===================================================================
+                              Sliders
+    ================================================================== */
+  
+    .q-slider__pin-text-container {
+      padding: 0 8px;
+      min-height: 20px;
+    }
+    .q-slider__pin-text {
+      font-weight: var(--st-font-weight-bold);
+    }
+    
+    .q-slider__track-markers {
+      color: currentColor;
+    }
+  
+    .q-slider--inactive .q-slider__thumb--h {
+      width: 16px !important;
+      height: 16px !important;
+    }
+  
+    .q-slider__track {
+      background: var( --st-color-field-background-dimmed );
+      .q-slider__inner {
+        background: none !important;
+      }
+      .q-slider__selection {
+        color: var( --st-color-primary );
+      }
+    }
+  
+  
+    
+  
+    /*===================================================================
+                                Table
+    ================================================================== */
+  .q-table th {
+    color: var(--st-text-1);
+    font-weight: 900;
+    font-size: 0.8rem;
+  }
+  .q-table__card {
+    position: relative;
+    border: none;
+    box-shadow: none;
+  }
+  .q-table__top {
+    padding: 0 5px;
+  }
+  .q-table__title {
+    font-weight: var(--st-font-weight-bold);
+    font-size: 14px;
+  }
+  .q-table__middle {
+    background: transparent;
+    border-top-right-radius: 5px;
+    border-top-left-radius: 5px;
+  }
+  .q-table__middle + .q-table__bottom {
+    border-top: none;
+  }
+  .q-table__bottom {
+    border-bottom-right-radius: 5px;
+    border-bottom-left-radius: 5px;
+    padding-top: 0;
+    padding-bottom: 0;
+    font-size: 0.8rem;
+  }
+  .q-table__sort-icon {
+    position: relative;
+    z-index: 1;
+    font-size: 25px;
+  }
+  .q-table__sort-icon:before {
+    font-family: Material Icons;
+    content: "arrow_drop_up";
+    -webkit-font-feature-settings: "liga" 1;
+    -moz-font-feature-settings: "liga" 1;
+    font-feature-settings: "liga" 1;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: var(--st-dashboard-module);
+    z-index: 5;
+    color: var(--q-color-secondary);
+  }
+  .q-table tbody tr {
+    color: var(--st-text-2);
+  }
+  .q-table td {
+    font-size: 0.9rem;
+  }
+  .q-table__select {
+    font-size: 12px;
+  }
+  
+  
+    .q-table__container{
+      background: none;
+    }
+    
+    .q-table td, .q-table th, .q-table thead, .q-table tr  {
+      border-color: var(--st-color-field-border);
+    }
+  
+    .q-table__card {
+      color: unset;
+    }
+  
+    .q-table{
+      th {
+        font-weight: bold;
+      }
+      tbody td:before {
+        background: color-mix(in srgb, var(--st-color-primary), transparent 85%);
+      }
+    }
+  
+    
+  
+    /*===================================================================
+                          Big Number
+    ================================================================== */
+  
+  .st-big-number {
+      margin: 0 auto;
+      color: var(--q-color-white);
+      text-align: center;
+      border-radius: 5px;
+      padding: 1rem 0;
+    }
+  .st-big-number .q-badge {
+      font-weight: 900;
+      font-size: large;
+      margin: 0.5rem;
+      padding: 8px 15px;
+      display: block;
+      background: none;
+      color: var(--st-text-1);
+    }
+  .st-big-number__num {
+      font-weight: var(--st-font-weight-bold);
+      display: block;
+      color: var(--st-text-1);
+      font-size: 1.5rem;
+    }
+  .st-big-number__num .q-icon {
+      display: none;
+      margin-left: -30px;
+    }
+  
+    @media (max-width: 599px) {
+      .st-big-number__num .q-icon {
+        display: inline-block;
+      }
+    }
+    @media (min-width: 1023px) {
+      .st-big-number__num {
+        font-size: 2rem;
+      }
+      .st-big-number__num .q-icon {
+        display: inline-block;
+      }
+    }
+  .st-big-number--positive .st-big-number__num .q-icon {
+      color: var(--q-color-positive);
+    }
+  .st-big-number--negative .st-big-number__num .q-icon {
+      color: var(--q-color-negative);
+    }
+  .st-big-number__icon {
+      font-size: 20px;
+      width: 2em;
+      height: 2em;
+      border-radius: 50%;
+      text-align: center;
+      margin: 0.5rem 0;
+      padding-right: 1px;
+    }
+  
+  
+    /*===================================================================
+                          Header
+    ================================================================== */
+    
+  .st-header {
+      background: var(--q-color-white);
+      padding-left: 20px;
+    }
+    @media (max-width: 599px) {
+      .st-header {
+        padding-top: 20px;
+        padding-bottom: 0;
+      }
+    }
+  
+  @media (min-width: 600px) {
+  .st-header .st-header__title + .st-header__title,
+  .st-header .st-header__title + .st-logo,
+  .st-header .st-logo + .st-header__title,
+  .st-header .st-logo + .st-logo {
+      margin-left: 15px;
+      padding-left: 15px;
+      border-left: 1px solid var(--st-dashboard-line);
+    }
+  }
+  .st-logo {
+    height: 20px;
+  }
+  .st-header__title,
+  .st-logo {
+    text-align: center;
+    display: block;
+  }
+  @media (min-width: 600px) {
+  .st-header__title,
+  .st-logo {
+      display: inline-block;
+      text-align: left;
+    }
+  }
+  .st-logo {
+    margin: 0 auto;
+  }
+  @media (min-width: 600px) {
+  .st-logo {
+      margin: auto;
+    }
+  }
+  
+  
+  
+    /*===================================================================
+                          St Field Label
+    ================================================================== */
+  
+    .st-field-label {
+      font-size: var(--st-font-size-md);
+      font-weight: 500;
+      color: var(--st-text-1);
+      padding-top: 7px;
+      padding-bottom: 2px;
+      margin: 0;
+  
+      > p{
+        margin: 0px;
+      }
+    }
+  
+    .st-center {
+      margin: auto;
+    }
+  }
+  
+  
+  /* ---------- Layout ---------- */
+  
+  .max-width-xs {
+    max-width: 600px;
+  }
+  .max-width-sm {
+    max-width: 800px;
+  }
+  .max-width-md {
+    max-width: 1000px;
+  }
+  .max-width-lg {
+    max-width: 1200px;
+  }
+  .max-width-xl {
+    max-width: 1400px;
+  }
+  

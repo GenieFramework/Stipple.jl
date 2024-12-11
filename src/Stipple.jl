@@ -15,12 +15,14 @@ existing Vue.js libraries.
 """
 module Stipple
 
-using PrecompileTools
-const PRECOMPILE = Ref(false)
 const ALWAYS_REGISTER_CHANNELS = Ref(true)
 const USE_MODEL_STORAGE = Ref(true)
 
 import MacroTools
+
+function use_model_storage()
+  USE_MODEL_STORAGE[]
+end
 
 """
 Disables the automatic storage and retrieval of the models in the session.
@@ -100,7 +102,7 @@ export setchannel, getchannel
 isempty(methods(notify, Observables)) && (Base.notify(observable::AbstractObservable) = Observables.notify!(observable))
 
 include("ParsingTools.jl")
-USE_MODEL_STORAGE[] && include("ModelStorage.jl")
+use_model_storage() && include("ModelStorage.jl")
 include("NamedTuples.jl")
 
 include("stipple/reactivity.jl")
@@ -361,7 +363,7 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
     print(output, debounce == 0 ?
       """
           ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true}));
-      """ : 
+      """ :
       """
           ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true}));
       """
@@ -387,6 +389,8 @@ const CHANNELPARAM = :CHANNEL__
 
 
 function sessionid(; encrypt::Bool = true) :: String
+  use_model_storage() || error("Model storage is disabled")
+
   sessid = Stipple.ModelStorage.Sessions.GenieSession.session().id
 
   encrypt ? Genie.Encryption.encrypt(sessid) : sessid
@@ -411,7 +415,7 @@ function channeldefault(::Type{M}) where M<:ReactiveModel
 
   model_id = Symbol(Stipple.routename(M))
 
-  USE_MODEL_STORAGE[] || return nothing
+  use_model_storage() || return nothing
 
   stored_model = Stipple.ModelStorage.Sessions.GenieSession.get(model_id, nothing)
   stored_model === nothing ? nothing : getfield(stored_model, Stipple.CHANNELFIELDNAME)
@@ -463,7 +467,7 @@ function init_storage()
     :isready => :(isready::Stipple.R{Bool} = false),
     :isprocessing => :(isprocessing::Stipple.R{Bool} = false),
     :fileuploads => :(fileuploads::Stipple.R{Dict{AbstractString,AbstractString}} = Dict{AbstractString,AbstractString}()),
-    :ws_disconnected => :(ws_disconnected::Stipple.R{Bool} = false)
+    :ws_disconnected => :(ws_disconnected::Stipple.R{Bool} = false),
   )
 end
 
@@ -515,12 +519,12 @@ function init(t::Type{M};
   setchannel(model, channel)
 
   # make sure we store the channel name in the model
-  USE_MODEL_STORAGE[] && Stipple.ModelStorage.Sessions.store(model)
+  use_model_storage() && Stipple.ModelStorage.Sessions.store(model)
 
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
   LAST_ACTIVITY[Symbol(getchannel(model))] = now()
 
-  PRECOMPILE[] || Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
+  # PRECOMPILE[] || Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
 
   # register channels and routes only if within a request
   if haskey(Genie.Router.params(), :CHANNEL) || haskey(Genie.Router.params(), :ROUTE) || always_register_channels
@@ -537,7 +541,7 @@ function init(t::Type{M};
       client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
 
       try
-        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) && USE_MODEL_STORAGE[] &&
+        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) && use_model_storage() &&
           Genie.Router.params!(Stipple.ModelStorage.Sessions.GenieSession.PARAMS_SESSION_KEY,
                                 Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
       catch ex
@@ -691,6 +695,12 @@ function Base.push!(app::M, vals::Pair{Symbol,T};
                     except::Union{Nothing,UInt,Vector{UInt}} = nothing,
                     restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T,M<:ReactiveModel}
   try
+    use_model_storage() && Stipple.ModelStorage.Sessions.store(app)
+  catch ex
+    @error ex
+  end
+
+  try
     _push!(vals, channel; except, restrict)
   catch ex
     @debug ex
@@ -760,12 +770,42 @@ const DEPS = OrderedCollections.LittleDict{Union{Any,AbstractString}, Function}(
 Registers the `routes` for all the required JavaScript dependencies (scripts).
 """
 
+const THEMES_FOLDER = "themes"
+
 @nospecialize
 
 function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool = true) :: Nothing
   if ! Genie.Assets.external_assets(assets_config)
     if core_theme
-      Genie.Assets.add_fileroute(assets_config, "stipplecore.css"; basedir = normpath(joinpath(@__DIR__, "..")))
+      Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, file="stipplecore")) do
+        Genie.Renderer.WebRenderable(
+          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", file="stipplecore")),
+          :css) |> Genie.Renderer.respond
+      end
+    end
+
+    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-light")) do
+      Genie.Renderer.WebRenderable(
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-light")),
+        :css) |> Genie.Renderer.respond
+    end
+
+    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-dark")) do
+      Genie.Renderer.WebRenderable(
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-dark")),
+        :css) |> Genie.Renderer.respond
+    end
+
+    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-light")) do
+      Genie.Renderer.WebRenderable(
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-light")),
+        :css) |> Genie.Renderer.respond
+    end
+
+    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-dark")) do
+      Genie.Renderer.WebRenderable(
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-dark")),
+        :css) |> Genie.Renderer.respond
     end
 
     if is_channels_webtransport()
@@ -1221,11 +1261,15 @@ end
 
 include("Typography.jl")
 include("Elements.jl")
+include("Theme.jl")
 include("Layout.jl")
 
 @reexport using .Typography
 @reexport using .Elements
+@reexport using .Theme
 @reexport using .Layout
+
+using Stipple.ReactiveTools
 
 # precompilation ...
 
@@ -1242,7 +1286,7 @@ using Stipple.ReactiveTools
     end
   end
 
-  route("/") do 
+  route("/") do
     model = Stipple.ReactiveTools.@init PrecompileApp
     page(model, ui) |> html
   end

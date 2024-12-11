@@ -12,8 +12,10 @@ function model_id(::Type{M}) where M
   Symbol(Stipple.routename(M))
 end
 
-function store(model::M) where M
-  GenieSession.set!(model_id(M), model)
+function store(model::M, force::Bool = false) where M
+  # do not overwrite stored model
+  (GenieSession.get(model_id(M), nothing) === nothing || force) && GenieSession.set!(model_id(M), model)
+
   nothing
 end
 
@@ -22,16 +24,19 @@ function init_from_storage( t::Type{M};
                             kwargs...) where M
   model = Stipple.init(M; channel, kwargs...)
   stored_model = GenieSession.get(model_id(M), nothing)
-
   CM = Stipple.get_concrete_type(M)
+
   for f in fieldnames(CM)
     field = getfield(model, f)
+
     if field isa Reactive
       # restore fields only if a stored model exists, if the field is not part of the internal fields and is not write protected
-      (
-        isnothing(stored_model) || f ∈ [Stipple.CHANNELFIELDNAME, Stipple.AUTOFIELDS...] || Stipple.isreadonly(f, model) || Stipple.isprivate(f, model) ||
-        ! hasproperty(stored_model, f) || ! hasproperty(model, f) || (field[!] = getfield(stored_model, f)[])
-      )
+      if isnothing(stored_model) || f ∈ [Stipple.CHANNELFIELDNAME, Stipple.AUTOFIELDS...] ||
+          Stipple.isprivate(f, model) || ! hasproperty(stored_model, f) || ! hasproperty(model, f)
+      else
+        # restore field value from stored model
+        field[!] = getfield(stored_model, f)[]
+      end
 
       # register reactive handlers to automatically save model on session when model changes
       if f ∉ [Stipple.AUTOFIELDS...]
@@ -40,7 +45,8 @@ function init_from_storage( t::Type{M};
         end
       end
     else
-      isnothing(stored_model) || Stipple.isprivate(f, model) || Stipple.isreadonly(f, model) || ! hasproperty(stored_model, f) || ! hasproperty(model, f) || setfield!(model, f, getfield(stored_model, f))
+      isnothing(stored_model) || Stipple.isprivate(f, model) || Stipple.isreadonly(f, model) ||
+        ! hasproperty(stored_model, f) || ! hasproperty(model, f) || setfield!(model, f, getfield(stored_model, f))
     end
   end
 

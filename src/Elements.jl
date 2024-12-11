@@ -201,7 +201,7 @@ function vue_integration(::Type{M};
       Object.entries(app.prototype).forEach(([key, value]) => {
         app.config.globalProperties[key] = value
       });
-      
+
       const stippleApp = window[appName] = window.GENIEMODEL = app.mount(rootSelector);
       stippleApp.WebChannel = Genie.initWebChannel(channel);
       stippleApp.WebChannel.parent = stippleApp;

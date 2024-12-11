@@ -1,7 +1,7 @@
 """
         mutable struct Reactive{T} <: Observables.AbstractObservable{T}
 
-`Reactive` is a the base type for variables that are handled by a model. It is an `AbstractObservable` of which the content is 
+`Reactive` is a the base type for variables that are handled by a model. It is an `AbstractObservable` of which the content is
 obtained by appending `[]` after the `Reactive` variable's name.
 For convenience, `Reactive` can be abbreviated by `R`.
 
@@ -32,7 +32,7 @@ end
 """
         mutable struct Reactive{T} <: Observables.AbstractObservable{T}
 
-`Reactive` is a the base type for variables that are handled by a model. It is an `AbstractObservable` of which the content is 
+`Reactive` is a the base type for variables that are handled by a model. It is an `AbstractObservable` of which the content is
 obtained by appending `[]` after the `Reactive` variable's name.
 For convenience, `Reactive` can be abbreviated by `R`.
 
@@ -266,7 +266,7 @@ function let_eval!(expr, let_block, m::Module, is_non_reactive::Bool = true)
     with_type || @info "Could not infer type of $var, setting it to `Any`, consider adding a type annotation"
     :__Any__
   end
-  
+
   T = val === :__Any__ ? Any : typeof(val)
   val === :__Any__ || push!(let_block.args, is_non_reactive ? :(var = $val) : :($var = $Rtype{$T}($val)))
   return val, T
@@ -291,14 +291,14 @@ end
 
 function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = nothing, m::Union{Module, Nothing} = nothing, let_block::Union{Expr, Nothing} = nothing, vars::Set = Set())
   expr = find_assignment(expr)
-  
+
   Rtype = isnothing(m) || ! isdefined(m, :R) ? :(Stipple.R) : :R
-  
+
   (isa(expr, Expr) && contains(string(expr.head), "=")) ||
   error("Invalid binding expression -- use it with variables assignment ex `@in a = 2`")
-  
+
   source = (source !== nothing ? String(strip(string(source), collect("#= "))) : "")
-  
+
   # args[end] instead of args[2] because of potential LineNumberNode
   var = expr.args[1]
   varname = var isa Expr ? var.args[1] : var
@@ -312,7 +312,7 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
   val = 0
   T = DataType
   let_block !== nothing && varname ∈ vars && ((val, T) = let_eval!(expr, let_block, m, is_non_reactive))
-  
+
   mode = mode isa Symbol && ! isdefined(context, mode) ? :(Stipple.$mode) : mode
   type = if isa(var, Expr) && var.head == Symbol("::") && ! is_non_reactive
     # change type T to type R{T}
@@ -436,7 +436,7 @@ macro type(modelname, storage)
     Stipple.@kwredef mutable struct $modelconst <: $modelname
       $output
     end
-    
+
     $modelname(; kwargs...) = $modelconst(; kwargs...)
     Stipple.get_concrete_type(::Type{$modelname}) = $modelconst
 
