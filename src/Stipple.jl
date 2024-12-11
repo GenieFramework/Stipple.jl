@@ -103,10 +103,9 @@ export setchannel, getchannel
 isempty(methods(notify, Observables)) && (Base.notify(observable::AbstractObservable) = Observables.notify!(observable))
 
 include("ParsingTools.jl")
-use_model_storage() && include("ModelStorage.jl")
 include("NamedTuples.jl")
-
 include("stipple/reactivity.jl")
+use_model_storage() && include("ModelStorage.jl")
 include("stipple/json.jl")
 include("stipple/undefined.jl")
 include("stipple/assets.jl")

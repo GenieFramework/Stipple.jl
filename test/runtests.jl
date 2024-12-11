@@ -122,7 +122,7 @@ end
     @eval @debounce TestApp i 101
     @eval @debounce TestApp (a, b, c) 101
     @test Stipple.DEBOUNCE[TestApp][:i] == 101
-    
+
     @eval @clear_debounce TestApp
     @test haskey(Stipple.DEBOUNCE, TestApp) == false
 end
@@ -154,7 +154,7 @@ end
     @eval @debounce i3 101
     @eval @debounce (a, b, c) 101
     @test Stipple.DEBOUNCE[Stipple.@type()][:i3] == 101
-    
+
     @eval @clear_debounce
     @test haskey(Stipple.DEBOUNCE, Stipple.@type()) == false
 end
@@ -195,7 +195,7 @@ end
 
 module App2
 using Stipple, Stipple.ReactiveTools
-    
+
 @app begin
     @in i2 = 102
 end
@@ -205,7 +205,7 @@ end
 end
 
 end
-    
+
 @testset "Multipage Reactive API (implicit)" begin
     @eval p1 = @page("/app1", "hello", model = App1)
     @eval p2 = @page("/app2", "world", model = App2)
@@ -435,7 +435,7 @@ end
     @test row(@gutter :sm [
         cell("Hello", sm = 2,  md = 8)
         cell("World", sm = 10, md = 4)
-    ]).data == "<div class=\"row q-col-gutter-sm\"><div class=\"col col-sm-2 col-md-8\">" * 
+    ]).data == "<div class=\"row q-col-gutter-sm\"><div class=\"col col-sm-2 col-md-8\">" *
     "<div class=\"st-col\">Hello</div></div><div class=\"col col-sm-10 col-md-4\"><div class=\"st-col\">World</div></div></div>"
 end
 
@@ -572,25 +572,25 @@ end
         c::Int
         d::Int
     end
-    
+
     struct T2
         a::Int
         b::T1
     end
-    
+
     t2 = T2(1, T1(2, 3))
     t2_dict = JSON3.read(Stipple.json(t2), Dict)
-    
+
     Base.@kwdef struct T3
         c::Int = 1
         d::Int = 3
     end
-    
+
     Base.@kwdef struct T4
         a::Int = 1
         b::T3 = T3()
     end
-    
+
     @test Stipple.stipple_parse(T2, t2_dict) == T2(1, T1(2, 3))
     @test Stipple.stipple_parse(T3, Dict()) == T3(1, 3)
     @test Stipple.stipple_parse(T4, Dict()) == T4(1, T3(1, 3))
@@ -605,4 +605,36 @@ end
         @test Stipple.stipple_parse(Union{Nothing, SubString}, "hi") == SubString("hi")
     end
     @test Stipple.stipple_parse(Union{Nothing, String}, nothing) === nothing
+end
+
+@testset "Exporting and loading model field values" begin
+    @app TestApp2 begin
+        @in i = 100
+        @out s = "Hello"
+        @private x = 4
+    end
+
+    model = @init TestApp2
+
+    exported_values = Stipple.ModelStorage.model_values(model)
+    @test exported_values[:i] == 100
+    @test exported_values[:s] == "Hello"
+    @test exported_values[:x] == 4
+
+    values_json = JSON3.write(exported_values)
+    exported_values_json = Stipple.ModelStorage.model_values(model, json = true)
+    @test values_json == exported_values_json
+
+    values_dict = Dict(:i => 20, :s => "world", :x => 5)
+    Stipple.ModelStorage.load_model_values!(model, values_dict)
+    @test model.i[] == 20
+    @test model.s[] == "world"
+    @test model.x[] == 5
+
+    values_json = Dict(:i => 30, :s => "zero", :x => 50) |> JSON3.write |> string
+    Stipple.ModelStorage.load_model_values!(model, values_json)
+    @test model.i[] == 30
+    @test model.s[] == "zero"
+    @test model.x[] == 50
+
 end
