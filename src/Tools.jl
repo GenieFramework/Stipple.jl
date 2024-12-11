@@ -94,7 +94,7 @@ function delete_kwarg!(expressions, kwarg::Symbol)
     else
         deleteat!(expressions, 1)
     end
-    
+
     return expressions
 end
 
@@ -108,10 +108,12 @@ end
 delete_kwarg(expressions, kwarg::Symbol) = delete_kwarg!(Any[copy(x) for x in expressions], kwarg)
 delete_kwargs(expressions, kwarg::Vector{Symbol}) = delete_kwargs!(Any[copy(x) for x in expressions], kwarg)
 
+using PrecompileTools
+
 """
     @stipple_precompile(setup, workload)
 
-A macro that facilitates the precompilation process for Stipple-related code. 
+A macro that facilitates the precompilation process for Stipple-related code.
 
 # Arguments
 - `setup`: An optional setup configuration that is required for the precompilation.
@@ -148,7 +150,7 @@ end
     # the @page macro cannot be called here, as it reilies on writing some cache files to disk
     # hence, we use a manual route definition for precompilation
 
-    route("/") do 
+    route("/") do
         model = @init PrecompileApp
         page(model, ui) |> html
     end
@@ -175,7 +177,7 @@ macro stipple_precompile(setup, workload)
             # set secret in order to avoid automatic generation of a new one,
             # which would invalidate the precompiled file
             Genie.Secrets.secret_token!(repeat("f", 64))
-            
+
             port = tryparse(Int, get(ENV, "STIPPLE_PRECOMPILE_PORT", ""))
             port === nothing && (port = rand(8081:8999))
             precompile_requests = tryparse(Bool, get(ENV, "STIPPLE_PRECOMPILE_REQUESTS", "true"))
@@ -188,10 +190,10 @@ macro stipple_precompile(setup, workload)
 
             precompile_get(location::String, args...; kwargs...) = precompile_request(:GET, location, args...; kwargs...)
             precompile_post(location::String, args...; kwargs...) = precompile_request(:POST, location, args...; kwargs...)
-            
+
             Logging.with_logger(Logging.SimpleLogger(stdout, Logging.Error)) do
                 up(port)
-                
+
                 esc($workload)
 
                 down()

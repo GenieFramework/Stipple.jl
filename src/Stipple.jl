@@ -17,6 +17,7 @@ module Stipple
 
 const ALWAYS_REGISTER_CHANNELS = Ref(true)
 const USE_MODEL_STORAGE = Ref(true)
+const PRECOMPILE = Ref(false)
 
 import MacroTools
 
@@ -1273,27 +1274,27 @@ using Stipple.ReactiveTools
 
 # precompilation ...
 
-using Stipple.ReactiveTools
-@stipple_precompile begin
-  ui() = [cell("hello"), row("world"), htmldiv("Hello World")]
+# using Stipple.ReactiveTools
+# @stipple_precompile begin
+#   ui() = [cell("hello"), row("world"), htmldiv("Hello World")]
 
-  @app PrecompileApp begin
-    @in demo_i = 1
-    @out demo_s = "Hi"
+#   @app PrecompileApp begin
+#     @in demo_i = 1
+#     @out demo_s = "Hi"
 
-    @onchange demo_i begin
-      println(demo_i)
-    end
-  end
+#     @onchange demo_i begin
+#       println(demo_i)
+#     end
+#   end
 
-  route("/") do
-    model = Stipple.ReactiveTools.@init PrecompileApp
-    page(model, ui) |> html
-  end
+#   route("/") do
+#     model = Stipple.ReactiveTools.@init PrecompileApp
+#     page(model, ui) |> html
+#   end
 
-  precompile_get("/")
-  deps_routes(core_theme = true)
-  precompile_get(Genie.Assets.asset_path(assets_config, :js, file = "stipplecore"))
-end
+#   precompile_get("/")
+#   deps_routes(core_theme = true)
+#   precompile_get(Genie.Assets.asset_path(assets_config, :js, file = "stipplecore"))
+# end
 
 end
