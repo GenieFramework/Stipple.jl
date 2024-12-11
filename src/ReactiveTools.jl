@@ -514,15 +514,18 @@ macro init(args...)
 end
 
 function init_model(M::Type{<:ReactiveModel}, args...; context = nothing, kwargs...)
-  m = parentmodule(M)
+  m = __module__ = parentmodule(M)
 
   initfn = begin
-    if Stipple.use_model_storage() && $__module__ === Stipple
+    if Stipple.use_model_storage() && __module__ === Stipple
       Stipple.ModelStorage.Sessions.init_from_storage
-    elseif isdefined($__module__, :Stipple) && isdefined($__module__.Stipple, :ModelStorage) && isdefined($__module__.Stipple.ModelStorage, :Sessions) && isdefined($__module__.Stipple.ModelStorage.Sessions, :init_from_storage) && Stipple.use_model_storage()
-      $__module__.Stipple.ModelStorage.Sessions.init_from_storage
-    elseif isdefined($__module__, :init_from_storage) && Stipple.use_model_storage()
-      $__module__.init_from_storage
+    elseif isdefined(__module__, :Stipple) && isdefined(__module__.Stipple, :ModelStorage) &&
+      isdefined(__module__.Stipple.ModelStorage, :Sessions) &&
+        isdefined(__module__.Stipple.ModelStorage.Sessions, :init_from_storage) &&
+          Stipple.use_model_storage()
+      __module__.Stipple.ModelStorage.Sessions.init_from_storage
+    elseif isdefined(__module__, :init_from_storage) && Stipple.use_model_storage()
+      __module__.init_from_storage
     else
       Stipple.init
     end
