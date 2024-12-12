@@ -531,9 +531,8 @@ function init_model(M::Type{<:ReactiveModel}, args...; context = nothing, kwargs
     end
   end
 
-
-  handlersfn = if context !== nothing && isdefined(M, :__GF_AUTO_HANDLERS__)
-    M.__GF_AUTO_HANDLERS__
+  handlersfn = if context !== nothing && isdefined(m, :__GF_AUTO_HANDLERS__)
+    m.__GF_AUTO_HANDLERS__
   else
     Stipple.ReactiveTools.HANDLERS_FUNCTIONS[M]
   end
