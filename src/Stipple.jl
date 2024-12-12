@@ -1020,10 +1020,10 @@ macro kwredef(expr)
       n=1
   end
 
-  T_old = t[n]
+  T = t[n]
 
-  if isa(T_old, Expr) && T_old.head == Symbol(".")
-    T_old = (split(string(T_old), '.')[end] |> Symbol)
+  if isa(T, Expr) && T.head == Symbol(".")
+    T = (split(string(T), '.')[end] |> Symbol)
   end
   
   # in the first run the datatype is not yet defined
@@ -1032,15 +1032,14 @@ macro kwredef(expr)
   called_first_time = !isa(T_old, DataType)
   t[n] = T_new = called_first_time ? Symbol(T_old, :def) : gensym(T_old)
 
-  esc(quote
+  quote
     Base.@kwdef $expr
-    $T_old = $T_new
+    $T = $T_new
     if Base.VERSION < v"1.8-"
-      $curly ? $T_new.body.name.name = $(QuoteNode(T_old)) : $T_new.name.name = $(QuoteNode(T_old)) # fix the name
+      $curly ? $T_new.body.name.name = $(QuoteNode(T)) : $T_new.name.name = $(QuoteNode(T)) # fix the name
     end
-
     $T_new
-  end)
+  end |> esc
 end
 
 """
