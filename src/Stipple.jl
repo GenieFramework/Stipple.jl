@@ -1025,8 +1025,12 @@ macro kwredef(expr)
   if isa(T_old, Expr) && T_old.head == Symbol(".")
     T_old = (split(string(T_old), '.')[end] |> Symbol)
   end
-
-  t[n] = T_new = gensym(T_old)
+  
+  # in the first run the datatype is not yet defined
+  # this is also the case when Revise registers the code, therefore we need
+  # to make sure that the generated name is always identical for first definition
+  called_first_time = !isa(T_old, DataType)
+  t[n] = T_new = called_first_time ? Symbol(T_old, :def) : gensym(T_old)
 
   esc(quote
     Base.@kwdef $expr
