@@ -1029,8 +1029,8 @@ macro kwredef(expr)
   # in the first run the datatype is not yet defined
   # this is also the case when Revise registers the code, therefore we need
   # to make sure that the generated name is always identical for first definition
-  called_first_time = !isa(T_old, DataType)
-  t[n] = T_new = called_first_time ? Symbol(T_old, :def) : gensym(T_old)
+  called_first_time = !isa(T, DataType)
+  t[n] = T_new = called_first_time ? Symbol(T, :def) : gensym(T)
 
   quote
     Base.@kwdef $expr
