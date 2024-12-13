@@ -424,7 +424,6 @@ end
 macro type(modelname, storage)
   modelname isa DataType && (modelname = modelname.name.name)
   modelconst = Symbol(modelname, '!')
-  modelconst_qn = QuoteNode(modelconst)
 
   output = quote end
   output.args = @eval __module__ collect(values($storage))

@@ -522,7 +522,7 @@ function init(t::Type{M};
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
   LAST_ACTIVITY[Symbol(getchannel(model))] = now()
 
-  # PRECOMPILE[] || Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
+  PRECOMPILE[] || Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
 
   # register channels and routes only if within a request
   if haskey(Genie.Router.params(), :CHANNEL) || haskey(Genie.Router.params(), :ROUTE) || always_register_channels
@@ -1274,27 +1274,26 @@ using Stipple.ReactiveTools
 
 # precompilation ...
 
-# using Stipple.ReactiveTools
-# @stipple_precompile begin
-#   ui() = [cell("hello"), row("world"), htmldiv("Hello World")]
+@app PrecompileApp begin
+  @in demo_i = 1
+  @out demo_s = "Hi"
 
-#   @app PrecompileApp begin
-#     @in demo_i = 1
-#     @out demo_s = "Hi"
+  @onchange demo_i begin
+    println(demo_i)
+  end
+end
 
-#     @onchange demo_i begin
-#       println(demo_i)
-#     end
-#   end
+using Stipple.ReactiveTools
+@stipple_precompile begin
+  ui() = [cell("hello"), row("world"), htmldiv("Hello World")]
 
-#   route("/") do
-#     model = Stipple.ReactiveTools.@init PrecompileApp
-#     page(model, ui) |> html
-#   end
-
-#   precompile_get("/")
-#   deps_routes(core_theme = true)
-#   precompile_get(Genie.Assets.asset_path(assets_config, :js, file = "stipplecore"))
-# end
+  route("/") do
+    model = Stipple.ReactiveTools.@init PrecompileApp
+    page(model, ui) |> html
+  end
+  precompile_get("/")
+  deps_routes(core_theme = true)
+  precompile_get(Genie.Assets.asset_path(assets_config, :js, file = "stipplecore"))
+end
 
 end

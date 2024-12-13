@@ -162,14 +162,38 @@ end
 ```
 """
 macro stipple_precompile(setup, workload)
-    quote
+    # wrap @app calls in @eval to avoid precompilation errors
+    # and escape all expressions except those starting with precompile_
+    for (i, ex) in enumerate(workload.args)
+        ex isa Expr && ex.head == :call && startswith("$(ex.args[1])", "precompile_") && continue
+        if ex isa Expr && ex.head == :macrocall && ex.args[1] == Symbol("@app")
+            println("found!")
+            workload.args[i] = :(@eval $__module__ $(ex))#Expr(:macrocall, Symbol("@eval"), ex.args)
+        else
+          workload.args[i] = :(esc($ex))
+        end
+    end
+
+    for (i, ex) in enumerate(setup.args)
+        ex isa Expr && ex.head == :call && startswith("$(ex.args[1])", "precompile_") && continue
+        if ex isa Expr && ex.head == :macrocall && ex.args[1] == Symbol("@app")
+            setup.args[i] = :(@eval $(ex))#Expr(:macrocall, Symbol("@eval"), ex.args)
+        end
+        setup.args[i] = :(esc($ex))
+    end
+
+    expr = quote
         @setup_workload begin
         # Putting some things in `setup` can reduce the size of the
         # precompile file and potentially make loading faster.
-        using Genie.HTTPUtils.HTTP
+        HTTP = Stipple.Genie.HTTPUtils.HTTP
         PRECOMPILE[] = true
+        dot_theme_watcher = Layout.DOTTHEME_WATCHER[]
+        user_theme_watcher = Layout.USER_THEME_WATCHER[]
+        Layout.DOTTHEME_WATCHER[] = true
+        Layout.USER_THEME_WATCHER[] = true
 
-        esc($setup)
+        :__setup__
 
         @compile_workload begin
             # all calls in this block will be precompiled, regardless of whether
@@ -194,7 +218,7 @@ macro stipple_precompile(setup, workload)
             Logging.with_logger(Logging.SimpleLogger(stdout, Logging.Error)) do
                 up(port)
 
-                esc($workload)
+                :__workload__
 
                 down()
             end
@@ -202,17 +226,27 @@ macro stipple_precompile(setup, workload)
             Genie.Secrets.secret_token!("")
         end
         PRECOMPILE[] = false
+        Layout.DOTTHEME_WATCHER[] = dot_theme_watcher
+        Layout.USER_THEME_WATCHER[] = user_theme_watcher
+        end
+    end
+
+    MacroTools.postwalk(expr) do ex
+        if ex isa QuoteNode
+            if ex.value === :__setup__
+                setup
+            elseif ex.value === :__workload__
+                workload
+            else
+                ex
+            end
+        else
+            ex
         end
     end
 end
 
 macro stipple_precompile(workload)
-    # wrap @app calls in @eval to avoid precompilation errors
-    for (i, ex) in enumerate(workload.args)
-        if ex isa Expr && ex.head == :macrocall && ex.args[1] == Symbol("@app")
-            workload.args[i] = :(@eval $(ex))#Expr(:macrocall, Symbol("@eval"), ex.args)
-        end
-    end
     quote
         @stipple_precompile begin end begin
             $workload
