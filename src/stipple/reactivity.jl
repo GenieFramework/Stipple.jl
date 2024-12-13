@@ -268,7 +268,8 @@ function let_eval!(expr, let_block, m::Module, is_non_reactive::Bool = true)
   end
 
   T = val === :__Any__ ? Any : typeof(val)
-  val === :__Any__ || push!(let_block.args, is_non_reactive ? :(var = $val) : :($var = $Rtype{$T}($val)))
+  val_qn = QuoteNode(val)
+  val === :__Any__ || push!(let_block.args, is_non_reactive ? :(var = $val) : :($var = $Rtype{$T}($val_qn)))
   return val, T
 end
 
