@@ -593,7 +593,10 @@ function get_varnames(app_expr::Vector, context::Module)
           append!(varnames, fnames)
       end
   end
-  @assert(length(unique(varnames)) == length(varnames), "Duplicate field names detected")
+  if length(unique(varnames)) != length(varnames)
+    duplicates = union(filter(x -> sum(x .== varnames) > 1, varnames))
+    @warn "Duplicate field names detected: $(join(duplicates, ", "))"
+  end
   varnames
 end
 
