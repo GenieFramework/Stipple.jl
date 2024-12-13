@@ -1022,15 +1022,16 @@ macro kwredef(expr)
 
   T = t[n]
 
+  # in the first run the datatype is not yet defined
+  # this is also the case when Revise registers the code, therefore we need
+  # to make sure that the generated name is always identical for first definition
+  already_defined = T isa DataType || isdefined(__module__, T) && @eval(__module__, $T) isa DataType
+
   if isa(T, Expr) && T.head == Symbol(".")
     T = (split(string(T), '.')[end] |> Symbol)
   end
   
-  # in the first run the datatype is not yet defined
-  # this is also the case when Revise registers the code, therefore we need
-  # to make sure that the generated name is always identical for first definition
-  called_first_time = !isa(T, DataType)
-  t[n] = T_new = called_first_time ? Symbol(T, :def) : gensym(T)
+  t[n] = T_new = already_defined ? gensym(T) : Symbol(T, :def)
 
   quote
     Base.@kwdef $expr
