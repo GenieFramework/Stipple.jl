@@ -315,9 +315,9 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
   let_block !== nothing && varname ∈ vars && ((val, T) = let_eval!(expr, let_block, m, is_non_reactive))
 
   mode = mode isa Symbol && ! isdefined(context, mode) ? :(Stipple.$mode) : mode
-  type = if isa(var, Expr) && var.head == Symbol("::") && ! is_non_reactive
-    # change type T to type R{T}
-    var.args[end] = :($Rtype{$(var.args[end])})
+  type = if isa(var, Expr) && var.head == Symbol("::")
+    # change type T to type R{T} if the variable is reactive
+    is_non_reactive || (var.args[end] = :($Rtype{$(var.args[end])}))
   else # no type is defined, so determine it from the type of the default value
     try
       # add type definition `::R{T}` to the var where T is the type of the default value
@@ -337,7 +337,7 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
   varname, expr
 end
 
-parse_expression(expr::Expr, mode = nothing, source = nothing, m = nothing, let_block::Expr = nothing, vars::Set = Set()) = parse_expression!(copy(expr), mode, source, m, let_block, vars)
+parse_expression(expr::Expr, mode = nothing, source = nothing, m = nothing, let_block::Union{Expr, Nothing} = nothing, vars::Set = Set()) = parse_expression!(copy(expr), mode, source, m, let_block, vars)
 
 macro var_storage(expr)
   m = __module__
