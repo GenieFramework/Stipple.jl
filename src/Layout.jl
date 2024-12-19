@@ -113,12 +113,12 @@ function page(model::Union{M, Vector{M}}, args...;
               prepend::Union{S,Vector} = "", append::Union{T,Vector} = [],
               core_theme::Bool = true,
               kwargs...)::ParsedHTMLString where {M<:Stipple.ReactiveModel, S<:AbstractString,T<:AbstractString}
-  model isa Vector || (model = [model])
   uis = if !isempty(args)
-    args[1] isa Vector ? args[1] : [args[1]]
+    args[1] isa Vector && model isa Vector ? args[1] : [args[1]]
   else
     ""
   end
+  model isa Vector || (model = [model])
   counter = Dict{DataType, Int}()
 
   function rootselector(m::M) where M <:ReactiveModel
