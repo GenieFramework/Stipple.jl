@@ -460,7 +460,7 @@ function init_storage()
   ch = channelfactory()
 
   LittleDict{Symbol, Expr}(
-    CHANNELFIELDNAME => :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = $ch),
+    CHANNELFIELDNAME => :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = Stipple.channelfactory()),
     :modes__ => :(modes__::Stipple.LittleDict{Symbol,Int} = Stipple.LittleDict{Symbol,Int}()),
     :isready => :(isready::Stipple.R{Bool} = false),
     :isprocessing => :(isprocessing::Stipple.R{Bool} = false),
@@ -996,6 +996,16 @@ macro js_str(expr)
   :( JSONText($(esc(expr))) )
 end
 
+function mygensym(sym::Symbol, context = @__MODULE__)
+  i = 1
+  sym = Symbol(sym, :_mygensym_, i)
+  while isdefined(context, sym)
+    i += 1
+    sym = Symbol(string(sym, "_", i))
+  end
+  sym
+end
+
 """
     @kwredef(expr)
 
@@ -1008,37 +1018,44 @@ macro kwredef(expr)
   expr = macroexpand(__module__, expr) # to expand @static
   expr isa Expr && expr.head === :struct || error("Invalid usage of @kwredef")
   expr = expr::Expr
-
+  
   t = expr.args; n = 2
   if t[n] isa Expr && t[n].head === :<:
-      t = t[n].args
-      n = 1
+    t = t[n].args
+    n = 1
   end
   curly = t[n] isa Expr && t[n].head === :curly
   if curly
-      t = t[n].args
-      n=1
+    t = t[n].args
+    n = 1
   end
 
   T = t[n]
 
-  # in the first run the datatype is not yet defined
-  # this is also the case when Revise registers the code, therefore we need
-  # to make sure that the generated name is always identical for first definition
-  already_defined = T isa DataType || isdefined(__module__, T) && @eval(__module__, $T) isa DataType
+  # Revise executes macros during compilation.
+  # This leads to redefining a new struct even when the there is no change in the struct definition.
+  # Most of the resulting definitions, e.g. function / constructor definitions are rewinded to not
+  # pollute the name space, however, gensym executions cannot be rewinded, moreover Revise seems to add a
+  # an extra level in the gensym variable names, which results to stackoverflow errors in our case.
+  # Hence we define our own gensym without level nesting and we store the defining expression after successful
+  # struct definition to track whether any changes occurred.
+  #  Upon reevaluation of the same expression we reuse the existing name and avoid the stackoverflow.
+  expr_qn = QuoteNode(copy(expr))
+  expr_name = Symbol(T, :_expr)
+  already_defined = isdefined(__module__, expr_name) && @eval(__module__, $expr_name) == expr
 
   if isa(T, Expr) && T.head == Symbol(".")
     T = (split(string(T), '.')[end] |> Symbol)
   end
   
-  t[n] = T_new = already_defined ? gensym(T) : Symbol(T, :def)
-
+  t[n] = T_new = already_defined ? @eval(__module__, $T).name.name : mygensym(T, __module__)
   quote
     Base.@kwdef $expr
     $T = $T_new
     if Base.VERSION < v"1.8-"
       $curly ? $T_new.body.name.name = $(QuoteNode(T)) : $T_new.name.name = $(QuoteNode(T)) # fix the name
     end
+    $expr_name = $expr_qn
     $T_new
   end |> esc
 end
