@@ -163,14 +163,10 @@ end
 """
 macro stipple_precompile(setup, workload)
     # wrap @app calls in @eval to avoid precompilation errors
-    # and escape all expressions except those starting with precompile_
     for (i, ex) in enumerate(workload.args)
-        ex isa Expr && ex.head == :call && startswith("$(ex.args[1])", "precompile_") && continue
         if ex isa Expr && ex.head == :macrocall && ex.args[1] == Symbol("@app")
-            println("found!")
-            workload.args[i] = :(@eval $__module__ $(ex))#Expr(:macrocall, Symbol("@eval"), ex.args)
-        else
-          workload.args[i] = :(esc($ex))
+            println("Found app declaration in precompilation section, wrapping in `@eval`!")
+            workload.args[i] = Expr(:macrocall, Symbol("@eval"), ex.args)
         end
     end
 
@@ -182,25 +178,19 @@ macro stipple_precompile(setup, workload)
         setup.args[i] = :(esc($ex))
     end
 
-    expr = quote
-        @setup_workload begin
-        # Putting some things in `setup` can reduce the size of the
-        # precompile file and potentially make loading faster.
+    quote
+        Stipple.@setup_workload begin
         HTTP = Stipple.Genie.HTTPUtils.HTTP
-        PRECOMPILE[] = true
-        dot_theme_watcher = Layout.DOTTHEME_WATCHER[]
-        user_theme_watcher = Layout.USER_THEME_WATCHER[]
-        Layout.DOTTHEME_WATCHER[] = true
-        Layout.USER_THEME_WATCHER[] = true
+        Stipple.PRECOMPILE[] = true
 
-        :__setup__
+        $setup
 
-        @compile_workload begin
+        Stipple.@compile_workload begin
             # all calls in this block will be precompiled, regardless of whether
             # they belong to your package or not (on Julia 1.8 and higher)
             # set secret in order to avoid automatic generation of a new one,
             # which would invalidate the precompiled file
-            Genie.Secrets.secret_token!(repeat("f", 64))
+            Stipple.Genie.Secrets.secret_token!(repeat("f", 64))
 
             port = tryparse(Int, get(ENV, "STIPPLE_PRECOMPILE_PORT", ""))
             port === nothing && (port = rand(8081:8999))
@@ -215,43 +205,25 @@ macro stipple_precompile(setup, workload)
             precompile_get(location::String, args...; kwargs...) = precompile_request(:GET, location, args...; kwargs...)
             precompile_post(location::String, args...; kwargs...) = precompile_request(:POST, location, args...; kwargs...)
 
-            Logging.with_logger(Logging.SimpleLogger(stdout, Logging.Error)) do
-                up(port)
+            Stipple.Logging.with_logger(Stipple.Logging.SimpleLogger(stdout, Stipple.Logging.Error)) do
+                Stipple.up(port)
 
-                :__workload__
+                $workload
 
-                down()
+                Stipple.down()
             end
             # reset secret back to empty string
-            Genie.Secrets.secret_token!("")
+            Stipple.Genie.Secrets.secret_token!("")
         end
-        PRECOMPILE[] = false
-        Layout.DOTTHEME_WATCHER[] = dot_theme_watcher
-        Layout.USER_THEME_WATCHER[] = user_theme_watcher
+        Stipple.PRECOMPILE[] = false
         end
-    end
-
-    MacroTools.postwalk(expr) do ex
-        if ex isa QuoteNode
-            if ex.value === :__setup__
-                setup
-            elseif ex.value === :__workload__
-                workload
-            else
-                ex
-            end
-        else
-            ex
-        end
-    end
+    end |> esc
 end
 
 macro stipple_precompile(workload)
-    quote
-        @stipple_precompile begin end begin
-            $workload
-        end
-    end
+    :(@stipple_precompile begin end begin
+        $workload
+    end) |> esc
 end
 
 """
