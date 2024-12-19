@@ -27,6 +27,11 @@ export @methods, @watch, @computed, @client_data, @add_client_data
 
 export @before_create, @created, @before_mount, @mounted, @before_update, @updated, @activated, @deactivated, @before_destroy, @destroyed, @error_captured
 
+function postwalk!(f::Function, expr::Expr)
+  ex = postwalk(f, expr)
+  expr.head = ex.head
+  expr.args = ex.args
+end
 
 export DEFAULT_LAYOUT, Page
 
@@ -600,6 +605,26 @@ function get_varnames(app_expr::Vector, context::Module)
   varnames
 end
 
+function add_brackets!(expr, varnames)
+  expr isa Expr || return expr
+  ex = Stipple.find_assignment(expr)
+  ex === nothing && return expr
+  val = ex.args[end]
+  if val isa Symbol && val ∈ varnames
+    ex.args[end] = :($val[])
+    return expr
+  elseif val isa Expr
+    postwalk!(val) do x
+      if x isa Symbol && x ∈ varnames
+        :($x[])
+      else
+        x
+      end
+    end
+  end
+  expr
+end
+
 macro handlers(typename, expr, handlers_fn_name = :handlers)
   expr = wrap(expr, :block)
   i_start = 1
@@ -627,6 +652,8 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
 
   storage = Stipple.init_storage()
   varnames = get_varnames(initcode, __module__)
+
+  add_brackets!.(initcode, Ref(varnames))
 
   filter!(x -> !isa(x, LineNumberNode), initcode)
   let_block = Expr(:block, :(_ = 0))
