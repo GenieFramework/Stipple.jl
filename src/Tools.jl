@@ -259,3 +259,45 @@ end
 Return a copy of an expression with all line number nodes removed. See also `striplines!`.
 """
 striplines(ex; recursive::Bool = false) = striplines!(copy(ex); recursive)
+
+"""
+    debug(model::ReactiveModel, field::Symbol, index::Int = 0)
+    debug(field::Reactive, index::Int = 0)
+
+Execute a listener of a field in a `ReactiveModel` and return the result. The `index` argument can be used to select a specific listener.
+The default index is the last listener. Negative indices are counted from the end of the list of listeners.
+
+# Example
+```julia
+using Stipple, Stipple.ReactiveTools
+
+@app TestApp begin
+    @in x = 0
+    @in y = 1
+
+    @onchange x begin
+        y = x + 1
+        error("This is an error")
+        println("x changed to \$x")
+    end
+
+    @onchange x, y begin
+        println("x and y changed to \$x and \$y")
+    end
+end
+
+model = @init TestApp
+debug(model, :x) # passes successfully
+debug(model, :x, -2) # returns an error including the location
+```
+"""
+function debug(field::Reactive, index::Int = 0)
+  listeners = field.o.listeners
+  index == 0 && (index = length(listeners))
+  index < 0 && (index = length(listeners) + index + 1)
+  index <= 0 && return "index '$index' not found in listeners, there are $(length(listeners)) listeners defined"
+  listener = listeners[index][2]
+  listener isa Observables.OnAny ? listener.f(listener.args...) : listener(field[],)
+end
+
+debug(model::ReactiveModel, field::Symbol, index::Int = 0) = debug(getfield(model, field), index)
