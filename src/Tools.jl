@@ -261,8 +261,11 @@ Return a copy of an expression with all line number nodes removed. See also `str
 striplines(ex; recursive::Bool = false) = striplines!(copy(ex); recursive)
 
 """
-    debug(model::ReactiveModel, field::Symbol, index::Int = 0)
-    debug(field::Reactive, index::Int = 0)
+    debug(field::Reactive; listener::Int = 0)
+    debug(field::Reactive, value; listener::Int = 0)
+    
+    debug(model::ReactiveModel, field::Symbol; listener::Int = 0)
+    debug(model::ReactiveModel, field::Symbol, value; listener::Int = 0)
 
 Execute a listener of a field in a `ReactiveModel` and return the result. The `index` argument can be used to select a specific listener.
 The default index is the last listener. Negative indices are counted from the end of the list of listeners.
@@ -287,17 +290,24 @@ using Stipple, Stipple.ReactiveTools
 end
 
 model = @init TestApp
-debug(model, :x) # passes successfully
-debug(model, :x, -2) # returns an error including the location
+debug(model.x) # passes successfully
+debug(model.x, 10; listener = -2) # returns an error including the location
 ```
 """
-function debug(field::Reactive, index::Int = 0)
+function debug(field::Reactive; listener::Int = 0)
   listeners = field.o.listeners
-  index == 0 && (index = length(listeners))
+  index = listener == 0 ? length(listeners) : listener
   index < 0 && (index = length(listeners) + index + 1)
   index <= 0 && return "index '$index' not found in listeners, there are $(length(listeners)) listeners defined"
   listener = listeners[index][2]
   listener isa Observables.OnAny ? listener.f(listener.args...) : listener(field[],)
 end
 
-debug(model::ReactiveModel, field::Symbol, index::Int = 0) = debug(getfield(model, field), index)
+function debug(field::Reactive, value; listener::Int = 0)
+    # silent update then debug
+    field[!] = value
+    debug(field; listener)
+end
+
+debug(model::ReactiveModel, field::Symbol; listener::Int = 0) = debug(getfield(model, field); listener)
+debug(model::ReactiveModel, field::Symbol, value; listener::Int = 0) = debug(getfield(model, field), value; listener)
