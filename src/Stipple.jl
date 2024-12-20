@@ -416,7 +416,7 @@ function channeldefault(::Type{M}) where M<:ReactiveModel
   use_model_storage() || return nothing
 
   stored_model = Stipple.ModelStorage.Sessions.GenieSession.get(model_id, nothing)
-  stored_model === nothing ? nothing : getfield(stored_model, Stipple.CHANNELFIELDNAME)
+  stored_model === nothing ? nothing : getchannel(stored_model)
 end
 
 @nospecialize
@@ -446,7 +446,7 @@ end
 
 function setmode!(dict::AbstractDict, mode, fieldnames::Symbol...)
   for fieldname in fieldnames
-    fieldname in [Stipple.CHANNELFIELDNAME, :modes__] && continue
+    fieldname ∈ Stipple.INTERNALFIELDS && continue
     mode == PUBLIC || mode == :PUBLIC ? delete!(dict, fieldname) : dict[fieldname] = Core.eval(Stipple, mode)
   end
   dict
@@ -456,12 +456,13 @@ function deletemode!(modes, fieldnames::Symbol...)
   setmode!(modes, PUBLIC, fieldnames...)
 end
 
-function init_storage()
-  ch = channelfactory()
+function init_storage(handler::Union{Nothing, Symbol, Expr} = nothing)
+  handlers = handler === nothing ? :(Function[]) : :(Function[$handler])
 
   LittleDict{Symbol, Expr}(
-    CHANNELFIELDNAME => :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = Stipple.channelfactory()),
+    :channel__ => :(channel__::String = Stipple.channelfactory()),
     :modes__ => :(modes__::Stipple.LittleDict{Symbol,Int} = Stipple.LittleDict{Symbol,Int}()),
+    :handlers__ => :(handlers__::Vector{Function} = $handlers),
     :isready => :(isready::Stipple.R{Bool} = false),
     :isprocessing => :(isprocessing::Stipple.R{Bool} = false),
     :fileuploads => :(fileuploads::Stipple.R{Dict{AbstractString,AbstractString}} = Dict{AbstractString,AbstractString}()),
@@ -1191,7 +1192,7 @@ macro mixin_old(expr, prefix = "", postfix = "")
   values = getfield.(Ref(mix), fnames)
   output = quote end
   for (f, type, v) in zip(Symbol.(pre, fnames, post), fieldtypes(get_concrete_type(T)), values)
-    f in Symbol.(prefix, [:channel__, :modes__, AUTOFIELDS...], postfix) && continue
+    f in Symbol.(prefix, [INTERNALFIELDS..., AUTOFIELDS...], postfix) && continue
     v_copy = Stipple._deepcopy(v)
     push!(output.args, v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy))
   end

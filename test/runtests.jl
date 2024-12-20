@@ -112,7 +112,7 @@ end
         end
     end
 
-    @eval model = TestApp |> init |> handlers
+    @eval model = TestApp |> init |> TestApp_handlers
     @test propertynames(model) ==  tuple(Stipple.INTERNALFIELDS..., Stipple.AUTOFIELDS..., :i, :s, :j, :t, :mixin_j, :mixin_t, :pre_j_post, :pre_t_post)
 
     # check reactivity

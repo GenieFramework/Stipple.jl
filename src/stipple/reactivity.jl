@@ -155,26 +155,24 @@ abstract type ReactiveModel end
 
 export @vars, @define_mixin, @clear_cache, clear_cache, @clear_route, clear_route
 
-export ChannelName, getchannel
-
-const ChannelName = String
-const CHANNELFIELDNAME = :channel__
+export getchannel
 
 function getchannel(m::M) where {M<:ReactiveModel}
-  getfield(m, CHANNELFIELDNAME)
+  getfield(m, :channel__)
 end
 
 
 function setchannel(m::M, value) where {M<:ReactiveModel}
-  setfield!(m, CHANNELFIELDNAME, ChannelName(value))
+  setfield!(m, :channel__, String(value))
 end
 
 const AUTOFIELDS = [:isready, :isprocessing, :fileuploads, :ws_disconnected] # not DRY but we need a reference to the auto-set fields
-const INTERNALFIELDS = [CHANNELFIELDNAME, :modes__] # not DRY but we need a reference to the auto-set fields
+const INTERNALFIELDS = [:channel__, :modes__, :handlers__] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin
   channel__::Stipple.ChannelName = Stipple.channelfactory()
-  modes__::LittleDict{Symbol, Int} = LittleDict(:modes__ => PRIVATE, :channel__ => PRIVATE)
+  handlers__::Vector{Function} = Function[]
+  modes__::LittleDict{Symbol, Int} = LittleDict(:modes__ => PRIVATE, :channel__ => PRIVATE, :handlers__ => PRIVATE)
   isready::Stipple.R{Bool} = false
   isprocessing::Stipple.R{Bool} = false
   channel_::String = "" # not sure what this does if it's empty
@@ -192,7 +190,7 @@ function model_to_storage(::Type{T}, prefix = "", postfix = "") where T# <: Reac
   values = getfield.(Ref(M()), fields)
   storage = LittleDict{Symbol, Expr}()
   for (f, type, v) in zip(fields, fieldtypes(M), values)
-    f = f in [:channel__, :modes__, AUTOFIELDS...] ? f : Symbol(prefix, f, postfix)
+    f = f in [INTERNALFIELDS..., AUTOFIELDS...] ? f : Symbol(prefix, f, postfix)
     storage[f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = Stipple._deepcopy($v))
   end
   # fix channel field, which is not reconstructed properly by the code above
@@ -216,6 +214,21 @@ function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict; keep_ch
     else
       setmode!(modes, get(m2, field, PUBLIC), field)
     end
+  end
+  
+  if haskey(storage_1, :handlers__) && haskey(storage_2, :handlers__)
+    for storage in (storage_1, storage_2)
+      haskey(storage, :handlers__) && postwalk!(storage[:handlers__]) do ex
+        MacroTools.@capture(ex, Stipple._deepcopy(x_)) ? x : ex
+      end
+    end
+    h1 = find_assignment(storage_1[:handlers__]).args[end]
+    h2 = find_assignment(storage_2[:handlers__]).args[end]
+
+    h1 isa Expr && (h1 = h1.args)
+    h2 isa Expr && (h2 = h2.args[2:end])
+    append!(h1, h2)
+    delete!(storage_2, :handlers__)
   end
   storage = merge(storage_1, storage_2)
   storage[:modes__] = :(modes__::Stipple.LittleDict{Symbol, Int} = $modes)
@@ -371,7 +384,7 @@ macro var_storage(expr)
         end
         var, ex = parse_expression!(e, reactive ? mode : nothing, source, m, let_block, required_vars)
         # prevent overwriting of control fields
-        var ∈ keys(Stipple.init_storage()) && continue
+        var ∈ [INTERNALFIELDS..., AUTOFIELDS...] && continue
         if reactive == false
             Stipple.setmode!(storage[:modes__], Core.eval(Stipple, mode), var)
         end

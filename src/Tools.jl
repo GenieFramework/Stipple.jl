@@ -260,6 +260,18 @@ Return a copy of an expression with all line number nodes removed. See also `str
 """
 striplines(ex; recursive::Bool = false) = striplines!(copy(ex); recursive)
 
+
+"""
+    postwalk!(f::Function, expr::Expr)
+
+Inplace version of MacroTools.postwalk()
+"""
+function postwalk!(f::Function, expr::Expr)
+    ex = MacroTools.postwalk(f, expr)
+    expr.head = ex.head
+    expr.args = ex.args
+end
+
 """
     debug(field::Reactive; listener::Int = 0)
     debug(field::Reactive, value; listener::Int = 0)

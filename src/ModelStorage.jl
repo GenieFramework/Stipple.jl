@@ -95,7 +95,7 @@ function init_from_storage( t::Type{M};
 
     if field isa Reactive
       # restore fields only if a stored model exists, if the field is not part of the internal fields and is not write protected
-      if isnothing(stored_model) || f ∈ [Stipple.CHANNELFIELDNAME, Stipple.AUTOFIELDS...] ||
+      if isnothing(stored_model) || f ∈ [Stipple.INTERNALFIELDS..., Stipple.AUTOFIELDS...] ||
           Stipple.isprivate(f, model) || ! hasproperty(stored_model, f) || ! hasproperty(model, f)
       else
         # restore field value from stored model

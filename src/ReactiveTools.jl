@@ -5,7 +5,7 @@ using MacroTools
 using MacroTools: postwalk
 using OrderedCollections
 import Genie
-import Stipple: deletemode!, parse_expression!, parse_expression, init_storage, striplines, striplines!
+import Stipple: deletemode!, parse_expression!, parse_expression, init_storage, striplines, striplines!, postwalk!
 
 #definition of handlers/events
 export @onchange, @onbutton, @event, @notify
@@ -27,15 +27,7 @@ export @methods, @watch, @computed, @client_data, @add_client_data
 
 export @before_create, @created, @before_mount, @mounted, @before_update, @updated, @activated, @deactivated, @before_destroy, @destroyed, @error_captured
 
-function postwalk!(f::Function, expr::Expr)
-  ex = postwalk(f, expr)
-  expr.head = ex.head
-  expr.args = ex.args
-end
-
 export DEFAULT_LAYOUT, Page
-
-const HANDLERS_FUNCTIONS = LittleDict{Type{<:ReactiveModel},Function}()
 
 function DEFAULT_LAYOUT(; title::String = "Genie App",
                           meta::D = Dict(),
@@ -125,7 +117,7 @@ macro appname()
 end
 
 function Stipple.setmode!(expr::Expr, mode::Int, fieldnames::Symbol...)
-  fieldname in [Stipple.CHANNELFIELDNAME, :modes__] && return
+  fieldname in [Stipple.INTERNALFIELDS..., :modes__] && return
   expr.args[2] isa Expr && expr.args[2].args[1] == :(Stipple._deepcopy) && (expr.args[2] = expr.args[2].args[2])
 
   d = if expr.args[2] isa LittleDict
@@ -397,7 +389,6 @@ end
 """
 macro app(expr = Expr(:block))
   modelname = model_typename(__module__)
-  storage = Stipple.init_storage()
   quote
     Stipple.ReactiveTools.@app $modelname $expr __GF_AUTO_HANDLERS__
     $modelname
@@ -509,8 +500,6 @@ macro init(args...)
   if called_without_type
     typename = model_typename(__module__)
     insert!(init_args, Stipple.has_parameters(init_args) ? 2 : 1, typename)
-  else
-    typename = init_args[type_pos]
   end
 
   quote
@@ -518,7 +507,7 @@ macro init(args...)
   end |> esc
 end
 
-function init_model(M::Type{<:ReactiveModel}, args...; context = nothing, kwargs...)
+function init_model(M::Type{<:ReactiveModel}, args...; kwargs...)
   m = __module__ = parentmodule(M)
 
   initfn = begin
@@ -536,13 +525,10 @@ function init_model(M::Type{<:ReactiveModel}, args...; context = nothing, kwargs
     end
   end
 
-  handlersfn = if context !== nothing && isdefined(m, :__GF_AUTO_HANDLERS__)
-    m.__GF_AUTO_HANDLERS__
-  else
-    Stipple.ReactiveTools.HANDLERS_FUNCTIONS[M]
+  model = initfn(M, args...; kwargs...)
+  for h in model.handlers__
+    model |> h
   end
-
-  model = initfn(M, args...; kwargs...) |> handlersfn
 
   # Update the model in all pages where it has been set as instance of an app.
   # Where it has been set as ReactiveModel type, no change is required
@@ -553,13 +539,12 @@ function init_model(M::Type{<:ReactiveModel}, args...; context = nothing, kwargs
 end
 
 function init_model(m::Module, args...; kwargs...)
-  init_model(@eval(m, Stipple.@type), args...; context = m, kwargs...)
+  init_model(@eval(m, Stipple.@type), args...; kwargs...)
 end
 
-macro app(typename, expr, handlers_fn_name = :handlers)
+macro app(typename, expr, handlers_fn_name = Symbol(typename, :_handlers))
   quote
     Stipple.ReactiveTools.@handlers $typename $expr $handlers_fn_name
-    Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$typename] = $handlers_fn_name
     $typename, $handlers_fn_name
   end |> esc
 end
@@ -625,7 +610,7 @@ function add_brackets!(expr, varnames)
   expr
 end
 
-macro handlers(typename, expr, handlers_fn_name = :handlers)
+macro handlers(typename, expr, handlers_fn_name = Symbol(typename, :_handlers))
   expr = wrap(expr, :block)
   i_start = 1
   handlercode = []
@@ -650,7 +635,7 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
     end
   end
 
-  storage = Stipple.init_storage()
+  storage = Stipple.init_storage(isempty(handlercode) ? nothing : handlers_fn_name)
   varnames = get_varnames(initcode, __module__)
 
   add_brackets!.(initcode, Ref(varnames))
@@ -689,7 +674,6 @@ macro handlers(typename, expr, handlers_fn_name = :handlers)
 
       __model__
     end
-    Stipple.ReactiveTools.HANDLERS_FUNCTIONS[$typename] = $handlers_fn_name
     ($typename, $handlers_fn_name)
   end |> esc
 end
