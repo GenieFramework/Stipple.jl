@@ -199,7 +199,9 @@ function model_to_storage(::Type{T}, prefix = "", postfix = "") where T# <: Reac
   storage
 end
 
-function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict; keep_channel = true, context::Module)
+function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict;
+  keep_channel = true, context::Module, handlers_expr::Union{Vector, Nothing} = nothing)
+
   m1 = haskey(storage_1, :modes__) ? Core.eval(context, storage_1[:modes__].args[end]) : LittleDict{Symbol, Int}()
   m2 = haskey(storage_2, :modes__) ? Core.eval(context, storage_2[:modes__].args[end]) : LittleDict{Symbol, Int}()
   modes = merge(m1, m2)
@@ -216,6 +218,7 @@ function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict; keep_ch
     end
   end
   
+  # merge handlers
   if haskey(storage_1, :handlers__) && haskey(storage_2, :handlers__)
     for storage in (storage_1, storage_2)
       haskey(storage, :handlers__) && postwalk!(storage[:handlers__]) do ex
@@ -227,6 +230,25 @@ function merge_storage(storage_1::AbstractDict, storage_2::AbstractDict; keep_ch
 
     h1 isa Expr && (h1 = h1.args)
     h2 isa Expr && (h2 = h2.args[2:end])
+
+    # if prefix or postfix is set, we need to create a new handler function
+    # the name of the function is composed of the name of the target model
+    # the mixin model with prefix and postfix and the suffix "_handlers"
+    if handlers_expr !== nothing
+      prefix, postfix = handlers_expr[1:2]
+      handlers_expr = handlers_expr[3:end]
+      h1_name = string(get(h1, 2, ""))
+      endswith(h1_name, "_handlers") && (h1_name = h1_name[1:end-9])
+      h2_name = string(get(h2, 1, ""))
+      endswith(h2_name, "_handlers") && (h2_name = h2_name[1:end-9])
+      handlers_fn_name = Symbol(h1_name, "_", prefix, h2_name, postfix, "_handlers")
+      function_expr = :(function $handlers_fn_name(__model__)
+        $(handlers_expr...)  
+        __model__
+      end)
+      @eval context $function_expr
+      h2 = [handlers_fn_name]
+    end
     append!(h1, h2)
     delete!(storage_2, :handlers__)
   end

@@ -312,7 +312,7 @@ function debug(field::Reactive; listener::Int = 0)
   index < 0 && (index = length(listeners) + index + 1)
   index <= 0 && return "index '$index' not found in listeners, there are $(length(listeners)) listeners defined"
   listener = listeners[index][2]
-  listener isa Observables.OnAny ? listener.f(listener.args...) : listener(field[],)
+  listener isa Observables.OnAny ? listener.f(listener.args...) : listener(field[])
 end
 
 function debug(field::Reactive, value; listener::Int = 0)

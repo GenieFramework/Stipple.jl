@@ -999,10 +999,10 @@ end
 
 function mygensym(sym::Symbol, context = @__MODULE__)
   i = 1
-  while isdefined(context, Symbol(sym, :_mygensym_, i))
+  while isdefined(context, Symbol(sym, :_, i))
     i += 1
   end
-  Symbol(sym, :_mygensym_, i)
+  Symbol(sym, :_, i)
 end
 
 """

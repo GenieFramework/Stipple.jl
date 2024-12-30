@@ -20,7 +20,7 @@ export @debounce, @clear_debounce
 export @clear, @clear_vars, @clear_handlers
 
 # app handling
-export @page, @init, @handlers, @app, @appname, @modelstorage
+export @page, @init, @handlers, @app, @appname, @app_mixin, @modelstorage
 
 # js functions on the front-end (see Vue.js docs)
 export @methods, @watch, @computed, @client_data, @add_client_data
@@ -449,7 +449,32 @@ function parse_macros(expr::Expr, storage::LittleDict, m::Module, let_block::Exp
   elseif fn == :mixin
     mixin, prefix, postfix = parse_mixin_params(params)
     mixin_storage = Stipple.model_to_storage(@eval(m, $mixin), prefix, postfix)
-    merge!(storage, Stipple.merge_storage(storage, mixin_storage; context = m))
+    pre_length = lastindex(prefix)
+    post_length = lastindex(postfix)
+
+    handlers_expr_name = Symbol(mixin, :var"!_handlers_expr")
+    handlers_expr = if pre_length + post_length > 0 && isdefined(m, handlers_expr_name)
+      varnames = setdiff(collect(keys(mixin_storage)), Stipple.AUTOFIELDS, Stipple.INTERNALFIELDS)
+      oldvarnames = [Symbol("$var"[1 + pre_length:end-post_length]) for var in varnames]
+
+      handlers_expr = @eval(m, $handlers_expr_name)
+      for h in handlers_expr
+        h isa Expr || continue
+        postwalk!(h) do x
+          if x isa Symbol && x ∈ oldvarnames
+            Symbol(prefix, x, postfix)
+          elseif x isa QuoteNode && x.value isa Symbol && x.value ∈ oldvarnames
+            QuoteNode(Symbol(prefix, x.value, postfix))
+          else
+            x
+          end
+        end
+      end
+      vcat([prefix, postfix], handlers_expr)
+    else
+      nothing
+    end
+    merge!(storage, Stipple.merge_storage(storage, mixin_storage; context = m, handlers_expr))
   else
     error("Unknown macro @$fn")
   end
@@ -542,28 +567,6 @@ function init_model(m::Module, args...; kwargs...)
   init_model(@eval(m, Stipple.@type), args...; kwargs...)
 end
 
-macro app(typename, expr, handlers_fn_name = Symbol(typename, :_handlers))
-  quote
-    Stipple.ReactiveTools.@handlers $typename $expr $handlers_fn_name
-    $typename, $handlers_fn_name
-  end |> esc
-end
-
-macro handlers()
-  modelname = model_typename(__module__)
-  empty_block = Expr(:block)
-  quote
-    Stipple.ReactiveTools.@handlers $modelname $empty_block __GF_AUTO_HANDLERS__
-  end |> esc
-end
-
-macro handlers(expr)
-  modelname = model_typename(__module__)
-  quote
-    Stipple.ReactiveTools.@handlers $modelname $expr __GF_AUTO_HANDLERS__
-  end |> esc
-end
-
 """
     get_varnames(app_expr::Vector, context::Module)
 
@@ -610,7 +613,30 @@ function add_brackets!(expr, varnames)
   expr
 end
 
-macro handlers(typename, expr, handlers_fn_name = Symbol(typename, :_handlers))
+macro app(typename, expr, handlers_fn_name = Symbol(typename, :_handlers), mixin = false)
+  :(Stipple.ReactiveTools.@handlers $typename $expr $handlers_fn_name $mixin) |> esc
+end
+
+macro app_mixin(typename, expr, handlers_fn_name = Symbol(typename, :_handlers))
+  :(Stipple.ReactiveTools.@handlers $typename $expr $handlers_fn_name true) |> esc
+end
+
+macro handlers()
+  modelname = model_typename(__module__)
+  empty_block = Expr(:block)
+  quote
+    Stipple.ReactiveTools.@handlers $modelname $empty_block __GF_AUTO_HANDLERS__
+  end |> esc
+end
+
+macro handlers(expr)
+  modelname = model_typename(__module__)
+  quote
+    Stipple.ReactiveTools.@handlers $modelname $expr __GF_AUTO_HANDLERS__
+  end |> esc
+end
+
+macro handlers(typename, expr, handlers_fn_name = Symbol(typename, :_handlers), mixin = false)
   expr = wrap(expr, :block)
   i_start = 1
   handlercode = []
@@ -665,7 +691,10 @@ macro handlers(typename, expr, handlers_fn_name = Symbol(typename, :_handlers))
   # println("handlercode: ", handlercode)
   # println("handlercode_final: ", handlercode_final)
 
-  quote
+  handlers_expr_name = Symbol(typename, :var"!_handlers_expr")
+  handlercode_qn = QuoteNode(handlercode_final)
+
+  expr = quote
     $(initcode_final)
     Stipple.ReactiveTools.delete_events($typename)
 
@@ -675,7 +704,11 @@ macro handlers(typename, expr, handlers_fn_name = Symbol(typename, :_handlers))
       __model__
     end
     ($typename, $handlers_fn_name)
-  end |> esc
+  end
+  
+  mixin === :true && insert!(expr.args, lastindex(expr.args), :($handlers_expr_name = $handlercode_qn))
+  
+  expr |> esc
 end
 
 function wrap(expr, wrapper = nothing)
