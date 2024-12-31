@@ -5,7 +5,7 @@ Utilities for rendering the general layout of a Stipple app, such as of a data d
 """
 module Layout
 
-using Genie, Stipple
+using Genie, Stipple, Stipple.Theme
 
 export layout, add_css, remove_css
 export page, app, row, column, cell, container, flexgrid_kwargs, htmldiv, @gutter
@@ -15,6 +15,25 @@ export theme, googlefonts_css, stipplecore_css, genie_footer
 const THEMES = Ref(Function[])
 
 const FLEXGRID_KWARGS = [:col, :xs, :sm, :md, :lg, :xl, :gutter, :xgutter, :ygutter]
+
+"""
+    make_unique!(src::Vector, condition::Union{Nothing, Function} = nothing)
+
+Utility function for removing duplicates from a vector that fulfill a given condition.
+"""
+function make_unique!(src::Vector, condition::Union{Nothing, Function} = nothing)
+  seen = Int[]
+  dups = Int[]
+  for (i, name) in enumerate(src)
+      if name ∈ view(src, seen) && (condition === nothing || condition(name))
+          push!(dups, i)
+      else
+          push!(seen, i)
+      end
+  end
+
+  deleteat!(src, dups)
+end
 
 """
     function layout(output::Union{String,Vector}; partial::Bool = false, title::String = "", class::String = "", style::String = "",
@@ -41,18 +60,21 @@ julia> layout([
 "<link href=\"https://fonts.googleapis.com/css?family=Material+Icons\" rel=\"stylesheet\" /><link href=\"https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;0,900;1,400&display=swap\" rel=\"stylesheet\" /><link href=\"/css/stipple/stipplecore.css\" rel=\"stylesheet\" /><link href=\"/css/stipple/quasar.min.css\" rel=\"stylesheet\" /><span v-text='greeting'>Hello</span><script src=\"/js/channels.js?v=1.17.1\"></script><script src=\"/js/underscore-min.js\"></script><script src=\"/js/vue.global.prod.js\"></script><script src=\"/js/quasar.umd.prod.js\"></script>\n<script src=\"/js/apexcharts.min.js\"></script><script src=\"/js/vue-apexcharts.min.js\"></script><script src=\"/js/stipplecore.js\" defer></script><script src=\"/js/vue_filters.js\" defer></script>"
 ```
 """
-function layout(output::Union{S,Vector}, m::M;
+function layout(output::Union{S,Vector}, m::Union{M, Vector{M}};
                 partial::Bool = false, title::String = "", class::String = "", style::String = "", head_content::Union{AbstractString, Vector{<:AbstractString}} = "",
                 channel::String = Stipple.channel_js_name,
                 core_theme::Bool = true)::ParsedHTMLString where {M<:ReactiveModel, S<:AbstractString}
 
   isa(output, Vector) && (output = join(output, '\n'))
+  m isa Vector || (m = [m])
 
   content = [
     output
     theme(; core_theme)
-    Stipple.deps(m)
+    Stipple.deps.(m)...
   ]
+
+  make_unique!(content, contains(r"src=|href="i))
 
   partial && return content
 
@@ -84,21 +106,34 @@ julia> page(:elemid, [
 "<!DOCTYPE html>\n<html><head><title></title><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui\" /></head><body class style><link href=\"https://fonts.googleapis.com/css?family=Material+Icons\" rel=\"stylesheet\" /><link href=\"https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;0,900;1,400&display=swap\" rel=\"stylesheet\" /><link href=\"/css/stipple/stipplecore.css\" rel=\"stylesheet\" /><link href=\"/css/stipple/quasar.min.css\" rel=\"stylesheet\" /><div id=elemid><span v-text='greeting'>Hello</span></div><script src=\"/js/channels.js?v=1.17.1\"></script><script src=\"/js/underscore-min.js\"></script><script src=\"/js/vue.global.prod.js\"></script><script src=\"/js/quasar.umd.prod.js\"></script>\n<script src=\"/js/apexcharts.min.js\"></script><script src=\"/js/vue-apexcharts.min.js\"></script><script src=\"/js/stipplecore.js\" defer></script><script src=\"/js/vue_filters.js\" defer></script></body></html>"
 ```
 """
-function page(model::M, args...;
+function page(model::Union{M, Vector{M}}, args...;
+              pagetemplate = (x...) -> join([x...], '\n'),
               partial::Bool = false, title::String = "", class::String = "container", style::String = "",
               channel::String = Genie.config.webchannels_default_route, head_content::Union{AbstractString, Vector{<:AbstractString}} = "",
               prepend::Union{S,Vector} = "", append::Union{T,Vector} = [],
               core_theme::Bool = true,
               kwargs...)::ParsedHTMLString where {M<:Stipple.ReactiveModel, S<:AbstractString,T<:AbstractString}
+  uis = if !isempty(args)
+    args[1] isa Vector && model isa Vector ? args[1] : [args[1]]
+  else
+    ""
+  end
+  model isa Vector || (model = [model])
+  counter = Dict{DataType, Int}()
+
+  function rootselector(m::M) where M <:ReactiveModel
+    AM = Stipple.get_abstract_type(M)
+    counter[AM] = get(counter, AM, 0) + 1
+    return (counter[AM] == 1) ? vm(m) : "$(vm(m))-$(counter[AM])"
+  end
 
   layout(
     [
       join(prepend)
-      Genie.Renderer.Html.div(id = vm(M), args...; class = class, kwargs...)
+      pagetemplate([Genie.Renderer.Html.div(id = rootselector(m), ui, args[2:end]...; class = class, kwargs...) for (m, ui) in zip(model, uis)]...)
       join(append)
     ], model;
-    partial = partial, title = title, style = style, head_content = head_content, channel = channel,
-    core_theme = core_theme)
+    partial, title, style, head_content, channel, core_theme)
 end
 
 const app = page
@@ -546,6 +581,112 @@ function coretheme()
     stylesheet(Genie.Assets.asset_path(Stipple.assets_config, :css, file="stipplecore"))
 end
 
+
+"""
+Sets the app theme to the given theme. Returns the index of the theme in the `THEMES[]` array.
+"""
+function set_theme!(theme::Symbol)
+  if Stipple.Theme.THEME_INDEX[] == 0
+    push!(THEMES[], Stipple.Theme.to_asset(theme)) # automatically load the current/default theme
+    Stipple.Theme.THEME_INDEX[] = length(THEMES[]) # store the index of the current theme
+  else
+    THEMES[][Stipple.Theme.THEME_INDEX[]] = Stipple.Theme.to_asset(theme)
+  end
+
+  theme == :usertheme && ! Stipple.Theme.theme_exists(:usertheme) && register_usertheme()
+  Stipple.Theme.set_theme(theme)
+
+  try
+    read_theme_dotfile() != theme && write_theme_dotfile(theme)
+  catch ex
+    @warn "Could not write theme to dotfile: $ex"
+  end
+
+  nothing
+end
+const set_theme = set_theme!
+
+
+const THEME_DOTFILE = joinpath(".theme")
+const DEFAULT_USER_THEME_FILE = joinpath("css", Stipple.THEMES_FOLDER, "theme.css")
+const USER_THEME_WATCHER = Ref(false)
+const DOTTHEME_WATCHER = Ref(false)
+
+
+function set_user_theme_watcher() :: Bool
+  (USER_THEME_WATCHER[] || Stipple.PRECOMPILE[] || ! Genie.Configuration.isdev()) && return false
+
+  path_to_user_theme = joinpath(Genie.config.server_document_root, DEFAULT_USER_THEME_FILE)
+  @async Genie.Revise.entr([path_to_user_theme]) do
+    if ! isfile(path_to_user_theme) && Stipple.Theme.get_theme() == :usertheme
+      set_theme!(:default)
+      Stipple.Theme.unregister_theme(:usertheme)
+    end
+  end
+  USER_THEME_WATCHER[] = true
+
+  true
+end
+
+
+function set_dottheme_watcher() :: Bool
+  (DOTTHEME_WATCHER[] || Stipple.PRECOMPILE[] || ! Genie.Configuration.isdev()) && return false
+
+  @async Genie.Revise.entr([THEME_DOTFILE]) do
+    theme_from_dotfile = read_theme_dotfile()
+    if theme_from_dotfile !== nothing && Stipple.Theme.get_theme() != theme_from_dotfile
+      if theme_from_dotfile == :usertheme && ! Stipple.Theme.theme_exists(:usertheme)
+        register_usertheme()
+      end
+      set_theme!(theme_from_dotfile)
+    end
+  end
+  DOTTHEME_WATCHER[] = true
+
+  true
+end
+
+
+function read_theme_dotfile() :: Union{Symbol,Nothing}
+  if ! isfile(THEME_DOTFILE)
+    try
+      touch(THEME_DOTFILE) # create the file if it doesn't exist
+    catch ex
+      @warn "Could not create theme dotfile: $ex"
+    end
+
+    return nothing
+  end
+
+  try
+    Symbol(open(THEME_DOTFILE, "r") do file
+      read(file, String)
+    end)
+  catch
+    nothing
+  end
+end
+
+
+function write_theme_dotfile(theme::Symbol)
+  isfile(THEME_DOTFILE) || return
+
+  open(THEME_DOTFILE, "w") do file
+    write(file, string(theme))
+  end
+
+  nothing
+end
+
+
+function register_usertheme() :: Bool
+  isfile(joinpath(Genie.config.server_document_root, DEFAULT_USER_THEME_FILE)) || return false
+  register_theme(:usertheme, "/" * join(splitpath(DEFAULT_USER_THEME_FILE), "/")) # make this a relative URL
+
+  true
+end
+
+
 """
     function theme() :: String
 
@@ -569,12 +710,54 @@ function theme(; core_theme::Bool = true) :: Vector{String}
 
   core_theme && coretheme ∉ THEMES[] && push!(output, coretheme()...)
 
+  has_custom_theme = false
+  has_dottheme = false
+
+  user_theme_file = joinpath(Genie.config.server_document_root, DEFAULT_USER_THEME_FILE)
+  if isfile(user_theme_file)
+    register_usertheme()
+    has_custom_theme = true
+  end
+
+  theme_from_dotfile = read_theme_dotfile()
+  if theme_from_dotfile !== nothing && Stipple.Theme.theme_exists(theme_from_dotfile)
+    has_dottheme = true
+  end
+
+  if has_dottheme
+    set_theme!(theme_from_dotfile)
+  elseif has_custom_theme
+    set_theme!(:usertheme)
+  else
+    set_theme!(:default)
+  end
+
+  set_dottheme_watcher()
+  set_user_theme_watcher()
+
   for f in THEMES[]
-    push!(output, f()...)
+    _o = f()
+    if _o isa Vector || _o isa Tuple
+      push!(output, _o...)
+      continue
+    end
+    push!(output, _o)
   end
   
   output
 end
+
+"""
+Register a theme with a given name and path to the CSS file.
+"""
+function register_theme(name::Symbol, theme::String; apply_theme = false)
+  Stipple.Theme.register_theme(name, theme)
+  apply_theme && set_theme!(name)
+end
+function register_theme(theme::String)
+  register_theme(Symbol(theme), theme)
+end
+
 
 """
     add_css(css::Function; update = true)

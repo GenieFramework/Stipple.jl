@@ -94,7 +94,7 @@ function delete_kwarg!(expressions, kwarg::Symbol)
     else
         deleteat!(expressions, 1)
     end
-    
+
     return expressions
 end
 
@@ -108,10 +108,12 @@ end
 delete_kwarg(expressions, kwarg::Symbol) = delete_kwarg!(Any[copy(x) for x in expressions], kwarg)
 delete_kwargs(expressions, kwarg::Vector{Symbol}) = delete_kwargs!(Any[copy(x) for x in expressions], kwarg)
 
+using PrecompileTools
+
 """
     @stipple_precompile(setup, workload)
 
-A macro that facilitates the precompilation process for Stipple-related code. 
+A macro that facilitates the precompilation process for Stipple-related code.
 
 # Arguments
 - `setup`: An optional setup configuration that is required for the precompilation.
@@ -148,7 +150,7 @@ end
     # the @page macro cannot be called here, as it reilies on writing some cache files to disk
     # hence, we use a manual route definition for precompilation
 
-    route("/") do 
+    route("/") do
         model = @init PrecompileApp
         page(model, ui) |> html
     end
@@ -160,22 +162,36 @@ end
 ```
 """
 macro stipple_precompile(setup, workload)
+    # wrap @app calls in @eval to avoid precompilation errors
+    for (i, ex) in enumerate(workload.args)
+        if ex isa Expr && ex.head == :macrocall && ex.args[1] == Symbol("@app")
+            println("Found app declaration in precompilation section, wrapping in `@eval`!")
+            workload.args[i] = Expr(:macrocall, Symbol("@eval"), ex.args)
+        end
+    end
+
+    for (i, ex) in enumerate(setup.args)
+        ex isa Expr && ex.head == :call && startswith("$(ex.args[1])", "precompile_") && continue
+        if ex isa Expr && ex.head == :macrocall && ex.args[1] == Symbol("@app")
+            setup.args[i] = :(@eval $(ex))#Expr(:macrocall, Symbol("@eval"), ex.args)
+        end
+        setup.args[i] = :(esc($ex))
+    end
+
     quote
-        @setup_workload begin
-        # Putting some things in `setup` can reduce the size of the
-        # precompile file and potentially make loading faster.
-        using Genie.HTTPUtils.HTTP
-        PRECOMPILE[] = true
+        Stipple.@setup_workload begin
+        HTTP = Stipple.Genie.HTTPUtils.HTTP
+        Stipple.PRECOMPILE[] = true
 
-        esc($setup)
+        $setup
 
-        @compile_workload begin
+        Stipple.@compile_workload begin
             # all calls in this block will be precompiled, regardless of whether
             # they belong to your package or not (on Julia 1.8 and higher)
             # set secret in order to avoid automatic generation of a new one,
             # which would invalidate the precompiled file
-            Genie.Secrets.secret_token!(repeat("f", 64))
-            
+            Stipple.Genie.Secrets.secret_token!(repeat("f", 64))
+
             port = tryparse(Int, get(ENV, "STIPPLE_PRECOMPILE_PORT", ""))
             port === nothing && (port = rand(8081:8999))
             precompile_requests = tryparse(Bool, get(ENV, "STIPPLE_PRECOMPILE_REQUESTS", "true"))
@@ -188,26 +204,122 @@ macro stipple_precompile(setup, workload)
 
             precompile_get(location::String, args...; kwargs...) = precompile_request(:GET, location, args...; kwargs...)
             precompile_post(location::String, args...; kwargs...) = precompile_request(:POST, location, args...; kwargs...)
-            
-            Logging.with_logger(Logging.SimpleLogger(stdout, Logging.Error)) do
-                up(port)
-                
-                esc($workload)
 
-                down()
+            Stipple.Logging.with_logger(Stipple.Logging.SimpleLogger(stdout, Stipple.Logging.Error)) do
+                Stipple.up(port)
+
+                $workload
+
+                Stipple.down()
             end
             # reset secret back to empty string
-            Genie.Secrets.secret_token!("")
+            Stipple.Genie.Secrets.secret_token!("")
         end
-        PRECOMPILE[] = false
+        Stipple.PRECOMPILE[] = false
         end
-    end
+    end |> esc
 end
 
 macro stipple_precompile(workload)
-    quote
-        @stipple_precompile begin end begin
-            $workload
-        end
+    :(@stipple_precompile begin end begin
+        $workload
+    end) |> esc
+end
+
+"""
+    striplines!(ex::Union{Expr, Vector})
+
+Remove all line number nodes from an expression or vector of expressions. See also `striplines`.
+"""
+function striplines!(ex::Expr; recursive::Bool = false)
+  for i in reverse(eachindex(ex.args))
+    if isa(ex.args[i], LineNumberNode) && (ex.head != :macrocall || i > 1)
+      deleteat!(ex.args, i)
+    elseif isa(ex.args[i], Expr) && recursive
+      striplines!(ex.args[i])
+    end
+  end
+  ex
+end
+
+function striplines!(exprs::Vector; recursive::Bool = false)
+  for i in reverse(eachindex(exprs))
+    if isa(exprs[i], LineNumberNode)
+      deleteat!(exprs, i)
+    elseif isa(exprs[i], Expr) && recursive
+      striplines!(exprs[i])
+    end
+  end
+  exprs
+end
+
+"""
+    striplines(ex::Union{Expr, Vector})
+
+Return a copy of an expression with all line number nodes removed. See also `striplines!`.
+"""
+striplines(ex; recursive::Bool = false) = striplines!(copy(ex); recursive)
+
+
+"""
+    postwalk!(f::Function, expr::Expr)
+
+Inplace version of MacroTools.postwalk()
+"""
+function postwalk!(f::Function, expr::Expr)
+    ex = MacroTools.postwalk(f, expr)
+    expr.head = ex.head
+    expr.args = ex.args
+end
+
+"""
+    debug(field::Reactive; listener::Int = 0)
+    debug(field::Reactive, value; listener::Int = 0)
+    
+    debug(model::ReactiveModel, field::Symbol; listener::Int = 0)
+    debug(model::ReactiveModel, field::Symbol, value; listener::Int = 0)
+
+Execute a listener of a field in a `ReactiveModel` and return the result. The `index` argument can be used to select a specific listener.
+The default index is the last listener. Negative indices are counted from the end of the list of listeners.
+
+# Example
+```julia
+using Stipple, Stipple.ReactiveTools
+
+@app TestApp begin
+    @in x = 0
+    @in y = 1
+
+    @onchange x begin
+        y = x + 1
+        error("This is an error")
+        println("x changed to \$x")
+    end
+
+    @onchange x, y begin
+        println("x and y changed to \$x and \$y")
     end
 end
+
+model = @init TestApp
+debug(model.x) # passes successfully
+debug(model.x, 10; listener = -2) # returns an error including the location
+```
+"""
+function debug(field::Reactive; listener::Int = 0)
+  listeners = field.o.listeners
+  index = listener == 0 ? length(listeners) : listener
+  index < 0 && (index = length(listeners) + index + 1)
+  index <= 0 && return "index '$index' not found in listeners, there are $(length(listeners)) listeners defined"
+  listener = listeners[index][2]
+  listener isa Observables.OnAny ? listener.f(listener.args...) : listener(field[])
+end
+
+function debug(field::Reactive, value; listener::Int = 0)
+    # silent update then debug
+    field[!] = value
+    debug(field; listener)
+end
+
+debug(model::ReactiveModel, field::Symbol; listener::Int = 0) = debug(getfield(model, field); listener)
+debug(model::ReactiveModel, field::Symbol, value; listener::Int = 0) = debug(getfield(model, field), value; listener)

@@ -15,10 +15,15 @@ existing Vue.js libraries.
 """
 module Stipple
 
-using PrecompileTools
-const PRECOMPILE = Ref(false)
 const ALWAYS_REGISTER_CHANNELS = Ref(true)
 const USE_MODEL_STORAGE = Ref(true)
+const PRECOMPILE = Ref(false)
+
+import MacroTools
+
+function use_model_storage()
+  USE_MODEL_STORAGE[]
+end
 
 """
 Disables the automatic storage and retrieval of the models in the session.
@@ -98,10 +103,9 @@ export setchannel, getchannel
 isempty(methods(notify, Observables)) && (Base.notify(observable::AbstractObservable) = Observables.notify!(observable))
 
 include("ParsingTools.jl")
-USE_MODEL_STORAGE[] && include("ModelStorage.jl")
 include("NamedTuples.jl")
-
 include("stipple/reactivity.jl")
+use_model_storage() && include("ModelStorage.jl")
 include("stipple/json.jl")
 include("stipple/undefined.jl")
 include("stipple/assets.jl")
@@ -113,7 +117,7 @@ using .NamedTuples
 export JSONParser, JSONText, json, @json, jsfunction, @jsfunction_str
 
 const config = Genie.config
-const channel_js_name = "window.CHANNEL"
+const channel_js_name = "'not_assigned'"
 
 const OptDict = OrderedDict{Symbol, Any}
 opts(;kwargs...) = OptDict(kwargs...)
@@ -342,10 +346,10 @@ changed on the frontend, it is pushed over to the backend using `channel`, at a 
 function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounce::Int, model::M; jsfunction::String = "")::String where {M<:ReactiveModel}
   js_channel = isempty(channel) ?
                 "window.Genie.Settings.webchannels_default_route" :
-                (channel == Stipple.channel_js_name ? Stipple.channel_js_name : "'$channel'")
+                "$vue_app_name.channel_"
 
   isempty(jsfunction) &&
-    (jsfunction = "Genie.WebChannels.sendMessageTo($js_channel, 'watchers', {'payload': {'field':'$fieldname', 'newval': newVal, 'oldval': oldVal, 'sesstoken': document.querySelector(\"meta[name='sesstoken']\")?.getAttribute('content')}});")
+    (jsfunction = "$vue_app_name.push('$fieldname')")
 
   output = IOBuffer()
   if fieldname == :isready
@@ -359,7 +363,7 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
     print(output, debounce == 0 ?
       """
           ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true}));
-      """ : 
+      """ :
       """
           ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true}));
       """
@@ -384,7 +388,7 @@ const MODELDEPID = "!!MODEL!!"
 const CHANNELPARAM = :CHANNEL__
 
 
-function sessionid(; encrypt::Bool = true) :: String
+function sessionid(; encrypt::Bool = true) :: Union{String,Nothing}
   sessid = Stipple.ModelStorage.Sessions.GenieSession.session().id
 
   encrypt ? Genie.Encryption.encrypt(sessid) : sessid
@@ -409,10 +413,10 @@ function channeldefault(::Type{M}) where M<:ReactiveModel
 
   model_id = Symbol(Stipple.routename(M))
 
-  USE_MODEL_STORAGE[] || return nothing
+  use_model_storage() || return nothing
 
   stored_model = Stipple.ModelStorage.Sessions.GenieSession.get(model_id, nothing)
-  stored_model === nothing ? nothing : getfield(stored_model, Stipple.CHANNELFIELDNAME)
+  stored_model === nothing ? nothing : getchannel(stored_model)
 end
 
 @nospecialize
@@ -442,7 +446,7 @@ end
 
 function setmode!(dict::AbstractDict, mode, fieldnames::Symbol...)
   for fieldname in fieldnames
-    fieldname in [Stipple.CHANNELFIELDNAME, :modes__] && continue
+    fieldname ∈ Stipple.INTERNALFIELDS && continue
     mode == PUBLIC || mode == :PUBLIC ? delete!(dict, fieldname) : dict[fieldname] = Core.eval(Stipple, mode)
   end
   dict
@@ -452,16 +456,17 @@ function deletemode!(modes, fieldnames::Symbol...)
   setmode!(modes, PUBLIC, fieldnames...)
 end
 
-function init_storage()
-  ch = channelfactory()
+function init_storage(handler::Union{Nothing, Symbol, Expr} = nothing)
+  handlers = handler === nothing ? :(Function[]) : :(Function[$handler])
 
   LittleDict{Symbol, Expr}(
-    CHANNELFIELDNAME => :($(Stipple.CHANNELFIELDNAME)::$(Stipple.ChannelName) = $ch),
+    :channel__ => :(channel__::String = Stipple.channelfactory()),
     :modes__ => :(modes__::Stipple.LittleDict{Symbol,Int} = Stipple.LittleDict{Symbol,Int}()),
+    :handlers__ => :(handlers__::Vector{Function} = $handlers),
     :isready => :(isready::Stipple.R{Bool} = false),
     :isprocessing => :(isprocessing::Stipple.R{Bool} = false),
     :fileuploads => :(fileuploads::Stipple.R{Dict{AbstractString,AbstractString}} = Dict{AbstractString,AbstractString}()),
-    :ws_disconnected => :(ws_disconnected::Stipple.R{Bool} = false)
+    :ws_disconnected => :(ws_disconnected::Stipple.R{Bool} = false),
   )
 end
 
@@ -513,7 +518,7 @@ function init(t::Type{M};
   setchannel(model, channel)
 
   # make sure we store the channel name in the model
-  USE_MODEL_STORAGE[] && Stipple.ModelStorage.Sessions.store(model)
+  use_model_storage() && Stipple.ModelStorage.Sessions.store(model)
 
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
   LAST_ACTIVITY[Symbol(getchannel(model))] = now()
@@ -535,7 +540,7 @@ function init(t::Type{M};
       client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
 
       try
-        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) && USE_MODEL_STORAGE[] &&
+        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) && use_model_storage() &&
           Genie.Router.params!(Stipple.ModelStorage.Sessions.GenieSession.PARAMS_SESSION_KEY,
                                 Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
       catch ex
@@ -689,6 +694,12 @@ function Base.push!(app::M, vals::Pair{Symbol,T};
                     except::Union{Nothing,UInt,Vector{UInt}} = nothing,
                     restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T,M<:ReactiveModel}
   try
+    use_model_storage() && Stipple.ModelStorage.Sessions.store(app)
+  catch ex
+    @error ex
+  end
+
+  try
     _push!(vals, channel; except, restrict)
   catch ex
     @debug ex
@@ -758,12 +769,42 @@ const DEPS = OrderedCollections.LittleDict{Union{Any,AbstractString}, Function}(
 Registers the `routes` for all the required JavaScript dependencies (scripts).
 """
 
+const THEMES_FOLDER = "themes"
+
 @nospecialize
 
 function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool = true) :: Nothing
   if ! Genie.Assets.external_assets(assets_config)
     if core_theme
-      Genie.Assets.add_fileroute(assets_config, "stipplecore.css"; basedir = normpath(joinpath(@__DIR__, "..")))
+      Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, file="stipplecore")) do
+        Genie.Renderer.WebRenderable(
+          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", file="stipplecore")),
+          :css) |> Genie.Renderer.respond
+      end
+    end
+
+    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-light")) do
+      Genie.Renderer.WebRenderable(
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-light")),
+        :css) |> Genie.Renderer.respond
+    end
+
+    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-dark")) do
+      Genie.Renderer.WebRenderable(
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-dark")),
+        :css) |> Genie.Renderer.respond
+    end
+
+    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-light")) do
+      Genie.Renderer.WebRenderable(
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-light")),
+        :css) |> Genie.Renderer.respond
+    end
+
+    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-dark")) do
+      Genie.Renderer.WebRenderable(
+        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-dark")),
+        :css) |> Genie.Renderer.respond
     end
 
     if is_channels_webtransport()
@@ -812,11 +853,18 @@ function injectdeps(output::Vector{AbstractString}, M::Type{<:ReactiveModel}) ::
   output
 end
 
-
+# no longer needed, replaced by initscript
 function channelscript(channel::String) :: String
-  Genie.Renderer.Html.script(["window.CHANNEL = '$(channel)';"])
+  Genie.Renderer.Html.script(["""
+  document.addEventListener('DOMContentLoaded', () => window.Genie.initWebChannel('$channel') );
+  """])
 end
 
+function initscript(vue_app_name, channel) :: String
+  Genie.Renderer.Html.script(["""
+  document.addEventListener('DOMContentLoaded', () => window.create$vue_app_name('$channel') );
+  """])
+end
 
 """
     function deps(channel::String = Genie.config.webchannels_default_route)
@@ -826,7 +874,7 @@ Outputs the HTML code necessary for injecting the dependencies in the page (the 
 function deps(m::M) :: Vector{String} where {M<:ReactiveModel}
   channel = getchannel(m)
   output = [
-    channelscript(channel),
+    initscript(vm(m), channel),
     (is_channels_webtransport() ? Genie.Assets.channels_script_tag(channel) : Genie.Assets.webthreads_script_tag(channel)),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="underscore-min")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.global.prod" : "vue.global"))),
@@ -949,6 +997,14 @@ macro js_str(expr)
   :( JSONText($(esc(expr))) )
 end
 
+function mygensym(sym::Symbol, context = @__MODULE__)
+  i = 1
+  while isdefined(context, Symbol(sym, :_, i))
+    i += 1
+  end
+  Symbol(sym, :_, i)
+end
+
 """
     @kwredef(expr)
 
@@ -961,35 +1017,46 @@ macro kwredef(expr)
   expr = macroexpand(__module__, expr) # to expand @static
   expr isa Expr && expr.head === :struct || error("Invalid usage of @kwredef")
   expr = expr::Expr
-
+  
   t = expr.args; n = 2
   if t[n] isa Expr && t[n].head === :<:
-      t = t[n].args
-      n = 1
+    t = t[n].args
+    n = 1
   end
   curly = t[n] isa Expr && t[n].head === :curly
   if curly
-      t = t[n].args
-      n=1
+    t = t[n].args
+    n = 1
   end
 
-  T_old = t[n]
+  T = t[n]
 
-  if isa(T_old, Expr) && T_old.head == Symbol(".")
-    T_old = (split(string(T_old), '.')[end] |> Symbol)
+  # Revise executes macros during compilation.
+  # This leads to redefining a new struct even when the there is no change in the struct definition.
+  # Most of the resulting definitions, e.g. function / constructor definitions are rewinded to not
+  # pollute the name space, however, gensym executions cannot be rewinded, moreover Revise seems to add a
+  # an extra level in the gensym variable names, which results to stackoverflow errors in our case.
+  # Hence we define our own gensym without level nesting and we store the defining expression after successful
+  # struct definition to track whether any changes occurred.
+  #  Upon reevaluation of the same expression we reuse the existing name and avoid the stackoverflow.
+  expr_qn = QuoteNode(copy(expr))
+  expr_name = Symbol(T, :_expr)
+  already_defined = isdefined(__module__, expr_name) && @eval(__module__, $expr_name) == expr
+
+  if isa(T, Expr) && T.head == Symbol(".")
+    T = (split(string(T), '.')[end] |> Symbol)
   end
-
-  t[n] = T_new = gensym(T_old)
-
-  esc(quote
+  
+  t[n] = T_new = already_defined ? @eval(__module__, $T).name.name : mygensym(T, __module__)
+  quote
     Base.@kwdef $expr
-    $T_old = $T_new
+    $T = $T_new
     if Base.VERSION < v"1.8-"
-      $curly ? $T_new.body.name.name = $(QuoteNode(T_old)) : $T_new.name.name = $(QuoteNode(T_old)) # fix the name
+      $curly ? $T_new.body.name.name = $(QuoteNode(T)) : $T_new.name.name = $(QuoteNode(T)) # fix the name
     end
-
+    $expr_name = $expr_qn
     $T_new
-  end)
+  end |> esc
 end
 
 """
@@ -1125,7 +1192,7 @@ macro mixin_old(expr, prefix = "", postfix = "")
   values = getfield.(Ref(mix), fnames)
   output = quote end
   for (f, type, v) in zip(Symbol.(pre, fnames, post), fieldtypes(get_concrete_type(T)), values)
-    f in Symbol.(prefix, [:channel__, :modes__, AUTOFIELDS...], postfix) && continue
+    f in Symbol.(prefix, [INTERNALFIELDS..., AUTOFIELDS...], postfix) && continue
     v_copy = Stipple._deepcopy(v)
     push!(output.args, v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = $v_copy))
   end
@@ -1212,32 +1279,35 @@ end
 
 include("Typography.jl")
 include("Elements.jl")
+include("Theme.jl")
 include("Layout.jl")
 
 @reexport using .Typography
 @reexport using .Elements
+@reexport using .Theme
 @reexport using .Layout
 
+using Stipple.ReactiveTools
+
 # precompilation ...
+
+@app PrecompileApp begin
+  @in demo_i = 1
+  @out demo_s = "Hi"
+
+  @onchange demo_i begin
+    println(demo_i)
+  end
+end
 
 using Stipple.ReactiveTools
 @stipple_precompile begin
   ui() = [cell("hello"), row("world"), htmldiv("Hello World")]
 
-  @app PrecompileApp begin
-    @in demo_i = 1
-    @out demo_s = "Hi"
-
-    @onchange demo_i begin
-      println(demo_i)
-    end
-  end
-
-  route("/") do 
+  route("/") do
     model = Stipple.ReactiveTools.@init PrecompileApp
     page(model, ui) |> html
   end
-
   precompile_get("/")
   deps_routes(core_theme = true)
   precompile_get(Genie.Assets.asset_path(assets_config, :js, file = "stipplecore"))
