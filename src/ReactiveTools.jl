@@ -15,6 +15,7 @@ export @deps, @clear_deps
 
 # definition of field-specific debounce times
 export @debounce, @clear_debounce
+export @throttle, @clear_throttle
 
 # deletion
 export @clear, @clear_vars, @clear_handlers
@@ -348,6 +349,136 @@ macro clear_debounce()
   :(Stipple.debounce(Stipple.@type(), nothing)) |> esc
 end
 
+"""
+    @throttle fieldname ms
+
+    @throttle App fieldname ms
+
+Set field-specific throttle time in ms.
+### Parameters
+
+- `APP`: a subtype of ReactiveModel, e.g. `MyApp`
+- `fieldname`: fieldname òr fieldnames as written in the declaration, e.g. `x`, `(x, y, z)`
+- `ms`: throttle time in ms
+
+### Example
+#### Implicit apps
+```
+@app begin
+  @out quick = 12
+  @out slow = 12
+  @in s = "Hello"
+end
+
+# no throttling for fast messaging
+@throttle quick 0
+
+# long throttling for long-running tasks
+@throttle (slow1, slow2) 1000
+```
+#### Explicit apps
+
+```
+@app MyApp begin
+  @out quick = 12
+  @out slow = 12
+  @in s = "Hello"
+end
+
+# no throttling for fast messaging
+@throttle MyApp quick 0
+
+# long throttling for long-running tasks
+@throttle MyApp slow 1000
+```
+"""
+macro throttle(M, fieldname, ms)
+  fieldname = _prepare(fieldname)
+  :(Stipple.throttle($M, $fieldname, $ms)) |> esc
+end
+
+macro throttle(fieldname, ms)
+  fieldname = _prepare(fieldname)
+  :(Stipple.throttle(Stipple.@type(), $fieldname, $ms)) |> esc
+end
+
+"""
+    @clear_throttle
+
+    @clear_throttle fieldname
+
+    @clear_throttle App
+
+    @clear_throttle App fieldname
+
+Clear field-specific throttle time, for setting see `@throttle`.
+After calling `@clear throttle` the field will be throttled by the value given in the
+`@init` macro.
+
+
+### Example
+#### Implicit apps
+```
+@app begin
+  @out quick = 12
+  @out slow = 12
+  @in s = "Hello"
+end
+
+
+# set standard throttle time for all fields
+@page("/", ui, model = MyApp, throttle = 100)
+
+# no throttling for fast messaging
+@throttle quick 0
+@throttle slow 1000
+
+# reset to standard value of the app
+@clear_throttle quick
+
+# clear all field-specific throttle times
+@clear_throttle
+```
+#### Explicit apps
+
+```
+@app MyApp begin
+  @out quick = 12
+  @out slow = 12
+  @in s = "Hello"
+end
+
+# set standard throttle time for all fields
+@page("/", ui, model = MyApp, throttle = 100)
+
+# no throttling for fast messaging
+@throttle MyApp quick 0
+
+@clear_throttle MyApp quick
+
+# clear all field-specific throttle times
+@clear_throttle MyApp
+```
+"""
+macro clear_throttle(M, fieldname)
+  fieldname = _prepare(fieldname)
+  :(Stipple.throttle($M, $fieldname, nothing)) |> esc
+end
+
+macro clear_throttle(expr)
+  quote
+    if $expr isa DataType && $expr <: Stipple.ReactiveModel
+      Stipple.throttle($expr, nothing)
+    else
+      Stipple.throttle(Stipple.@type(), $(_prepare(expr)), nothing)
+    end
+  end |> esc
+end
+
+macro clear_throttle()
+  :(Stipple.throttle(Stipple.@type(), nothing)) |> esc
+end
+
 import Stipple: @vars
 
 macro vars(expr)
@@ -487,6 +618,7 @@ end
 
 Create a new app with the following kwargs supported:
 - `debounce::Int = JS_DEBOUNCE_TIME`
+- `throttle::Int = JS_THROTTLE_TIME`
 - `transport::Module = Genie.WebChannels`
 - `core_theme::Bool = true`
 

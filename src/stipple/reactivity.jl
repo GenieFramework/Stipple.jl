@@ -540,8 +540,15 @@ Base.string(ex::MissingPropertyException) = "Entity $entity does not have requir
 """
     const JS_DEBOUNCE_TIME
 
-Debounce time used to indicate the minimum frequency for sending data payloads to the backend (for example to batch send
+Debounce time used to indicate the minimum duration that an input must pause before a front-end change is sent to the backend (for example to batch send
 payloads when the user types into an text field, to avoid overloading the server).
 """
 const JS_DEBOUNCE_TIME = 300 #ms
+"""
+    const JS_THROTTLE_TIME
+
+Throttle time used to indicate the minimum duration before a new input signal is sent to the backend (for example to update a model variable with a
+lower frequency, to avoid overloading the server).
+"""
+const JS_THROTTLE_TIME = 0   #ms
 const SETTINGS = Settings()

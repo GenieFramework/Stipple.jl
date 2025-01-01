@@ -33,6 +33,7 @@ function Page(  route::Union{Route,String};
                 layout::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Nothing,Function} = nothing,
                 context::Module = @__MODULE__,
                 debounce::Int = Stipple.JS_DEBOUNCE_TIME,
+                throttle::Int = Stipple.JS_THROTTLE_TIME,
                 transport::Module = Stipple.WEB_TRANSPORT[],
                 core_theme::Bool = true,
                 kwargs...
@@ -42,11 +43,11 @@ function Page(  route::Union{Route,String};
             Core.eval(context, model)
           elseif isa(model, Module)
             context = model
-            () -> Stipple.ReactiveTools.init_model(context; debounce, transport, core_theme)
+            () -> Stipple.ReactiveTools.init_model(context; debounce, throttle, transport, core_theme)
           elseif model isa DataType
             # as model is being redefined, we need to create a copy
             mymodel = model
-            () -> Stipple.ReactiveTools.init_model(mymodel; debounce, transport, core_theme)
+            () -> Stipple.ReactiveTools.init_model(mymodel; debounce, throttle, transport, core_theme)
           else
             model
           end

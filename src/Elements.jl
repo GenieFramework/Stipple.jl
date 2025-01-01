@@ -128,6 +128,7 @@ function vue_integration(::Type{M};
                           vue_app_name::String = "StippleApp",
                           core_theme::Bool = true,
                           debounce::Int = Stipple.JS_DEBOUNCE_TIME,
+                          throttle::Int = Stipple.JS_THROTTLE_TIME,
                           transport::Module = Genie.WebChannels)::String where {M<:ReactiveModel}
   model = Base.invokelatest(M)
   vue_app = json(model |> Stipple.render)
@@ -213,7 +214,7 @@ function vue_integration(::Type{M};
     function initWatchers$vue_app_name(app){
     """,
     join(
-      [Stipple.watch("app", field, Stipple.channel_js_name, debounce, model) for field in fieldnames(Stipple.get_concrete_type(M))
+      [Stipple.watch("app", field, Stipple.channel_js_name, debounce, throttle, model) for field in fieldnames(Stipple.get_concrete_type(M))
         if Stipple.has_frontend_watcher(field, model)]
     ),
 

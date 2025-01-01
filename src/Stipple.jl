@@ -130,6 +130,7 @@ const PURGE_NUMBER_LIMIT = Ref(1000)
 const PURGE_CHECK_DELAY = Ref(60)
 
 const DEBOUNCE = LittleDict{Type{<:ReactiveModel}, LittleDict{Symbol, Any}}()
+const THROTTLE = LittleDict{Type{<:ReactiveModel}, LittleDict{Symbol, Any}}()
 
 """
     debounce(M::Type{<:ReactiveModel}, fieldnames::Union{Symbol, Vector{Symbol}}, debounce::Union{Int, Nothing} = nothing)
@@ -162,6 +163,39 @@ function debounce(M::Type{<:ReactiveModel}, fieldnames::Union{Symbol, Vector{Sym
 end
 
 debounce(M::Type{<:ReactiveModel}, ::Nothing) = delete!(DEBOUNCE, M)
+
+import Observables.throttle
+"""
+    throttle(M::Type{<:ReactiveModel}, fieldnames::Union{Symbol, Vector{Symbol}}, debounce::Union{Int, Nothing} = nothing)
+
+Add field-specific debounce times.
+"""
+function throttle(M::Type{<:ReactiveModel}, fieldnames::Union{Symbol, Vector{Symbol}, NTuple{N, Symbol} where N}, throttle::Union{Int, Nothing} = nothing)
+  if throttle === nothing
+    haskey(THROTTLE, M) || return
+    d = THROTTLE[M]
+    if fieldnames isa Symbol
+      delete!(d, fieldnames)
+    else
+      for v in fieldnames
+        delete!(d, v)
+      end
+    end
+    isempty(d) && delete!(THROTTLE, M)
+  else
+    d = get!(LittleDict{Symbol, Any}, THROTTLE, M)
+    if fieldnames isa Symbol
+      d[fieldnames] = throttle
+    else
+      for v in fieldnames
+        d[v] = throttle
+      end
+    end
+  end
+  return
+end
+
+throttle(M::Type{<:ReactiveModel}, ::Nothing) = delete!(THROTTLE, M)
 
 """
 `function sorted_channels()`
@@ -343,7 +377,7 @@ include("stipple/mutators.jl")
 Sets up default Vue.js watchers so that when the value `fieldname` of type `fieldtype` in model `vue_app_name` is
 changed on the frontend, it is pushed over to the backend using `channel`, at a `debounce` minimum time interval.
 """
-function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounce::Int, model::M; jsfunction::String = "")::String where {M<:ReactiveModel}
+function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounce::Int, throttle::Int, model::M; jsfunction::String = "")::String where {M<:ReactiveModel}
   js_channel = isempty(channel) ?
                 "window.Genie.Settings.webchannels_default_route" :
                 "$vue_app_name.channel_"
@@ -360,14 +394,13 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
   else
     AM = get_abstract_type(M)
     debounce = get(get(DEBOUNCE, AM, Dict{Symbol, Any}()), fieldname, debounce)
-    print(output, debounce == 0 ?
-      """
-          ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true}));
-      """ :
-      """
-          ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, _.debounce(function(newVal, oldVal){$jsfunction}, $debounce), {deep: true}));
-      """
-    )
+    throttle = get(get(THROTTLE, AM, Dict{Symbol, Any}()), fieldname, throttle)
+    fn = "function(newVal, oldVal){$jsfunction}"
+    throttle > 0 && (fn = "_.throttle($fn, $throttle)")
+    debounce > 0 && (fn = "_.debounce($fn, $debounce)")
+    print(output, """
+        ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, $fn, {deep: true}));
+    """)
   end
 
   String(take!(output))
@@ -485,6 +518,7 @@ end
                     endpoint::S = vue_app_name,
                     channel::Union{Any,Nothing} = nothing,
                     debounce::Int = JS_DEBOUNCE_TIME,
+                    throttle::Int = JS_THROTTLE_TIME,
                     transport::Module = Genie.WebChannels,
                     core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
 
@@ -502,6 +536,7 @@ function init(t::Type{M};
               endpoint::S = vue_app_name,
               channel::Union{Any,Nothing} = channeldefault(t),
               debounce::Int = JS_DEBOUNCE_TIME,
+              throttle::Int = JS_THROTTLE_TIME,
               transport::Module = Genie.WebChannels,
               core_theme::Bool = true,
               always_register_channels::Bool = ALWAYS_REGISTER_CHANNELS[])::M where {M<:ReactiveModel, S<:AbstractString}
@@ -613,7 +648,7 @@ function init(t::Type{M};
     end
   end
 
-  haskey(DEPS, AM) || (DEPS[AM] = stipple_deps(AM, vue_app_name, debounce, core_theme, endpoint, transport))
+  haskey(DEPS, AM) || (DEPS[AM] = stipple_deps(AM, vue_app_name, debounce, throttle, core_theme, endpoint, transport))
 
   setup(model, channel)
 end
@@ -624,12 +659,12 @@ function routename(::Type{M}) where M<:ReactiveModel
   replace(s, r"[^0-9a-zA-Z_]+" => "")
 end
 
-function stipple_deps(::Type{M}, vue_app_name, debounce, core_theme, endpoint, transport)::Function where {M<:ReactiveModel}
+function stipple_deps(::Type{M}, vue_app_name, debounce, throttle, core_theme, endpoint, transport)::Function where {M<:ReactiveModel}
   () -> begin
     if ! Genie.Assets.external_assets(assets_config)
       if ! Genie.Router.isroute(Symbol(routename(M)))
         Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file = endpoint), named = Symbol(routename(M))) do
-          Stipple.Elements.vue_integration(M; vue_app_name, debounce, core_theme, transport) |> Genie.Renderer.Js.js
+          Stipple.Elements.vue_integration(M; vue_app_name, debounce, throttle, core_theme, transport) |> Genie.Renderer.Js.js
         end
       end
     end
