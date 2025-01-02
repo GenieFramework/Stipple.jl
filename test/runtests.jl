@@ -621,7 +621,7 @@ end
     @test exported_values[:s] == "Hello"
     @test exported_values[:x] == 4
 
-    values_json = JSON3.write(exported_values)
+    values_json = Stipple.json(exported_values)
     exported_values_json = Stipple.ModelStorage.model_values(model, json = true)
     @test values_json == exported_values_json
 
@@ -631,7 +631,7 @@ end
     @test model.s[] == "world"
     @test model.x[] == 5
 
-    values_json = Dict(:i => 30, :s => "zero", :x => 50) |> JSON3.write |> string
+    values_json = Dict(:i => 30, :s => "zero", :x => 50) |> Stipple.json |> string
     Stipple.ModelStorage.load_model_values!(model, values_json)
     @test model.i[] == 30
     @test model.s[] == "zero"

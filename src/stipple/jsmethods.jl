@@ -211,6 +211,31 @@ function js_add_reviver(revivername::String)
 end
 
 """
+    js_add_serializer(serializername::String)
+
+Add a serializer function to the list of Genie's serializers.
+
+This function is meant for package developer who want to make additional js content available for the user.
+This resulting script needs to be added to the dependencies of an app in order to be executed.
+
+If you want to add a custom serializer to your model you should rather consider using `@mounted`, e.g.
+
+```julia
+@methods \"\"\"
+myserializer: function(value) { return value + 1 }
+\"\"\"
+@mounted "Genie.Serializers.addSerializer(this.myserializer)"
+```
+"""
+function js_add_serializer(serializername::String)
+  """
+  document.addEventListener('DOMContentLoaded', () => Genie.WebChannels.subscriptionHandlers.push(function(event) {
+      Genie.Serializers.addSerializer($serializername);
+  }));
+  """
+end
+
+"""
     js_initscript(initscript::String)
 
 Add a js script that is executed as soon as the connection to the server is established.

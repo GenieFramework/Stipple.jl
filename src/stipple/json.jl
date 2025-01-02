@@ -1,5 +1,8 @@
 const JSONParser = JSON3
-const json = JSON3.write
+
+# for inf values no reviver is necessary, but
+stipple_inf_mapping(x) = x == Inf ? "1e1000" : x == -Inf ? "-1e1000" : "\"__nan__\""
+json(args; inf_mapping::Function = stipple_inf_mapping, kwargs...) = JSON3.write(args; inf_mapping, kwargs...)
 
 struct JSONText
   s::String

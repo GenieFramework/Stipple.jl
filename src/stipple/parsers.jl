@@ -75,7 +75,15 @@ end
 
 #String to AbstractFloat
 function stipple_parse(::Type{T}, value::String) where T<:AbstractFloat
-  Base.parse(T, value)
+  if value == "__nan__"
+    NaN
+  elseif value == "__inf__"
+    Inf
+  elseif value == "__neginf__"
+    -Inf
+  else
+    Base.parse(T, value)
+  end
 end
 
 # Union with Nothing

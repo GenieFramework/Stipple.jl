@@ -142,7 +142,7 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
   end
 
   # convert :data to () => ({   })
-  data = JSON3.write(merge(result, client_data(app)))
+  data = json(merge(result, client_data(app)))
 
   vue = Dict(
     :mixins => JSONText("[watcherMixin, reviveMixin, eventMixin, filterMixin]"),
