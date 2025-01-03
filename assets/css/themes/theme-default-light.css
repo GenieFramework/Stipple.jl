@@ -202,6 +202,11 @@
       min-height: 36px;
       color: var(--st-text-2);
     }
+    .q-textarea {
+      .q-field__control, .q-field--auto-height .q-field__control, .q-field__marginal {
+        height: auto;
+      }
+    }
   
     .q-field--auto-height.q-field--labeled .q-field__control-container {
       padding-top: 0;
