@@ -153,7 +153,13 @@ end
 """
 abstract type ReactiveModel end
 
-export @vars, @define_mixin, @clear_cache, clear_cache, @clear_route, clear_route
+struct Mixin
+  mixin::Union{Expr, Symbol, QuoteNode}
+  prefix::String
+  postfix::String
+end
+
+export @vars, @define_mixin, @clear_cache, clear_cache, @clear_route, clear_route, @mixin
 
 export getchannel
 
@@ -422,6 +428,10 @@ function parse_mixin_params(params)
   mixin, prefix, postfix
 end
 
+macro mixin(expr...)
+  Mixin(parse_mixin_params(collect(expr))...)
+end
+
 function add_brackets!(expr, varnames)
   expr isa Expr || return expr
   ex = Stipple.find_assignment(expr)
@@ -442,13 +452,15 @@ function add_brackets!(expr, varnames)
   expr
 end
 
-macro var_storage(expr)
+macro var_storage(expr, handler = nothing)
   m = __module__
-  if expr.head != :block
-      expr = quote $expr end
+
+  expr = macroexpand(m, expr) |> MacroTools.flatten
+  if !isa(expr, Expr) || expr.head != :block
+    expr = quote $expr end
   end
 
-  storage = init_storage()
+  storage = init_storage(handler)
 
   source = nothing
   required_vars = Set()
@@ -457,16 +469,16 @@ macro var_storage(expr)
   add_brackets!.(expr.args, Ref(required_vars))
   for e in expr.args
       if e isa LineNumberNode
-          source = e
-          continue
+        source = e
+        continue
       end
       mode = :PUBLIC
       reactive = true
-      if e.head == :(=)
+      if e isa Expr && e.head == :(=)
         #check whether flags are set
         if e.args[end] isa Expr && e.args[end].head == :tuple
           flags = e.args[end].args[2:end]
-          if length(flags) > 0 && flags[1] ∈ [:READONLY, :PRIVATE, :JSFUNCTION, :NON_REACTIVE]
+          if length(flags) > 0 && flags[1] ∈ [:PUBLIC, :READONLY, :PRIVATE, :JSFUNCTION, :NON_REACTIVE]
             newmode = intersect(setdiff(flags, [:NON_REACTIVE]), [:READONLY, :PRIVATE, :JSFUNCTION])
             length(newmode) > 0 && (mode = newmode[end])
             reactive = :NON_REACTIVE ∉ flags
@@ -482,25 +494,36 @@ macro var_storage(expr)
 
         storage[var] = ex
       else
-        # parse @mixin call, which is now only defined in ReactiveTools, but wouldn't work here
-        if e.head == :macrocall && (e.args[1] == Symbol("@mixin") || e.args[1] == Symbol("@mix_in"))
-          # e.args = filter!(x -> ! isa(x, LineNumberNode), e.args)
-          # prefix = postfix = ""
-          # if e.args[2] isa Expr && e.args[2].head == :(::)
-          #   prefix = string(e.args[2].args[1])
-          #   e.args[2] = e.args[2].args[2]
-          # else
-          #   length(e.args) ≥ 3 && (prefix = string(e.args[3]))
-          #   length(e.args) ≥ 4 && (postfix = string(e.args[4]))
-          # end
+        if e isa Mixin
+          mixin, prefix, postfix = e.mixin, e.prefix, e.postfix
+          mixin_storage = Stipple.var_to_storage(@eval(m, $mixin), prefix, postfix; mixin_name = mixin)
 
-          # mixin = e.args[2]
-          params = e.args[2:end]
-          mixin, prefix, postfix = parse_mixin_params(params)
-          mixin_storage = Stipple.var_to_storage(@eval(__module__, $mixin), prefix, postfix; mixin_name = mixin)
+          pre_length = lastindex(prefix)
+          post_length = lastindex(postfix)
       
-#          mixin_storage = Stipple.var_to_storage(@eval(__module__, $mixin), prefix, postfix; mixin_name = mixin)
-          storage = merge_storage(storage, mixin_storage; context = __module__)
+          handlers_expr_name = Symbol(mixin, :var"!_handlers_expr")
+          handlers_expr = if pre_length + post_length > 0 && isdefined(m, handlers_expr_name)
+            varnames = setdiff(collect(keys(mixin_storage)), Stipple.AUTOFIELDS, Stipple.INTERNALFIELDS)
+            oldvarnames = [Symbol("$var"[1 + pre_length:end-post_length]) for var in varnames]
+      
+            handlers_expr = @eval(m, $handlers_expr_name)
+            for h in handlers_expr
+              h isa Expr || continue
+              postwalk!(h) do x
+                if x isa Symbol && x ∈ oldvarnames
+                  Symbol(prefix, x, postfix)
+                elseif x isa QuoteNode && x.value isa Symbol && x.value ∈ oldvarnames
+                  QuoteNode(Symbol(prefix, x.value, postfix))
+                else
+                  x
+                end
+              end
+            end
+            vcat([prefix, postfix], handlers_expr)
+          else
+            nothing
+          end
+          merge!(storage, merge_storage(storage, mixin_storage; context = m, handlers_expr))
         end
         :modes__, e
       end
