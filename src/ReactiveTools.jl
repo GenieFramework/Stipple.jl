@@ -5,7 +5,7 @@ using MacroTools
 using MacroTools: postwalk
 using OrderedCollections
 import Genie
-import Stipple: deletemode!, parse_expression!, parse_expression, init_storage, striplines, striplines!, postwalk!
+import Stipple: deletemode!, parse_expression!, parse_expression, init_storage, striplines, striplines!, postwalk!, add_brackets!, required_evals!, parse_mixin_params
 
 #definition of handlers/events
 export @onchange, @onbutton, @event, @notify
@@ -538,22 +538,6 @@ macro define_var()
   end |> esc
 end
 
-function parse_mixin_params(params)
-  striplines!(params)
-  mixin, prefix, postfix = if length(params) == 1 && params[1] isa Expr && hasproperty(params[1], :head) && params[1].head == :(::)
-    params[1].args[2], string(params[1].args[1]), ""
-  elseif length(params) == 1
-    params[1], "", ""
-  elseif length(params) == 2
-    params[1], string(params[2]), ""
-  elseif length(params) == 3
-    params[1], string(params[2]), string(params[3])
-  else
-    error("1, 2, or 3 arguments expected, found $(length(params))")
-  end
-  mixin, prefix, postfix
-end
-
 function parse_macros(expr::Expr, storage::LittleDict, m::Module, let_block::Expr = nothing, vars::Set = Set())
   expr.head == :macrocall || return expr
   flag = :nothing
@@ -562,7 +546,7 @@ function parse_macros(expr::Expr, storage::LittleDict, m::Module, let_block::Exp
 
   source = filter(x -> x isa LineNumberNode, expr.args)
   source = isempty(source) ? "" : last(source)
-  striplines!(expr)
+  expr = striplines(expr)
   params = expr.args[2:end]
 
   if fn != :mixin
@@ -579,7 +563,7 @@ function parse_macros(expr::Expr, storage::LittleDict, m::Module, let_block::Exp
     storage[var] = ex
   elseif fn == :mixin
     mixin, prefix, postfix = parse_mixin_params(params)
-    mixin_storage = Stipple.model_to_storage(@eval(m, $mixin), prefix, postfix)
+    mixin_storage = Stipple.var_to_storage(@eval(m, $mixin), prefix, postfix; mixin_name = mixin)
     pre_length = lastindex(prefix)
     post_length = lastindex(postfix)
 
@@ -713,7 +697,9 @@ function get_varnames(app_expr::Vector, context::Module)
           push!(varnames, res isa Symbol ? res : res[1])
       elseif ex.args[1] == Symbol("@mixin")
           mixin, prefix, postfix = parse_mixin_params(ex.args[2:end])
-          fnames = setdiff(@eval(context, collect($mixin isa LittleDict ? keys($mixin) : propertynames($mixin()))), Stipple.AUTOFIELDS, Stipple.INTERNALFIELDS)
+          mixin_val = @eval(context, $mixin)
+          mixin_val isa DataType && mixin_val <: ReactiveModel && (mixin_val = Stipple.get_concrete_type(mixin_val))
+          fnames = setdiff(collect(mixin_val isa LittleDict ? keys(mixin_val) : mixin_val isa DataType ? fieldnames(mixin_val) : propertynames(mixin_val)), Stipple.AUTOFIELDS, Stipple.INTERNALFIELDS)
           prefix === nothing || (fnames = Symbol.(prefix, fnames, postfix))
           append!(varnames, fnames)
       end
@@ -723,26 +709,6 @@ function get_varnames(app_expr::Vector, context::Module)
     @warn "Duplicate field names detected: $(join(duplicates, ", "))"
   end
   varnames
-end
-
-function add_brackets!(expr, varnames)
-  expr isa Expr || return expr
-  ex = Stipple.find_assignment(expr)
-  ex === nothing && return expr
-  val = ex.args[end]
-  if val isa Symbol && val ∈ varnames
-    ex.args[end] = :($val[])
-    return expr
-  elseif val isa Expr
-    postwalk!(val) do x
-      if x isa Symbol && x ∈ varnames
-        :($x[])
-      else
-        x
-      end
-    end
-  end
-  expr
 end
 
 macro app(typename, expr, handlers_fn_name = Symbol(typename, :_handlers), mixin = false)
@@ -801,7 +767,7 @@ macro handlers(typename, expr, handlers_fn_name = Symbol(typename, :_handlers), 
   filter!(x -> !isa(x, LineNumberNode), initcode)
   let_block = Expr(:block, :(_ = 0))
   required_vars = Set()
-  Stipple.required_evals!.(initcode, Ref(required_vars))
+  required_evals!.(initcode, Ref(required_vars))
   parse_macros.(initcode, Ref(storage), Ref(__module__), Ref(let_block), Ref(required_vars))
   # if no initcode is provided and typename is already defined, don't overwrite the existing type and just declare the handlers function
   initcode_final = isempty(initcode) && isdefined(__module__, typename) ? Expr(:block) : :(Stipple.@type($typename, $storage))

@@ -184,14 +184,46 @@ function split_expr(expr)
   expr.args[1] isa Symbol ? (expr.args[1], nothing, expr.args[2]) : (expr.args[1].args[1], expr.args[1].args[2], expr.args[2])
 end
 
-function model_to_storage(::Type{T}, prefix = "", postfix = "") where T# <: ReactiveModel
-  M = T <: ReactiveModel ? get_concrete_type(T) : T
-  fields = fieldnames(M)
-  values = getfield.(Ref(M()), fields)
+function expr_isa_var(ex)
+  ex isa Symbol && return true
+  while ex isa Expr
+    if ex.head == :call && ex.args[1] in (:getfield, :getproperty) || ex.head == :.
+      ex = ex.args[2]
+    else
+      return false
+    end
+  end
+
+  return ex isa QuoteNode && ex.value isa Symbol
+end
+
+function var_to_storage(T, prefix = "", postfix = ""; mode = READONLY, mixin_name = nothing)
+  M, m = if T isa DataType
+    T <: ReactiveModel && (T = get_concrete_type(T))
+    T, T()
+  else
+    typeof(T), T
+  end
+
+  fields = collect(fieldnames(M))
+  values = Any[getfield.(Ref(m), fields)...]
+  ftypes = Any[fieldtypes(M)...]
+  has_reactives = any(ftypes .<: Reactive)
+
+  # if m has no reactive fields, we assume that all fields should be made reactive, default mode is READONLY
+  if !has_reactives
+    for (i, (f, type, v)) in enumerate(zip(fields, values, ftypes, values))
+      f in [INTERNALFIELDS..., AUTOFIELDS...] && continue
+      rtype = Reactive{type}
+      ftypes[i] = rtype
+      values[i] = expr_isa_var(mixin_name) ? Expr(:call, rtype, Expr(:., mixin_name, QuoteNode(f)), mode) : rtype(v, mode)
+    end
+  end
   storage = LittleDict{Symbol, Expr}()
-  for (f, type, v) in zip(fields, fieldtypes(M), values)
+  for (f, type, v) in zip(fields, ftypes, values)
     f = f in [INTERNALFIELDS..., AUTOFIELDS...] ? f : Symbol(prefix, f, postfix)
-    storage[f] = v isa Symbol ? :($f::$type = $(QuoteNode(v))) : :($f::$type = Stipple._deepcopy($v))
+    v isa Symbol && (v = QuoteNode(v))
+    storage[f] = v isa QuoteNode || v isa Expr ? :($f::$type = $v) : :($f::$type = Stipple._deepcopy($v))
   end
   # fix channel field, which is not reconstructed properly by the code above
   storage[:channel__] = :(channel__::String = Stipple.channelfactory())
@@ -374,6 +406,42 @@ end
 
 parse_expression(expr::Expr, mode = nothing, source = nothing, m = nothing, let_block::Union{Expr, Nothing} = nothing, vars::Set = Set()) = parse_expression!(copy(expr), mode, source, m, let_block, vars)
 
+function parse_mixin_params(params)
+  striplines!(params)
+  mixin, prefix, postfix = if length(params) == 1 && params[1] isa Expr && hasproperty(params[1], :head) && params[1].head == :(::)
+    params[1].args[2], string(params[1].args[1]), ""
+  elseif length(params) == 1
+    params[1], "", ""
+  elseif length(params) == 2
+    params[1], string(params[2]), ""
+  elseif length(params) == 3
+    params[1], string(params[2]), string(params[3])
+  else
+    error("1, 2, or 3 arguments expected, found $(length(params))")
+  end
+  mixin, prefix, postfix
+end
+
+function add_brackets!(expr, varnames)
+  expr isa Expr || return expr
+  ex = Stipple.find_assignment(expr)
+  ex === nothing && return expr
+  val = ex.args[end]
+  if val isa Symbol && val ∈ varnames
+    ex.args[end] = :($val[])
+    return expr
+  elseif val isa Expr
+    postwalk!(val) do x
+      if x isa Symbol && x ∈ varnames
+        :($x[])
+      else
+        x
+      end
+    end
+  end
+  expr
+end
+
 macro var_storage(expr)
   m = __module__
   if expr.head != :block
@@ -386,6 +454,7 @@ macro var_storage(expr)
   required_vars = Set()
   let_block = Expr(:block, :(_ = 0))
   required_evals!.(expr.args, Ref(required_vars))
+  add_brackets!.(expr.args, Ref(required_vars))
   for e in expr.args
       if e isa LineNumberNode
           source = e
@@ -415,17 +484,22 @@ macro var_storage(expr)
       else
         # parse @mixin call, which is now only defined in ReactiveTools, but wouldn't work here
         if e.head == :macrocall && (e.args[1] == Symbol("@mixin") || e.args[1] == Symbol("@mix_in"))
-          e.args = filter!(x -> ! isa(x, LineNumberNode), e.args)
-          prefix = postfix = ""
-          if e.args[2] isa Expr && e.args[2].head == :(::)
-            prefix = string(e.args[2].args[1])
-            e.args[2] = e.args[2].args[2]
-          else
-            length(e.args) ≥ 3 && (prefix = string(e.args[3]))
-            length(e.args) ≥ 4 && (postfix = string(e.args[4]))
-          end
+          # e.args = filter!(x -> ! isa(x, LineNumberNode), e.args)
+          # prefix = postfix = ""
+          # if e.args[2] isa Expr && e.args[2].head == :(::)
+          #   prefix = string(e.args[2].args[1])
+          #   e.args[2] = e.args[2].args[2]
+          # else
+          #   length(e.args) ≥ 3 && (prefix = string(e.args[3]))
+          #   length(e.args) ≥ 4 && (postfix = string(e.args[4]))
+          # end
 
-          mixin_storage = @eval __module__ Stipple.model_to_storage($(e.args[2]), $prefix, $postfix)
+          # mixin = e.args[2]
+          params = e.args[2:end]
+          mixin, prefix, postfix = parse_mixin_params(params)
+          mixin_storage = Stipple.var_to_storage(@eval(__module__, $mixin), prefix, postfix; mixin_name = mixin)
+      
+#          mixin_storage = Stipple.var_to_storage(@eval(__module__, $mixin), prefix, postfix; mixin_name = mixin)
           storage = merge_storage(storage, mixin_storage; context = __module__)
         end
         :modes__, e
