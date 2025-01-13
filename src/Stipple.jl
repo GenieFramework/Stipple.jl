@@ -674,7 +674,7 @@ function stipple_deps(::Type{M}, vue_app_name, debounce, throttle, core_theme, e
         Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file = vue_app_name), defer = true)
       else
         Genie.Renderer.Html.script([
-          (Stipple.Elements.vue_integration(M; vue_app_name, core_theme, debounce) |> Genie.Renderer.Js.js).body |> String
+          (Stipple.Elements.vue_integration(M; vue_app_name, debounce, throttle, core_theme, transport) |> Genie.Renderer.Js.js).body |> String
         ])
       end
     ]
@@ -798,16 +798,16 @@ include("stipple/jsintegration.jl")
 import OrderedCollections
 const DEPS = OrderedCollections.LittleDict{Union{Any,AbstractString}, Function}()
 
-"""
-    function deps_routes(channel::String = Genie.config.webchannels_default_route) :: Nothing
-
-Registers the `routes` for all the required JavaScript dependencies (scripts).
-"""
 
 const THEMES_FOLDER = "themes"
 
 @nospecialize
 
+"""
+    function deps_routes(channel::String = Genie.config.webchannels_default_route) :: Nothing
+
+Registers the `routes` for all the required JavaScript dependencies (scripts).
+"""
 function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool = true) :: Nothing
   if ! Genie.Assets.external_assets(assets_config)
     if core_theme
