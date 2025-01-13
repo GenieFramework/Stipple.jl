@@ -212,11 +212,11 @@ function var_to_storage(T, prefix = "", postfix = ""; mode = READONLY, mixin_nam
 
   # if m has no reactive fields, we assume that all fields should be made reactive, default mode is READONLY
   if !has_reactives
-    for (i, (f, type, v)) in enumerate(zip(fields, values, ftypes, values))
+    for (i, (f, type, v)) in enumerate(zip(fields, ftypes, values))
       f in [INTERNALFIELDS..., AUTOFIELDS...] && continue
       rtype = Reactive{type}
       ftypes[i] = rtype
-      values[i] = expr_isa_var(mixin_name) ? Expr(:call, rtype, Expr(:., mixin_name, QuoteNode(f)), mode) : rtype(v, mode)
+      values[i] = !isa(T, DataType) && expr_isa_var(mixin_name) ? Expr(:call, rtype, Expr(:., mixin_name, QuoteNode(f)), mode) : rtype(v, mode)
     end
   end
   storage = LittleDict{Symbol, Expr}()
