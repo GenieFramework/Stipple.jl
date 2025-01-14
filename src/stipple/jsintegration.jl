@@ -1,3 +1,27 @@
+struct JSFunction
+  arguments::String
+  body::String
+end
+
+JSFunction(s::Symbol...; body = "") = JSFunction(join(s, ", "), "$body")
+JSFunction(s1::Symbol, body::Union{AbstractString, JSONText} = "") = JSFunction("$s1", "$body")
+JSFunction(s1::Symbol, s2::Symbol, body::Union{AbstractString, JSONText} = "") = JSFunction(join([s1, s2], ", "), "$body")
+JSFunction(s1::Symbol, s2::Symbol, s3::Symbol, body::Union{AbstractString, JSONText} = "") = JSFunction(join([s1, s2, s3], ", "), "$body")
+JSFunction(s1::Symbol, s2::Symbol, s3::Symbol, s4::Symbol, body::Union{AbstractString, JSONText} = "") = JSFunction(join([s1, s2, s3, s4], ", "), "$body")
+
+StructTypes.StructType(::Type{JSFunction}) = StructTypes.CustomStruct()
+StructTypes.lower(jsfunc::JSFunction) = Dict(:jsfunction => OrderedDict(:arguments => jsfunc.arguments, :body => jsfunc.body))
+
+function Stipple.render(jsfunc::JSFunction)
+  opts(jsfunction = opts(arguments = jsfunc.arguments; body = jsfunc.body))
+end
+
+function Stipple.jsrender(jsfunc::JSFunction, args...)
+  body = rstrip(jsfunc.body)
+  body = contains(body, '\n') ? "\n$body\n" : " $body "
+  JSONText("function($(jsfunc.arguments)) {$body}")
+end
+
 """
     function parse_jsfunction(s::AbstractString)
 
@@ -16,7 +40,7 @@ function parse_jsfunction(s::AbstractString)
     # if pure function body is without curly brackets, add a `return`, otherwise strip the brackets
     # Note: for utf-8 strings m[2][2:end-1] will fail if the string ends with a wide character, e.g. ϕ
     body = startswith(m[2], "{") ? m[2][2:prevind(m[2], lastindex(m[2]))] : "return " * m[2]
-    return opts(arguments=m[1], body=body)
+    return JSFunction(m[1], body)
 end
 
 """
@@ -69,8 +93,7 @@ There is also a string macro version `jsfunction"<js code>"`
 """
 function jsfunction(jscode::String)
   jsfunc = parse_jsfunction(jscode)
-  isnothing(jsfunc) && (jsfunc = opts(arguments = "", body = jscode) )
-  opts(jsfunction = jsfunc)
+  isnothing(jsfunc) ? JSFunction("", jscode) : jsfunc
 end
 
 """

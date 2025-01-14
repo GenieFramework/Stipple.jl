@@ -11,6 +11,11 @@ end
 JSONText(sym::Symbol) = JSONText(String(sym))
 JSONText(js::JSONText) = js
 
+Base.string(js::JSONText) = js.s
+Base.:(*)(js::JSONText, x) = js.s * x
+Base.:(*)(x, js::JSONText) = x * js.s
+Base.:(*)(js1::JSONText, js2::JSONText) = JSONText(js1.s * js2.s)
+
 @inline StructTypes.StructType(::Type{JSONText}) = JSON3.RawType()
 @inline StructTypes.construct(::Type{JSONText}, x::JSON3.RawValue) = JSONText(string(x))
 @inline JSON3.rawbytes(x::JSONText) = codeunits(x.s)

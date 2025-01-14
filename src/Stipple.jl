@@ -114,7 +114,7 @@ include("stipple/print.jl")
 
 using .NamedTuples
 
-export JSONParser, JSONText, json, @json, jsfunction, @jsfunction_str
+export JSONParser, JSONText, json, @json, jsfunction, @jsfunction_str, JSFunction
 
 const config = Genie.config
 const channel_js_name = "'not_assigned'"
