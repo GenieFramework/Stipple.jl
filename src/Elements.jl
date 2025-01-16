@@ -123,14 +123,16 @@ function vue_integration(::Type{M};
       }
   };
 
-  if ( window.autorun === undefined || window.autorun === true ) {
-    initStipple('#$vue_app_name');
-    initWatchers();
+  window.addEventListener('load', function() {
+    if ( window.autorun === undefined || window.autorun === true ) {
+      initStipple('#$vue_app_name');
+      initWatchers();
 
-    Genie.WebChannels.subscriptionHandlers.push(function(event) {
-      app_ready();
-    });
-  }
+      Genie.WebChannels.subscriptionHandlers.push(function(event) {
+        app_ready();
+      });
+    }
+  });
   """
   )
 
