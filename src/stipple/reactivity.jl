@@ -347,7 +347,7 @@ function let_eval!(expr, let_block, m::Module, is_non_reactive::Bool = true)
 end
 
 # deterimine the variables that need to be evaluated to infer the type of the variable
-function required_evals!(expr, vars::Set)
+function required_evals!(expr, vars::Set, all_vars::Set)
   expr isa LineNumberNode && return vars
   expr = find_assignment(expr)
   # @mixin statements are currently not evaluated
@@ -355,9 +355,13 @@ function required_evals!(expr, vars::Set)
   if expr.args[1] isa Symbol
     x = expr.args[1]
     push!(vars, x)
+    push!(all_vars, x)
+  elseif expr.args[1] isa Expr && expr.args[1].head == :(::)
+    x = expr.args[1].args[1]
+    push!(all_vars, x)
   end
   MacroTools.postwalk(expr.args[end]) do ex
-    MacroTools.@capture(ex, x_[]) && push!(vars, x)
+    MacroTools.@capture(ex, x_[]) && x ∈ all_vars && push!(vars, x)
     ex
   end
   return vars
@@ -454,7 +458,6 @@ end
 
 macro var_storage(expr, handler = nothing)
   m = __module__
-
   expr = macroexpand(m, expr) |> MacroTools.flatten
   if !isa(expr, Expr) || expr.head != :block
     expr = quote $expr end
@@ -464,8 +467,9 @@ macro var_storage(expr, handler = nothing)
 
   source = nothing
   required_vars = Set()
+  all_vars = Set()
   let_block = Expr(:block, :(_ = 0))
-  required_evals!.(expr.args, Ref(required_vars))
+  required_evals!.(expr.args, Ref(required_vars), Ref(all_vars))
   add_brackets!.(expr.args, Ref(required_vars))
   for e in expr.args
       if e isa LineNumberNode
