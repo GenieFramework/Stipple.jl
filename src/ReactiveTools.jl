@@ -927,6 +927,10 @@ end
 macro onchange(location, vars, expr)
   loc::Union{Module, Type{<:ReactiveModel}, LittleDict} = @eval __module__ $location
   vars = wrap(vars, :tuple)
+
+  if expr isa Expr && expr.head == :call && length(expr.args) == 1
+    push!(expr.args, :__model__)
+  end
   expr = wrap(expr, :block)
 
   known_reactive_vars, known_non_reactive_vars = get_known_vars(loc)
@@ -985,6 +989,9 @@ end
 
 macro onbutton(location, var, expr)
   loc::Union{Module, Type{<:ReactiveModel}, LittleDict} = @eval __module__ $location
+  if expr isa Expr && expr.head == :call && length(expr.args) == 1
+    push!(expr.args, :__model__)
+  end
   expr = wrap(expr, :block)
 
   known_reactive_vars, known_non_reactive_vars = get_known_vars(loc)
@@ -1000,6 +1007,58 @@ macro onbutton(location, var, expr)
   :(onbutton($var) do
     $(expr.args...)
   end) |> QuoteNode
+end
+
+"""
+    @handler App expr
+
+Defines a handler function that can be called from within a ReactiveModel App
+
+  ### Example
+  ```julia
+  @app MyApp begin
+    @in i = 0
+    @onchange i on_i()
+      println("Hello World")
+    end
+  end
+  
+  @handler MyApp function on_i()
+    println("i: $i")
+  end
+  ```
+"""
+macro handler(location, expr)
+  location! = Symbol(location, '!')
+  
+  loc::Union{Module, Type{<:ReactiveModel}, LittleDict} = @eval __module__ $location
+  known_reactive_vars, known_non_reactive_vars = Stipple.ReactiveTools.get_known_vars(loc)
+  known_vars = vcat(known_reactive_vars, known_non_reactive_vars)
+
+  f_expr = expr.args[1]
+  f_args = f_expr.args
+  functionname = f_args[1]
+  
+  pos = length(f_args) > 1 && f_args[2] isa Expr && f_args[2].head == :parameters ? 3 : 2
+  insert!(f_args, pos, :__model__)
+
+  expr = Expr(:block, expr.args[2].args...)
+  expr, _ = ReactiveTools.mask(expr, known_vars)
+  expr = fieldnames_to_fields(expr, known_non_reactive_vars)
+  expr = fieldnames_to_fieldcontent(expr, known_reactive_vars)
+  expr = unmask(expr, vcat(known_reactive_vars, known_non_reactive_vars))
+
+  quote
+    $f_expr
+
+    precompile($functionname, ($location!,))
+    $functionname
+  end |> esc
+end
+
+macro handler(expr)
+  location = model_typename(__module__)
+  :(@handler $location $expr) |> esc
 end
 
 #===#
