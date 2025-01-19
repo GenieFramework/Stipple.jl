@@ -21,7 +21,7 @@ export @throttle, @clear_throttle
 export @clear, @clear_vars, @clear_handlers
 
 # app handling
-export @page, @init, @handlers, @app, @appname, @app_mixin, @modelstorage
+export @page, @init, @handlers, @app, @appname, @app_mixin, @modelstorage, @handler
 
 # js functions on the front-end (see Vue.js docs)
 export @methods, @watch, @computed, @client_data, @add_client_data
