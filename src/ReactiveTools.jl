@@ -1012,27 +1012,66 @@ end
 """
     @handler App expr
 
-Defines a handler function that can be called from within a ReactiveModel App
+Defines a handler function that can be called from within a ReactiveModel App, if not present, the macro will add the variable `__model__` as the first argument.
 
-  ### Example
-  ```julia
-  @app MyApp begin
-    @in i = 0
-    @onchange i on_i()
-      println("Hello World")
+Parameters:
+  - `App`: either
+    - a ReactiveModel (e.g. `MyApp`)
+    - a list of reactive variables (e.g. `(:r1, :r2)`)
+    - a tuple or vector of a list of reactive variables and a list of non-reactive variables (e.g. `((:r,), (:nr,))`)
+  - `expr`: function definition, e.g. `function my_handler() println("n: \$n") end`
+
+### Example 1
+
+```julia
+@app MyApp begin
+  @in i = 0
+  @onchange i on_i()
+    println("Hello World")
+  end
+end
+
+@handler MyApp function on_i()
+  println("i: \$i")
+end
+```
+
+### Example 2
+
+```julia-repl
+julia> @macroexpand @handler (:a,) function f() a end
+quote
+    function f(__model__)
+        model.a[]
     end
-  end
-  
-  @handler MyApp function on_i()
-    println("i: $i")
-  end
-  ```
+end
+
+julia> @macroexpand @handler ((:a,), (:b,)) function f(x, __model__) a, b end
+quote
+    function f(x, __model__)
+        (__model__.a[], __model__.b)
+    end
+end
+```
 """
 macro handler(location, expr)
   location! = Symbol(location, '!')
   
-  loc::Union{Module, Type{<:ReactiveModel}, LittleDict} = @eval __module__ $location
-  known_reactive_vars, known_non_reactive_vars = Stipple.ReactiveTools.get_known_vars(loc)
+  loc = @eval __module__ $location
+  known_reactive_vars, known_non_reactive_vars = if loc isa Union{Module, Type{<:ReactiveModel}, LittleDict}
+    Stipple.ReactiveTools.get_known_vars(loc)
+  else
+    location! = nothing
+    loc = if isempty(loc)
+      Symbol[], Symbol[]
+    else
+      if loc[1] isa Union{Vector, Tuple}
+        length(loc) == 1 ? (collect(loc[1]), Symbol[]) : (collect(loc[1]), collect(loc[2]))
+      else
+        collect(loc), Symbol[]
+      end
+    end
+  end
   known_vars = vcat(known_reactive_vars, known_non_reactive_vars)
 
   f_expr = expr.args[1]
@@ -1056,7 +1095,7 @@ macro handler(location, expr)
   end
 
   # add precompilation statement if the function has only one argument
-  if length(f_args) == 2
+  if length(f_args) == 2 && location! !== nothing
     precompile_expr = quote
       precompile($functionname, ($location!,))
       $functionname
