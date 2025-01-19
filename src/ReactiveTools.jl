@@ -1039,21 +1039,31 @@ macro handler(location, expr)
   f_args = f_expr.args
   functionname = f_args[1]
   
+  # add __model__ as first argument if not present
   pos = length(f_args) > 1 && f_args[2] isa Expr && f_args[2].head == :parameters ? 3 : 2
-  insert!(f_args, pos, :__model__)
+  :__model__ ∉ f_args[2:end] && insert!(f_args, pos, :__model__)
 
-  expr = Expr(:block, expr.args[2].args...)
-  expr, _ = ReactiveTools.mask(expr, known_vars)
-  expr = fieldnames_to_fields(expr, known_non_reactive_vars)
-  expr = fieldnames_to_fieldcontent(expr, known_reactive_vars)
-  expr = unmask(expr, vcat(known_reactive_vars, known_non_reactive_vars))
+  body = Expr(:block, expr.args[2].args...)
+  body, _ = ReactiveTools.mask(body, known_vars)
+  body = fieldnames_to_fields(body, known_non_reactive_vars)
+  body = fieldnames_to_fieldcontent(body, known_reactive_vars)
+  body = unmask(body, vcat(known_reactive_vars, known_non_reactive_vars))
 
-  quote
-    $f_expr
+  expr.args[2] = body
 
-    precompile($functionname, ($location!,))
-    $functionname
-  end |> esc
+  output = quote
+    $expr
+  end
+
+  # add precompilation statement if the function has only one argument
+  if length(f_args) == 2
+    precompile_expr = quote
+      precompile($functionname, ($location!,))
+      $functionname
+    end
+    push!(output.args, precompile_expr.args...)
+  end
+  output |> esc
 end
 
 macro handler(expr)
