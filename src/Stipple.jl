@@ -386,7 +386,7 @@ function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounc
     (jsfunction = "$vue_app_name.push('$fieldname')")
 
   output = IOBuffer()
-  if fieldname == :isready
+  if fieldname ∈ (:isready, :fileuploads)
     print(output, """
       // Don't remove this line: due to a bug we need to have a \$-sign in this function;
           ({ignoreUpdates: $vue_app_name._ignore_$fieldname} = $vue_app_name.watchIgnorable(function(){return $vue_app_name.$fieldname}, function(newVal, oldVal){$jsfunction}, {deep: true}));
