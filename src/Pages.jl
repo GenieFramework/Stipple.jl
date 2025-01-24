@@ -12,6 +12,7 @@ using Stipple
 
 export Page
 export pages
+export routehandler
 
 @vars EmptyModel begin
 end
@@ -27,6 +28,9 @@ end
 const _pages = Page[]
 pages() = _pages
 
+routehandler(model::ReactiveModel, routepath) = routehandler(model)
+routehandler(model::ReactiveModel) = nothing
+
 function Page(  route::Union{Route,String};
                 view::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Vector{<:AbstractString},Function},
                 model::Union{M,Function,Nothing,Expr,Module,Type{M}} = Stipple.init(EmptyModel),
@@ -39,6 +43,7 @@ function Page(  route::Union{Route,String};
                 kwargs...
               ) where {M<:ReactiveModel}
 
+  routepath = Symbol(route isa Route ? route.path : route)
   model = if isa(model, Expr)
             Core.eval(context, model)
           elseif isa(model, Module)
@@ -68,7 +73,13 @@ function Page(  route::Union{Route,String};
             isa(layout, ParsedHTMLString) || isa(layout, String) ? string(layout) :
               layout
 
-  route.action = () -> (isa(view, Function) ? html! : html)(view; layout, context, model = (isa(model, Function) ? Base.invokelatest(model) : model), kwargs...)
+  route.action = function ()
+    model = model isa Function ? Base.invokelatest(model) : model
+    page = view isa Function ? html! : html
+    result = routehandler(model, routepath)
+    result !== nothing && return result
+    page(view; layout, context, model, kwargs...)
+  end
 
   page = Page(route, view, model, layout, context)
 
