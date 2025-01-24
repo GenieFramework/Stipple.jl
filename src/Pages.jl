@@ -28,8 +28,8 @@ end
 const _pages = Page[]
 pages() = _pages
 
-routehandler(model::ReactiveModel, routepath) = routehandler(model)
-routehandler(model::ReactiveModel) = nothing
+routehandler(model::ReactiveModel, ::Any) = routehandler(model)
+routehandler(::ReactiveModel) = nothing
 
 function Page(  route::Union{Route,String};
                 view::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Vector{<:AbstractString},Function},
@@ -76,7 +76,7 @@ function Page(  route::Union{Route,String};
   route.action = function ()
     model = model isa Function ? Base.invokelatest(model) : model
     page = view isa Function ? html! : html
-    result = routehandler(model, routepath)
+    result = routehandler(model, Val(routepath))
     result !== nothing && return result
     page(view; layout, context, model, kwargs...)
   end
