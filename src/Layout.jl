@@ -659,9 +659,7 @@ function read_theme_dotfile() :: Union{Symbol,Nothing}
   end
 
   try
-    Symbol(open(THEME_DOTFILE, "r") do file
-      read(file, String)
-    end)
+    read(THEME_DOTFILE, String) |> Symbol
   catch
     nothing
   end
@@ -670,11 +668,8 @@ end
 
 function write_theme_dotfile(theme::Symbol)
   isfile(THEME_DOTFILE) || return
-
-  open(THEME_DOTFILE, "w") do file
-    write(file, string(theme))
-  end
-
+  
+  write(THEME_DOTFILE, String(theme))
   nothing
 end
 
