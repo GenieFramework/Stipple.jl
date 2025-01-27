@@ -12,7 +12,6 @@ using Stipple
 
 export Page
 export pages
-export routehandler
 
 @vars EmptyModel begin
 end
@@ -28,9 +27,6 @@ end
 const _pages = Page[]
 pages() = _pages
 
-routehandler(model::ReactiveModel, ::Any) = routehandler(model)
-routehandler(::ReactiveModel) = nothing
-
 function Page(  route::Union{Route,String};
                 view::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Vector{<:AbstractString},Function},
                 model::Union{M,Function,Nothing,Expr,Module,Type{M}} = Stipple.init(EmptyModel),
@@ -40,48 +36,57 @@ function Page(  route::Union{Route,String};
                 throttle::Int = Stipple.JS_THROTTLE_TIME,
                 transport::Module = Stipple.WEB_TRANSPORT[],
                 core_theme::Bool = true,
+                pre::Union{Function, Vector{<:Function}} = Function[],
+                post::Union{Function, Vector{<:Function}} = Function[],
                 kwargs...
               ) where {M<:ReactiveModel}
 
-  routepath = Symbol(route isa Route ? route.path : route)
-  model = if isa(model, Expr)
-            Core.eval(context, model)
-          elseif isa(model, Module)
-            context = model
-            () -> Stipple.ReactiveTools.init_model(context; debounce, throttle, transport, core_theme)
-          elseif model isa DataType
-            # as model is being redefined, we need to create a copy
-            mymodel = model
-            () -> Stipple.ReactiveTools.init_model(mymodel; debounce, throttle, transport, core_theme)
-          else
-            model
-          end
-  view =  if isa(view, Function) || isa(view, ParsedHTMLString)
-            view
-          elseif isa(view, Vector{ParsedHTMLString})
-            ParsedHTMLString(view)
-          elseif isa(view, Vector{<:AbstractString})
-            join(view)
-          elseif isa(view, AbstractString)
-            isfile(view) ? filepath(view) : view
-          else
-            view
-          end
+  model isa Expr && (model = @eval context model)
+  view = if isa(view, Function) || isa(view, ParsedHTMLString)
+    view
+  elseif isa(view, Vector{ParsedHTMLString})
+    ParsedHTMLString(view)
+  elseif isa(view, Vector{<:AbstractString})
+    join(view)
+  elseif isa(view, AbstractString)
+    isfile(view) ? filepath(view) : view
+  else
+    view
+  end
 
   route = isa(route, String) ? Route(; method = GET, path = route) : route
-  layout = isa(layout, String) && length(layout) < Stipple.IF_ITS_THAT_LONG_IT_CANT_BE_A_FILENAME && isfile(layout) ? filepath(layout) :
-            isa(layout, ParsedHTMLString) || isa(layout, String) ? string(layout) :
-              layout
 
-  route.action = function ()
-    model = model isa Function ? Base.invokelatest(model) : model
-    page = view isa Function ? html! : html
-    result = routehandler(model, Val(routepath))
-    result !== nothing && return result
-    page(view; layout, context, model, kwargs...)
+  layout = if isa(layout, String) && length(layout) < Stipple.IF_ITS_THAT_LONG_IT_CANT_BE_A_FILENAME && isfile(layout)
+    filepath(layout)
+  elseif isa(layout, ParsedHTMLString) || isa(layout, String)
+    string(layout)
+  else
+    layout
   end
 
   page = Page(route, view, model, layout, context)
+
+  pre isa Function && (pre = [pre])
+  post isa Function && (post = [post])
+  
+  route.action = function ()
+    for f in pre
+      result = f()
+      result !== nothing && return result
+    end
+    model = if page.model isa DataType && page.model <: ReactiveModel || page.model isa Module
+      Stipple.ReactiveTools.init_model(page.model; debounce, throttle, transport, core_theme)
+    else
+      page.model
+    end
+    for f in post
+      result = f(model)
+      result !== nothing && return result
+    end
+
+    page_fn = view isa Function ? html! : html
+    page_fn(view; layout, context, model = model, kwargs...)
+  end
 
   if isempty(_pages)
     push!(_pages, page)

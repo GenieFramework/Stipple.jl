@@ -1147,8 +1147,6 @@ end
 #===#
 
 include("Pages.jl")
-import .Pages.routehandler
-export routehandler
 
 #===#
 
