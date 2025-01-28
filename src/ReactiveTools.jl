@@ -1114,7 +1114,13 @@ end
 
 """
 ```julia
-@page(url, view)
+@page(url, view; model::Union{Module, Type{<:ReactiveModel}, ReactiveModel},
+                layout::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Nothing,Function} = nothing
+                debounce::Int = Stipple.JS_DEBOUNCE_TIME,
+                throttle::Int = Stipple.JS_THROTTLE_TIME,
+                core_theme::Bool = true,
+                pre::Union{Function, Vector{<:Function}} = Function[],
+                post::Union{Function, Vector{<:Function}} = Function[])
 ```
 Registers a new page with source in `view` to be rendered at the route `url`.
 
@@ -1125,6 +1131,30 @@ Registers a new page with source in `view` to be rendered at the route `url`.
 
 @page("/", ui; model = MyApp) # for specifying an explicit app
 ```
+### Other Parameters
+- `debounce`: debounce time in ms
+- `throttle`: throttle time in ms
+- `core_theme`: whether to use the core theme
+- `pre`: pre-rendering functions, e.g. for authentication
+
+   Function definition: `pre1() = println("pre1").
+
+   Call: `@page("/", ui, pre = pre1)` or `@page("/", ui, pre = [pre1, pre2, ...])`
+   
+   If the result of the function is not `nothing`, the rendering will be stopped and the result will be returned.
+- `post`: post-rendering functions, e.g. for modification of initial values of the model
+
+   Function definition:
+
+   ```
+   @handler function post1();
+       println("post1");
+       x = new_x;
+       println("changed initial value of :x to new_x");
+   end
+    ```
+    Model variables are accessible and can be modified in the post-rendering functions. For more details see [`@handler`](@ref).
+    Note that you need a model handler `@onchange isready @push` or `@onchange isready @push x` to update the variables after the model is ready.
 """
 macro page(expressions...)
     # for macros to support semicolon parameter syntax it's required to have no positional arguments in the definition
@@ -1274,13 +1304,12 @@ end
 macro event(M, eventname, expr)
   known_reactive_vars, known_non_reactive_vars = get_known_vars(@eval(__module__, $M))
   known_vars = vcat(known_reactive_vars, known_non_reactive_vars)
-  expr, used_vars = mask(expr, known_vars)
-
+  
+  expr, _ = mask(expr, known_vars)
   expr = fieldnames_to_fields(expr, known_non_reactive_vars)
   expr = fieldnames_to_fieldcontent(expr, known_reactive_vars)
   expr = unmask(expr, known_vars)
 
-  expr = unmask(fieldnames_to_fieldcontent(expr, known_vars), known_vars)
   T = eventname isa QuoteNode ? eventname : QuoteNode(eventname)
 
   quote
