@@ -1304,13 +1304,12 @@ end
 macro event(M, eventname, expr)
   known_reactive_vars, known_non_reactive_vars = get_known_vars(@eval(__module__, $M))
   known_vars = vcat(known_reactive_vars, known_non_reactive_vars)
-  expr, used_vars = mask(expr, known_vars)
-
+  
+  expr, _ = mask(expr, known_vars)
   expr = fieldnames_to_fields(expr, known_non_reactive_vars)
   expr = fieldnames_to_fieldcontent(expr, known_reactive_vars)
   expr = unmask(expr, known_vars)
 
-  expr = unmask(fieldnames_to_fieldcontent(expr, known_vars), known_vars)
   T = eventname isa QuoteNode ? eventname : QuoteNode(eventname)
 
   quote

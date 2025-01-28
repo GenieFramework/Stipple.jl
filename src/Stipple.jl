@@ -512,6 +512,18 @@ function get_abstract_type(::Type{M})::Type{<:ReactiveModel} where M <: Stipple.
   SM <: ReactiveModel && SM != ReactiveModel ? SM : M
 end
 
+# fallback for event handling if no handler with event_info is defined
+function Base.notify(model::ReactiveModel, event, event_info::AbstractDict)
+  notify(model, event)
+end
+
+# fallback for event handling without event_info
+function Base.notify(model::ReactiveModel, event)
+  T = typeof(event)
+  event_name = T.name == Base.typename(Val) ? ":$(T.parameters[1])" : event
+  println("No event '$event_name' defined")
+end
+
 """
     function init(::Type{M};
                     vue_app_name::S = Stipple.Elements.root(M),
@@ -638,9 +650,7 @@ function init(t::Type{M};
         client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
         push!(event_info, "_client" => client)
       end
-
-      isempty(methods(notify, (M, Val{handler}))) || notify(model, Val(handler))
-      isempty(methods(notify, (M, Val{handler}, Any))) || notify(model, Val(handler), event_info)
+      notify(model, Val(handler), event_info)
 
       LAST_ACTIVITY[Symbol(channel)] = now()
 
