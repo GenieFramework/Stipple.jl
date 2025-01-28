@@ -521,7 +521,7 @@ end
 function Base.notify(model::ReactiveModel, event)
   T = typeof(event)
   event_name = T.name == Base.typename(Val) ? ":$(T.parameters[1])" : event
-  println("No event '$event_name' defined")
+  @info("Warning: No event '$event_name' defined")
 end
 
 """
