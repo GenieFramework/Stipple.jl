@@ -165,6 +165,7 @@ function vue_integration(::Type{M};
     }
 
     function app_ready(app) {
+      if (app.isready) return;
       if (app.WebChannel == Genie.AllWebChannels[0]) Genie.Revivers.addReviver(app.revive_jsfunction);
       app.isready = true;
     """,
