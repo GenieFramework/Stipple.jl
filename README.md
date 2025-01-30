@@ -37,7 +37,7 @@
 </p>
   
 Part of [Genie Framework](https://genieframework.com), Stipple is a reactive UI library for building interactive data applications in pure Julia.
-It uses <a href="https://github.com/GenieFramework/Genie.jl">Genie.jl</a> on the server side and <a href="https://vuejs.org/">Vue.js</a> on the client. Stipple uses a high performance architecture that automatically synchronizes the state two-way (server -> client and client -> server), sending only JSON data over the wire.
+It uses [Genie.jl]("https://github.com/GenieFramework/Genie.jl) on the server side and [Vuejs](https://vuejs.org) on the client. Stipple uses a high performance architecture that automatically synchronizes the state two-way (server -> client and client -> server), sending only JSON data over the wire.
 </div>
 
 Besides the low-code API provided by Stipple, you can also use [Genie Builder](https://learn.genieframework.com/docs/genie-builder/quick-start) to build your reactive UIs. Genie Builder is a plugin for VSCode to help you create interactive Genie apps much faster using its visual drag-and-drop editor.
@@ -56,7 +56,23 @@ The Stipple ecosystem also includes:
 * [StipplePlotly.jl](https://github.com/GenieFramework/StipplePlotly.jl) - Plotting library for `Stipple.jl` based on [Plotly](https://plotly.com/javascript/)'s Graphing Library including event forwarding for interactive plots.
 * [StipplePlotlyExport.jl](https://github.com/GenieFramework/StipplePlotlyExport.jl) - add-on for `StipplePlotly.jl` to allow server side generation and exporting of plots. 
 * [StippleLatex.jl](https://github.com/GenieFramework/StippleLatex.jl) - support for reactive Latex content based on the [Vue-Katex](https://github.com/lucpotage/vue-katex) plugin. 
-## News: Vue 3 / Quasar 2
+## News (v0.31):
+### Features
+- referring to variables in the `@app` declaration, e.g. `@in y = x + 1`
+- multiple models on one page
+- debugging of model events with `Stipple.debug()`
+- add `throttle` in analogy to `debounce`
+- `@handler` macro to define app handlers outside of `@app`
+- handler merging in mixins
+- accept Inf and NaN in floats (full support with next release of JSON3)
+- routehandlers `pre` / `post` for `@page` 
+- precompilation by `@stipple_precompile`
+### Fixes / Improvements
+- reconnection after network interruption, e.g. energy save mode
+- `@async` calls in `@onchange` sections
+- remove state-changing evals from ReactiveTools macros
+
+## Vue 3 / Quasar 2
 
 From version 0.30 on Stipple has upgraded the front-end libraries to Vue3 / Quasar 2, as Vue-2 has reached its end-of-life.
 We recommend to use at least v0.30.3, as we have fixed some relevant bugs.
