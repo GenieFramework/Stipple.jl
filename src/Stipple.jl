@@ -1086,13 +1086,12 @@ macro kwredef(expr)
   #  Upon reevaluation of the same expression we reuse the existing name and avoid the stackoverflow.
   expr_qn = QuoteNode(copy(expr))
   expr_name = Symbol(T, :_expr)
-  already_defined = isdefined(__module__, expr_name) && @eval(__module__, $expr_name) == expr
 
   if isa(T, Expr) && T.head == Symbol(".")
     T = (split(string(T), '.')[end] |> Symbol)
   end
   
-  t[n] = T_new = already_defined ? @eval(__module__, $T).name.name : mygensym(T, __module__)
+  t[n] = T_new = mygensym(T, __module__)
   quote
     Base.@kwdef $expr
     $T = $T_new
