@@ -616,18 +616,18 @@ macro type(modelname, storage)
     end
 
     function $modelname(; kwargs...)
-      global $modelconst
-      # check existence of constructor. might have been removed byRevise
-      # in that case reset the modelconst to the latest valid version
+      # Check existence of constructor, it might have been removed by Revise.
+      # In that case reset the modelconst to the latest valid version
       # via the get_concrete_type method, see below
-      length(methods($modelconst, ())) == 0 && ($modelconst = Stipple.get_concrete_type($modelname))
+      if @isdefined($modelconst) && length(methods($modelconst, ())) == 0
+        $__module__.$modelconst = Stipple.get_concrete_type($modelname)
+      end
       $modelconst(; kwargs...)
     end
 
     function Stipple.get_concrete_type(::Type{$modelname})
-      global $modelconst
-      if length(methods($modelconst, ())) == 0
-        $modelconst = Stipple.find_concrete_type($modelname)
+      if @isdefined($modelconst) && length(methods($modelconst, ())) == 0
+        $__module__.$modelconst = Stipple.find_concrete_type($modelname)
         Stipple.REVISE_DEBUG_INFO[] && @info "Withdraw Revise-induced redefinition of '$($modelname)!', latest valid version is '$($modelconst)'"
       end
       $modelconst
