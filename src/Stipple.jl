@@ -513,7 +513,7 @@ function get_abstract_type(::Type{M})::Type{<:ReactiveModel} where M <: Stipple.
 end
 
 # fallback for event handling if no handler with event_info is defined
-function Base.notify(model::ReactiveModel, event, event_info::AbstractDict)
+function Base.notify(model::ReactiveModel, event, event_info)
   notify(model, event)
 end
 
