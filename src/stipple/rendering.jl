@@ -166,6 +166,13 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
     if field == :created
       created_auto = join_js(Stipple.js_created_auto(app), "\n\n    "; pre = strip)
       created_auto == "" || (js = join_js([js, created_auto], "\n\n    "))
+    elseif field == :mounted
+      mounted_auto = """setTimeout(() => {
+          this.WebChannel.unsubscriptionHandlers.push(() => this.handle_event({}, 'finalize'))
+          console.log('Unsubscription handler installed')
+      }, 100)
+      """
+      js = join_js([js, mounted_auto], "\n\n    ")
     end
     isempty(js) || push!(vue, field => JSONText("function(){\n    $js\n}"))
   end

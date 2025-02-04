@@ -524,6 +524,15 @@ function Base.notify(model::ReactiveModel, event)
   @info("Warning: No event '$event_name' defined")
 end
 
+function Base.notify(model::ReactiveModel, ::Val{:finalize})
+  @info("Calling finalizers")
+  for fieldname in propertynames(__model__)
+      field = getfield(model, fieldname)
+      field isa AbstractObservable && Stipple.off!(field)
+  end
+end
+
+
 """
     function init(::Type{M};
                     vue_app_name::S = Stipple.Elements.root(M),

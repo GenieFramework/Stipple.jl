@@ -82,8 +82,8 @@ function Base.getproperty(r::Reactive{T}, field::Symbol) where T
   if field in (:o, :r_mode, :no_backend_watcher, :no_frontend_watcher, :__source__) # fieldnames(Reactive)
     getfield(r, field)
   else
+    # forward property :val to respective field of Observable
     if field == :val
-      @warn """Reactive API has changed, use "[]" instead of ".val"!"""
       getfield(r, :o).val
     else
       getproperty(getfield(r, :o).val, field)
@@ -95,8 +95,8 @@ function Base.setproperty!(r::Reactive{T}, field::Symbol, val) where T
   if field in fieldnames(Reactive)
     setfield!(r, field, val)
   else
+    # forward property :val to respective field of Observable
     if field == :val
-      @warn """Reactive API has changed, use "setfield_withoutwatchers!() or o.val" instead of ".val"!"""
       getfield(r, :o).val = val
     else
       setproperty!(getfield(r, :o).val, field, val)
@@ -162,6 +162,7 @@ struct Mixin
 end
 
 export @vars, @define_mixin, @clear_cache, clear_cache, @clear_route, clear_route, @mixin
+export synchronize!
 
 export getchannel
 
@@ -710,3 +711,96 @@ lower frequency, to avoid overloading the server).
 """
 const JS_THROTTLE_TIME = 0   #ms
 const SETTINGS = Settings()
+
+
+"""
+    Base.notify(@nospecialize(observable::AbstractObservable), priority::Union{Int, Function})
+
+Implement observable notification with priority filtering.
+
+### Example
+```
+# only notify listeners with priority 1
+notify(observable, 1)
+
+# only notify listeners with priority greater than 0
+notify(observable, >(0))
+```
+"""
+function Base.notify(@nospecialize(observable::AbstractObservable), priority::Union{Int, Function})
+  val = observable[]
+  for (p, f) in Observables.listeners(observable)::Vector{Pair{Int, Any}}
+      (priority isa Int ? p == priority : priority(p)) || continue
+      result = Base.invokelatest(f, val)
+      if result isa Consume && result.x
+          # stop calling callbacks if event got consumed
+          return true
+      end
+  end
+  return false
+end
+
+
+"""
+    synchronize!(o1::AbstractObservable, o2::AbstractObservable; priority::Union{Int,Nothing} = nothing, update = true)
+
+Synchronize two observables by setting the value of `o1` to the value of `o2`.
+Other than `connect!()` this function works bidirectional without creating a loop back.
+Synchronizing multiple observables is possible, but care should be taken to always synchronize to the same root observable.
+
+### parameters
+- `o1::AbstractObservable`: The first observable to synchronize.
+- `o2::AbstractObservable`: The observable to synchronize with
+- `priority::Union{Int,Nothing}`: The priority of the synchronization listeners.
+
+    The priority is used as identifier of a synchronization pair.
+    If more than one observables is synchronized they should have different priorities.
+    If `nothing` (default), search for a unique priority so that the order of synchronization is identical to 
+    the order of synchronize!() calls.
+- `update::Bool`: If `true` then `o1` will be updated with the value of `o2`, default: `true`
+
+### Example
+
+```
+o = Observable(0)
+on(o -> println("o: \$o"), o)
+
+o1 = Observable(1)
+on(o1 -> println("o1: \$o1"), o)
+
+o2 = Observable(2)
+on(o2 -> println("o2: \$o2"), o)
+
+synchronize!(o1, o)
+synchronize!(o2, o)
+
+o[] = 10;
+# o: 10
+# o1: 10
+# o2: 10
+
+o1[] = 11;
+# o: 11
+# o1: 11
+# o2: 11
+
+o2[] = 12;
+# o: 12
+# o1: 12
+# o2: 12
+```
+"""
+function synchronize!(o1::AbstractObservable, o2::AbstractObservable; priority::Union{Int,Nothing} = nothing, update = true)
+  if priority === nothing
+      priorities = setdiff(getindex.(Observables.listeners(o2), 1), typemin(Int))
+      priority = isempty(priorities) ? -1 : minimum(priorities) - 1
+  end
+  on(o2; update, priority) do o2
+      o1.val = o2
+      notify(o1, !=(priority))
+  end
+  on(o1; priority) do o1
+      o2.val = o1
+      notify(o2, !=(priority))
+  end
+end
