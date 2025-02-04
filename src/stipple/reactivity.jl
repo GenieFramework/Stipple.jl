@@ -795,10 +795,11 @@ function synchronize!(o1::AbstractObservable, o2::AbstractObservable; priority::
       priorities = setdiff(getindex.(Observables.listeners(o2), 1), typemin(Int))
       priority = isempty(priorities) ? -1 : minimum(priorities) - 1
   end
+  
   on(o2; update, priority) do o2
       o1.val = o2
       notify(o1, !=(priority))
-  end
+  end,
   on(o1; priority) do o1
       o2.val = o1
       notify(o2, !=(priority))
