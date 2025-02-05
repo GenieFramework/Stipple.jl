@@ -56,6 +56,14 @@ The Stipple ecosystem also includes:
 * [StipplePlotly.jl](https://github.com/GenieFramework/StipplePlotly.jl) - Plotting library for `Stipple.jl` based on [Plotly](https://plotly.com/javascript/)'s Graphing Library including event forwarding for interactive plots.
 * [StipplePlotlyExport.jl](https://github.com/GenieFramework/StipplePlotlyExport.jl) - add-on for `StipplePlotly.jl` to allow server side generation and exporting of plots. 
 * [StippleLatex.jl](https://github.com/GenieFramework/StippleLatex.jl) - support for reactive Latex content based on the [Vue-Katex](https://github.com/lucpotage/vue-katex) plugin. 
+## News (v0.31.3/0.31.4):
+### Features
+#### Synchronization
+- add functions `synchronize!(o1, o2)` and `unsynchronize!(o1, o2)` to sync/unsync reactive variables to external Observables. Sync is bidirectional by default
+- Example below.
+#### Finalizers
+- add finalizers that strip off listeners when a model goes out of scope.
+- custom finalizers can be added, e.g. to unsync model variables from external sources
 ## News (v0.31):
 ### Features
 - referring to variables in the `@app` declaration, e.g. `@in y = x + 1`
@@ -114,7 +122,7 @@ Stipple can be added from the GitHub repo, via `Pkg`:
 pkg> add Stipple
 ```
 
-## Example
+## Example 1
 
 This snippet below illustrates the structure of a reactive UI built with Stipple. See its [documentation page](https://learn.genieframework.com/docs/reference/reactive-ui/introduction) for a detailed explanation.
 
@@ -156,6 +164,41 @@ end
 
 <img src="https://learn.genieframework.com/assets/docs/ui/enternumber.png" width="200px" style="margin-left:auto;margin-right:auto"> </img>
 
+## Example 2 (Synchronization to external sources)
+
+```julia
+using Stipple, Stipple.ReactiveTools
+using StippleUI
+
+using GenieSession
+
+const XX = Dict{String, Reactive}()
+
+@app Observer begin
+    @in x = 0
+    @private session = ""
+
+    @onchange isready begin
+        @info "session: $session"
+        println("hi")
+        r = get!(XX, session, R(x))
+        synchronize!(__model__.x, r)
+    end
+end
+
+@page("/", slider(1:100, :x), model = Observer, post = model -> begin model.session[] = session().id *""; nothing end)
+
+@event Observer :finalize begin
+    println("unsynchronizing ...")
+    @info unsynchronize!(__model__.x)
+    notify(__model__, Val(:finalize))
+end
+
+@debounce Observer x 0
+@throttle Observer x 10
+
+up()
+```
 ## More information
 
 While Stipple/StippleUI documentation is still evolving, you can find help and many small examples via docstrings of the functions.
