@@ -162,7 +162,7 @@ struct Mixin
 end
 
 export @vars, @define_mixin, @clear_cache, clear_cache, @clear_route, clear_route, @mixin
-export synchronize!
+export synchronize!, unsynchronize!
 
 export getchannel
 
@@ -740,9 +740,49 @@ function Base.notify(@nospecialize(observable::AbstractObservable), priority::Un
   return false
 end
 
+function get_synced_observers(o::AbstractObservable)
+  oo = AbstractObservable[]
+  for cb in getindex.(Observables.listeners(o), 2)
+      p = propertynames(cb)
+      (length(p) == 2 && p[1] == :priority && p[2] ∈ (:o1, :o2)) || continue
+      push!(oo, getfield(cb, p[2]))
+  end
+  unique!(oo)
+end
+
+function get_syncing_listeners(o::AbstractObservable)
+  cbs = Function[]
+  for cb in getindex.(Observables.listeners(o), 2)
+      p = propertynames(cb)
+      (length(p) == 2 && p[1] == :priority && p[2] ∈ (:o1, :o2)) || continue
+      push!(cbs, cb)
+  end
+  return cbs
+end
+
+function loop_check(o1::AbstractObservable, o2::AbstractObservable)
+  loop_warn = true
+  pool = get_synced_observers(o2)
+  while o1 ∉ pool
+    loop_warn = false
+    new_pool = AbstractObservable[]
+    for o in pool
+      o_pool = get_synced_observers(o)
+      setdiff!(o_pool, pool, new_pool)
+      if !isempty(o_pool)
+        (loop_warn = o1 ∈ o_pool) && break
+        union!(new_pool, o_pool)
+      end
+    end
+    (loop_warn || isempty(new_pool)) && break
+    union!(pool, new_pool)
+  end
+  
+  return loop_warn
+end
 
 """
-    synchronize!(o1::AbstractObservable, o2::AbstractObservable; priority::Union{Int,Nothing} = nothing, update = true)
+    synchronize!(o1::AbstractObservable, o2::AbstractObservable; priority::Union{Int,Nothing} = nothing, update = true, biderectional = false)
 
 Synchronize two observables by setting the value of `o1` to the value of `o2`.
 Other than `connect!()` this function works bidirectional without creating a loop back.
@@ -758,8 +798,11 @@ Synchronizing multiple observables is possible, but care should be taken to alwa
     If `nothing` (default), search for a unique priority so that the order of synchronization is identical to 
     the order of synchronize!() calls.
 - `update::Bool`: If `true` then `o1` will be updated with the value of `o2`, default: `true`
-
-### Example
+- `biderectional`: If `true` (default) perform two-way synchronization, if `false` sync o1 to follow o2.
+    The latter functionally identical to `connect!()`, however `unsynchronize!()` only works correctly on 
+    variables synced with `synchronize!()`
+  
+### Example 1
 
 ```
 o = Observable(0)
@@ -789,19 +832,164 @@ o2[] = 12;
 # o1: 12
 # o2: 12
 ```
+
+### Example 2
+```
+using Stipple, Stipple.ReactiveTools
+using StippleUI
+
+const X = Observable(0)
+
+@app Observer begin
+    @in x = 0
+
+    @onchange isready begin
+        synchronize!(__model__.x, X)
+    end
+end
+
+@event Observer :finalize begin
+    println("unsynchronizing ...")
+    @info unsynchronize!(__model__.x)
+    notify(__model__, Val(:finalize))
+end
+
+@page("/", slider(1:100, :x), model = Observer)
+
+@debounce Observer x 0
+@throttle Observer x 10
+
+up()
+```
+
+### Example 3
+
+Modification of Example 2 to sync only tabs with the same session id (i.e. the same browser).
+
+```
+using Stipple, Stipple.ReactiveTools
+using StippleUI
+using GenieSession
+
+const XX = Dict{String, Reactive}()
+
+@app Observer begin
+    @in x = 0
+    @private session = ""
+
+    @onchange isready begin
+        r = get!(XX, session, R(x))
+        synchronize!(__model__.x, r)
+    end
+end
+
+@page("/", slider(1:100, :x), model = Observer, post = model -> begin model.session[] = session().id; nothing end)
+
+@event Observer :finalize begin
+    println("unsynchronizing ...")
+    @info unsynchronize!(__model__.x)
+    notify(__model__, Val(:finalize))
+end
+
+@debounce Observer x 0
+@throttle Observer x 10
+
+up()
+```
+Note that `post` has been used to attach the session id to the model. Make sure that the
+attached function returns nothing in order to proceed with the page rendering.
+If `post` returns a value, the page will render that value instead of the page content.
+For further information see [`@page`](@ref).
+
+Unsynchronization via the event :finalize is important to suppress syncing to models
+that have been replaced by page reloading or navigation.
 """
-function synchronize!(o1::AbstractObservable, o2::AbstractObservable; priority::Union{Int,Nothing} = nothing, update = true)
+function synchronize!(o1::AbstractObservable, o2::AbstractObservable; priority::Union{Int,Nothing} = nothing, update = true, bidirectional = true)
   if priority === nothing
-      priorities = setdiff(getindex.(Observables.listeners(o2), 1), typemin(Int))
-      priority = isempty(priorities) ? -1 : minimum(priorities) - 1
+    priorities = getindex.(Observables.listeners(o2), 1)
+    bidirectional || union!(priorities, getindex.(Observables.listeners(o1), 1))
+    setdiff!(priorities, typemin(Int))
+    priority = isempty(priorities) ? -1 : minimum(priorities) - 1
   end
+
+  if loop_check(o1, o2)
+    @warn "Synchronization loop detected, skipping synchronization"  
+    return ObserverFunction[]
+  end
+
+  function update_o1(x)
+    o1.val = x
+    notify(o1, !=(priority))
+  end
+  function update_o2(x)
+    o2.val = x
+    notify(o2, !=(priority))
+  end
+  if bidirectional
+    ObserverFunction[on(update_o1, o2; update, priority), on(update_o2, o1; priority)]
+  else
+    ObserverFunction[on(update_o1, o2; update, priority)]
+  end
+end
+
+
+"""
+    unsynchronize!(o::AbstractObservable, o_sync::Union{AbstractObservable, Nothing} = nothing)
+
+Remove synchronization of observables.
+
+### Parameters
+- `o::AbstractObservable`: The observable to unsynchronize.
+- `o_sync::Union{AbstractObservable, Nothing}`: The observable to unsynchronize with,
+  if `nothing` (default) remove all bidirectional synchronizations and all unidirectional synchronizations from `o`,
+  if `o_sync` is passed, remove all synchronizations between `o` and `o_sync`.
   
-  on(o2; update, priority) do o2
-      o1.val = o2
-      notify(o1, !=(priority))
-  end,
-  on(o1; priority) do o1
-      o2.val = o1
-      notify(o2, !=(priority))
+### Example 1
+
+```
+o = Observable(0)
+on(o -> println("o: \$o"), o)
+o1 = Observable(1)
+on(o1 -> println("o1: \$o1"), o)
+o2 = Observable(2)
+on(o2 -> println("o2: \$o2"), o)
+o3 = Observable(3)
+
+synchronize!(o1, o)
+synchronize!(o2, o)
+synchronize!(o3, o, biderectional = false)
+
+# unsync o2 only
+unsynchronize!(o2)
+
+# wrong way of unsyncing o3, because it's unidirectional
+unsynchronize!(o3)
+
+# correct way of unsyncing o3
+unsynchronize!(o3, o)
+
+# unsync all syncs from o
+unsynchronize!(o)
+```
+"""
+function unsynchronize!(o::AbstractObservable, o_sync::Union{AbstractObservable, Nothing} = nothing)
+  oo1 = o_sync === nothing ? (o,) : (o, o_sync)
+  oo2 = o_sync === nothing ? (nothing,) : (o_sync, o)
+  # two runs to cover all unidirectional syncs if two observables are passed
+  # single run if o2 === nothing, readonyly syncs from other observables are not removed
+  # however, unidirectional syncs to other observables are removed
+  for (o1, o2) in zip(oo1, oo2)
+    cbs1 = get_syncing_listeners(o1)
+    for cb in cbs1
+      fieldname = propertynames(cb)[2]
+      o_source = getfield(cb, fieldname)
+      o2 === nothing || o_source === o2 || continue
+      # remove back syncs if o2 === nothing  
+      if o2 === nothing
+        cbs2 = filter!(o -> getfield(o, propertynames(o)[2]) === o1, get_syncing_listeners(o_source))
+        off.(Ref(o_source), cbs2)
+      end
+      off(o1, cb)
+    end
   end
 end

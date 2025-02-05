@@ -526,7 +526,7 @@ end
 
 function Base.notify(model::ReactiveModel, ::Val{:finalize})
   @info("Calling finalizers")
-  for fieldname in propertynames(__model__)
+  for fieldname in propertynames(model)
       field = getfield(model, fieldname)
       field isa AbstractObservable && Stipple.off!(field)
   end

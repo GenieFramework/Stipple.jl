@@ -638,3 +638,93 @@ end
     @test model.x[] == 50
 
 end
+
+@testset "Finalizers" begin
+    current_storage = Stipple.use_model_storage()
+    Stipple.enable_model_storage(false)
+    @app MyApp begin
+        @in i = 100
+        @out s = "Hello"
+        @private x = 4
+
+        @onchange isready begin
+            @info "Model is ready"
+        end
+    end
+
+    model = @init MyApp
+    @test length(model.isready.o.listeners) == 2
+    @test_logs (:info, "Calling finalizers") notify(model, Val(:finalize), "")
+    @test length(model.isready.o.listeners) == 0
+
+    model = @init MyApp
+    @event MyApp :finalize begin
+        @info "Custom finalizer"
+    end
+
+    @test_logs (:info, "Custom finalizer") notify(model, Val(:finalize), "")
+    @test length(model.isready.o.listeners) == 2
+
+    Stipple.enable_model_storage(current_storage)
+end
+
+@testset "Observable synchronization" begin
+    o = Observable(0)
+    o1 = Observable(1)
+    o2 = Observable(2)
+    o3 = Observable(3)
+
+    synchronize!(o1, o, update = false)
+    synchronize!(o2, o, update = false)
+    synchronize!(o3, o, update = false)
+
+    @test o1[] == 1
+    @test o2[] == 2
+    @test o3[] == 3
+
+    o[] = 10
+    @test o1[] == 10
+    @test o2[] == 10
+    @test o3[] == 10
+
+    o1[] = 20
+    @test o[] == 20
+    @test o2[] == 20
+    @test o3[] == 20
+
+    o2[] = 30
+    @test o[] == 30
+    @test o1[] == 30
+    @test o3[] == 30
+
+    @test_logs (:warn, "Synchronization loop detected, skipping synchronization") synchronize!(o1, o)
+    @test_logs (:warn, "Synchronization loop detected, skipping synchronization") synchronize!(o, o3)
+
+    unsynchronize!(o1)
+    o1[] = 40
+    @test o[] == 30
+    @test o2[] == 30
+    @test o3[] == 30
+
+    o[] = 50
+    @test o1[] == 40
+
+    unsynchronize!(o)
+    o[] = 60
+    @test o1[] == 40
+    @test o2[] == 50
+    @test o3[] == 50
+
+    o = Observable(0)
+    o1 = Observable(1)
+    synchronize!(o1, o; bidirectional = false)
+
+    @test length(o.listeners) == 1
+    @test length(o1.listeners) == 0
+
+    unsynchronize!(o1)
+    @test length(o.listeners) == 1
+
+    unsynchronize!(o1, o)
+    @test length(o.listeners) == 0
+end
