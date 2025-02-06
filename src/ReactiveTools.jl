@@ -1167,11 +1167,18 @@ macro page(expressions...)
         expressions[kwarg_inds];
         args_to_kwargs = [:layout, :model, :context],
         defaults = Dict(
-            :layout => Stipple.ReactiveTools.DEFAULT_LAYOUT(),
+            :layout => "--no layout passed--",
             :context => __module__,
-            :model => __module__
+            :model => __module__,
+            :core_theme => true,
         )
     )
+
+    # if `layout` has not been passed, set the default layout with the correct `core_theme` setting
+    layout_parent, layout_ind, layout_expr = Stipple.locate_kwarg(args, :layout)
+    _, _, core_theme = Stipple.locate_kwarg(args, :core_theme) 
+    layout_expr == "--no layout passed--" && (layout_parent[layout_ind].args[2] = DEFAULT_LAYOUT(; core_theme))
+
     model_parent, model_ind, model_expr = Stipple.locate_kwarg(args, :model)
     model = @eval(__module__, $model_expr)
 
