@@ -589,7 +589,7 @@ function find_concrete_type(::Type{T}) where T<:ReactiveModel
           $modelconst = $modelname
           function Stipple.get_concrete_type(::Type{$abstract_modelname})
             @info "Withdraw Revise-induced redefinition of '$($modelname)!', latest valid version is '$($modelconst)'"
-            @warn "This withdrawal is unexpected, please inform the Genie team!"
+            # @warn "This withdrawal is unexpected, please inform the Genie team!"
             length(methods($modelconst, ())) > 0 ? $modelconst : Stipple.find_concrete_type($abstract_modelname)
           end
         end)

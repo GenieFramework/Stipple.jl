@@ -93,7 +93,7 @@ There is also a string macro version `jsfunction"<js code>"`
 """
 function jsfunction(jscode::String)
   jsfunc = parse_jsfunction(jscode)
-  isnothing(jsfunc) ? JSFunction("", jscode) : jsfunc
+  isnothing(jsfunc) ? JSFunction("", jscode) : JSFunction(jsfunc[:arguments], jsfunc[:body])
 end
 
 """
