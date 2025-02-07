@@ -378,10 +378,6 @@ Sets up default Vue.js watchers so that when the value `fieldname` of type `fiel
 changed on the frontend, it is pushed over to the backend using `channel`, at a `debounce` minimum time interval.
 """
 function watch(vue_app_name::String, fieldname::Symbol, channel::String, debounce::Int, throttle::Int, model::M; jsfunction::String = "")::String where {M<:ReactiveModel}
-  js_channel = isempty(channel) ?
-                "window.Genie.Settings.webchannels_default_route" :
-                "$vue_app_name.channel_"
-
   isempty(jsfunction) &&
     (jsfunction = "$vue_app_name.push('$fieldname')")
 

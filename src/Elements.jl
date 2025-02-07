@@ -132,7 +132,8 @@ function vue_integration(::Type{M};
                           transport::Module = Genie.WebChannels)::String where {M<:ReactiveModel}
   model = Base.invokelatest(M)
   vue_app = json(model |> Stipple.render)
-  vue_app = replace(vue_app, "\"$(getchannel(model))\"" => Stipple.channel_js_name)
+  # the following line is (probably) no longer needed
+  # vue_app = replace(vue_app, "\"$(getchannel(model))\"" => Stipple.channel_js_name)
 
   # determine global components (registered under ReactiveModel)
   comps = Stipple.components(M)
