@@ -237,19 +237,26 @@ function setup_purge_checker(@nospecialize(m::ReactiveModel))
   modelref = Ref(m)
   channel = Symbol(getchannel(m))
   function(timer)
-      if ! isnothing(modelref[]) && Stipple.isendoflive(modelref[])
-          println("deleting ", channel)
-          Stipple.delete_channels(channel)
-          delete!(Stipple.LAST_ACTIVITY, channel)
-          # it seems that deleting the channels is sufficient
-          # in case that in future we know better, there is room to do
-          # some model-specific clean-up here, e.g.
-          # striphandlers(modelref[])
-          # modelref[] = nothing
-          close(timer)
-      else
-          # @info "purge_checker of $channel is alive"
-      end
+    if ! isnothing(modelref[]) && Stipple.isendoflive(modelref[])
+      # trigger model finalizer
+      notify(modelref[], Val(:finalize), nothing)
+
+      # remove observers in case that :finalize was modified
+      strip_observers(modelref[])
+
+      println("deleting ", channel)
+      Stipple.delete_channels(channel)
+      delete!(Stipple.LAST_ACTIVITY, channel)
+      # it seems that deleting the channels is sufficient
+      # in case that in future we know better, there is room to do
+      # some model-specific clean-up here, e.g.
+      # striphandlers(modelref[])
+      # modelref[] = nothing
+      
+      close(timer)
+    else
+      # @info "purge_checker of $channel is alive"
+    end
   end
 end
 
@@ -492,6 +499,7 @@ function init_storage(handler::Union{Nothing, Symbol, Expr} = nothing)
     :channel__ => :(channel__::String = Stipple.channelfactory()),
     :modes__ => :(modes__::Stipple.LittleDict{Symbol,Int} = Stipple.LittleDict{Symbol,Int}()),
     :handlers__ => :(handlers__::Vector{Function} = $handlers),
+    :observerfunctions__ => :(observerfunctions__::Vector{ObserverFunction} = ObserverFunction[]),
     :isready => :(isready::Stipple.R{Bool} = false),
     :isprocessing => :(isprocessing::Stipple.R{Bool} = false),
     :fileuploads => :(fileuploads::Stipple.R{Dict{AbstractString,AbstractString}} = Dict{AbstractString,AbstractString}()),
@@ -522,10 +530,7 @@ end
 
 function Base.notify(model::ReactiveModel, ::Val{:finalize})
   @info("Calling finalizers")
-  for fieldname in propertynames(model)
-      field = getfield(model, fieldname)
-      field isa AbstractObservable && Stipple.off!(field)
-  end
+  strip_observers(model)
 end
 
 
@@ -1322,6 +1327,11 @@ function striphandlers(m::M) where M <: ReactiveModel
   for (f, T) in zip(fieldnames(M), fieldtypes(M))
       T <: Reactive && off!(getfield(m, f))
   end
+end
+
+function strip_observers(model)
+  Observables.off.(model.observerfunctions__)
+  empty!(model.observerfunctions__)
 end
 
 #===#

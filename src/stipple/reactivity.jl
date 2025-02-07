@@ -1,4 +1,4 @@
-const REVISE_DEBUG_INFO =Ref(false)
+const REVISE_DEBUG_INFO = Ref(false)
 
 """
         mutable struct Reactive{T} <: Observables.AbstractObservable{T}
@@ -176,12 +176,13 @@ function setchannel(m::M, value) where {M<:ReactiveModel}
 end
 
 const AUTOFIELDS = [:isready, :isprocessing, :fileuploads, :ws_disconnected] # not DRY but we need a reference to the auto-set fields
-const INTERNALFIELDS = [:channel__, :modes__, :handlers__] # not DRY but we need a reference to the auto-set fields
+const INTERNALFIELDS = [:channel__, :modes__, :handlers__, :observerfunctions__] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin
   channel__::Stipple.ChannelName = Stipple.channelfactory()
   handlers__::Vector{Function} = Function[]
-  modes__::LittleDict{Symbol, Int} = LittleDict(:modes__ => PRIVATE, :channel__ => PRIVATE, :handlers__ => PRIVATE)
+  observerfunctions__::Vector{ObserverFunction} = ObserverFunction[]
+  modes__::LittleDict{Symbol, Int} = LittleDict(INTERNALFIELDS .=> PRIVATE)
   isready::Stipple.R{Bool} = false
   isprocessing::Stipple.R{Bool} = false
   channel_::String = "" # not sure what this does if it's empty

@@ -943,11 +943,12 @@ macro onchange(location, vars, expr)
   expr = fieldnames_to_fieldcontent(expr, known_reactive_vars)
   expr = unmask(expr, vcat(known_reactive_vars, known_non_reactive_vars))
 
-  fn = length(vars.args) == 1 ? :on : :onany
-  :($fn($(on_vars.args...)) do _...
+  (fn, add_observers) = length(vars.args) == 1 ? (:on, :push!) : (:onany, :append!)
+  :($add_observers(__model__.observerfunctions__,
+    $fn($(on_vars.args...)) do _...
         $(expr.args...)
     end
-  ) |> QuoteNode
+  )) |> QuoteNode
 end
 
 macro onchangeany(var, expr)
