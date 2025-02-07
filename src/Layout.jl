@@ -63,7 +63,8 @@ julia> layout([
 function layout(output::Union{S,Vector}, m::Union{M, Vector{M}};
                 partial::Bool = false, title::String = "", class::String = "", style::String = "", head_content::Union{AbstractString, Vector{<:AbstractString}} = "",
                 channel::String = Stipple.channel_js_name,
-                core_theme::Bool = true)::ParsedHTMLString where {M<:ReactiveModel, S<:AbstractString}
+                core_theme::Bool = true,
+                sess_token::Bool = true)::ParsedHTMLString where {M<:ReactiveModel, S<:AbstractString}
 
   isa(output, Vector) && (output = join(output, '\n'))
   m isa Vector || (m = [m])
@@ -77,13 +78,17 @@ function layout(output::Union{S,Vector}, m::Union{M, Vector{M}};
   make_unique!(content, contains(r"src=|href="i))
 
   partial && return content
-
+  
+  head_content = join(head_content)
+  if !contains(head_content, "<meta name=\"sesstoken\"") && sess_token
+    head_content *= Stipple.sesstoken()
+  end
   Genie.Renderer.Html.doc(
     Genie.Renderer.Html.html([
       Genie.Renderer.Html.head([
         Genie.Renderer.Html.title(title)
         Genie.Renderer.Html.meta(name="viewport", content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no")
-        join(head_content)
+        head_content
       ])
       Genie.Renderer.Html.body(content, class=class, style=style)
     ])
@@ -112,6 +117,7 @@ function page(model::Union{M, Vector{M}}, args...;
               channel::String = Genie.config.webchannels_default_route, head_content::Union{AbstractString, Vector{<:AbstractString}} = "",
               prepend::Union{S,Vector} = "", append::Union{T,Vector} = [],
               core_theme::Bool = true,
+              sess_token::Bool = true,
               kwargs...)::ParsedHTMLString where {M<:Stipple.ReactiveModel, S<:AbstractString,T<:AbstractString}
   uis = if !isempty(args)
     args[1] isa Vector && model isa Vector ? args[1] : [args[1]]
@@ -133,7 +139,7 @@ function page(model::Union{M, Vector{M}}, args...;
       pagetemplate([Genie.Renderer.Html.div(id = rootselector(m), ui, args[2:end]...; class = class, kwargs...) for (m, ui) in zip(model, uis)]...)
       join(append)
     ], model;
-    partial, title, style, head_content, channel, core_theme)
+    partial, title, style, head_content, channel, core_theme, sess_token)
 end
 
 const app = page
