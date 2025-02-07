@@ -243,6 +243,7 @@ function setup_purge_checker(@nospecialize(m::ReactiveModel))
 
       # remove observers in case that :finalize was modified
       strip_observers(modelref[])
+      strip_handlers(modelref[])
 
       println("deleting ", channel)
       Stipple.delete_channels(channel)
@@ -531,6 +532,7 @@ end
 function Base.notify(model::ReactiveModel, ::Val{:finalize})
   @info("Calling finalizers")
   strip_observers(model)
+  strip_handlers(model)
 end
 
 
@@ -1328,6 +1330,7 @@ function striphandlers(m::M) where M <: ReactiveModel
       T <: Reactive && off!(getfield(m, f))
   end
 end
+const strip_handlers = striphandlers
 
 function strip_observers(model)
   Observables.off.(model.observerfunctions__)
