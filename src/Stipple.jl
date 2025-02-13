@@ -919,6 +919,7 @@ end
 
 function initscript(vue_app_name, channel) :: String
   Genie.Renderer.Html.script(["""
+  window.CHANNEL = null;
   document.addEventListener('DOMContentLoaded', () => window.create$vue_app_name('$channel') );
   """])
 end

@@ -12,6 +12,9 @@ using MacroTools
 import Genie.Renderer.Html: HTMLString, normal_element
 
 export root, elem, vm, @if, @else, @elseif, @for, @text, @bind, @data, @on, @click, @showif, @slot
+# deprecated exports
+export @iif, @els, @elsiif, @recur
+
 export stylesheet, kw_to_str
 export add_plugins, remove_plugins
 
@@ -167,7 +170,7 @@ function vue_integration(::Type{M};
 
     function app_ready(app) {
       if (app.isready) return;
-      if (app.WebChannel == Genie.AllWebChannels[0]) Genie.Revivers.addReviver(app.revive_jsfunction);
+      Genie.Revivers.addReviver(app.revive_jsfunction);
       app.isready = true;
     """,
     transport == Genie.WebChannels &&
