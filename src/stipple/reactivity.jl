@@ -562,44 +562,39 @@ macro clear_cache(App)
   :(Stipple.clear_cache($(esc(App))))
 end
 
-function find_concrete_type(::Type{T}) where T<:ReactiveModel
+function restore_constructor(::Type{T}) where T<:ReactiveModel
   # When Revise registeres macros it seems to execute them and to delete most of the traces, e.g. it
-  # deletes constructors of structs it created. As we define a variable points to the latest compiled struct
+  # deletes constructors of structs it created. As we define a variable that points to the latest compiled struct
   # the program throws an error when it tries to access the deleted constructor.
-  # This function tries to find the latest true definition of a ReactiveModel.
+  # This function redefines the deleted constructor by referring to the constructor of the latest valid version.
   parent = parentmodule(T)
   abstract_modelname = T.name.name
   modelconst = Symbol(abstract_modelname, '!')
 
-  CT = getfield(parent, modelconst)
-  length(methods(CT, ())) > 0 && return CT
+  M = getfield(parent, modelconst)
+  length(methods(M, ())) > 0 && return false
 
-  nn = split(String(CT.name.name), '_')
+  nn = split(String(M.name.name), '_')
   i = tryparse(Int, nn[end])
   i === nothing && return T
+  undef_modelname = Symbol(modelconst, '_', i)
   i -= 1
 
-  M = CT
   while i > 0
       modelname = Symbol(modelconst, '_', i)
       M = getfield(parent, modelname)
       if length(methods(M, ())) > 0
-        # latest true definition found, so reset the modelconst and the get_concrete_type method
+        # latest true definition found, so redefine the constructor
         ex = :(begin
-          $modelconst = $modelname
-          function Stipple.get_concrete_type(::Type{$abstract_modelname})
-            @info "Withdraw Revise-induced redefinition of '$($modelname)!', latest valid version is '$($modelconst)'"
-            # @warn "This withdrawal is unexpected, please inform the Genie team!"
-            length(methods($modelconst, ())) > 0 ? $modelconst : Stipple.find_concrete_type($abstract_modelname)
-          end
+          Stipple.REVISE_DEBUG_INFO[] && @info "Redefining model constructor"
+          $undef_modelname(; kwargs...) = $modelname(; kwargs...)
         end)
         @eval parent $ex
-
-        return M
+        return true
       end
       i -= 1
   end
-  return T
+  return false
 end
 
 macro type(modelname, storage)
@@ -622,15 +617,14 @@ macro type(modelname, storage)
       # In that case reset the modelconst to the latest valid version
       # via the get_concrete_type method, see below
       if @isdefined($modelconst) && length(methods($modelconst, ())) == 0
-        $__module__.$modelconst = Stipple.get_concrete_type($modelname)
+        Stipple.restore_constructor($modelconst)
       end
       $modelconst(; kwargs...)
     end
 
     function Stipple.get_concrete_type(::Type{$modelname})
       if @isdefined($modelconst) && length(methods($modelconst, ())) == 0
-        $__module__.$modelconst = Stipple.find_concrete_type($modelname)
-        Stipple.REVISE_DEBUG_INFO[] && @info "Withdraw Revise-induced redefinition of '$($modelname)!', latest valid version is '$($modelconst)'"
+        Stipple.restore_constructor($modelconst)
       end
       $modelconst
     end
