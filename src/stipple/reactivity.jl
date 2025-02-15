@@ -568,7 +568,8 @@ function restore_constructor(::Type{T}) where T<:ReactiveModel
   # the program throws an error when it tries to access the deleted constructor.
   # This function redefines the deleted constructor by referring to the constructor of the latest valid version.
   parent = parentmodule(T)
-  abstract_modelname = T.name.name
+  AM = get_abstract_type(T)
+  abstract_modelname = AM.name.name
   modelconst = Symbol(abstract_modelname, '!')
 
   M = getfield(parent, modelconst)
