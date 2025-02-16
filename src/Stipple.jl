@@ -20,6 +20,7 @@ const USE_MODEL_STORAGE = Ref(true)
 const PRECOMPILE = Ref(false)
 
 import MacroTools
+import Pkg.TOML
 
 function use_model_storage()
   USE_MODEL_STORAGE[]
@@ -681,6 +682,26 @@ function routename(::Type{M}) where M<:ReactiveModel
   replace(s, r"[^0-9a-zA-Z_]+" => "")
 end
 
+function gb_stipple_dir()
+  gbdir = joinpath(Base.DEPOT_PATH[1], "geniebuilder")
+  replace(strip(read(`julia --project=$gbdir -E 'dirname(dirname(Base.find_package("Stipple")))'`, String), ['"', '\n']), "\\\\" =>'/')
+end
+
+function gb_compat_deps(::Type{M}) where M <: ReactiveModel
+  get(ENV, "GB_ROUTES", "false") == "true" && return
+  basedir = gb_stipple_dir()
+  remote_assets_config = deepcopy(Stipple.assets_config)
+  remote_assets_config.version = TOML.parsefile(joinpath(basedir, "Project.toml"))["version"]
+  Genie.Assets.add_fileroute(remote_assets_config, "stipplecore.css"; basedir)
+  Genie.Assets.add_fileroute(remote_assets_config, "stipplecore.js"; basedir)
+  Genie.Assets.add_fileroute(remote_assets_config, "vue.js"; basedir)
+  Genie.Assets.add_fileroute(remote_assets_config, "vue_filters.js"; basedir)
+  Genie.Router.route(Genie.Assets.asset_route(remote_assets_config, :js, file = vm(M))) do
+    Stipple.Elements.vue2_integration(M) |> Genie.Renderer.Js.js
+  end
+  ENV["GB_ROUTES"] = true
+end
+
 function stipple_deps(::Type{M}, vue_app_name, debounce, throttle, core_theme, endpoint, transport)::Function where {M<:ReactiveModel}
   () -> begin
     if ! Genie.Assets.external_assets(assets_config)
@@ -690,6 +711,8 @@ function stipple_deps(::Type{M}, vue_app_name, debounce, throttle, core_theme, e
         end
       end
     end
+
+    haskey(ENV, "GB_JULIA_PATH") && gb_compat_deps(M)
 
     [
       if ! Genie.Assets.external_assets(assets_config)

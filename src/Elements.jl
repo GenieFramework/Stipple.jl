@@ -251,6 +251,95 @@ function vue_integration(::Type{M};
   output[2:prevind(output, lastindex(output))]
 end
 
+function vue2_integration(::Type{M};
+                          vue_app_name::String = "StippleApp",
+                          core_theme::Bool = true,
+                          debounce::Int = Stipple.JS_DEBOUNCE_TIME,
+                          transport::Module = Genie.WebChannels)::String where {M<:ReactiveModel}
+  model = Base.invokelatest(M)
+
+  vue_app = replace(json(model |> Stipple.render), "\"{" => " {", ", filterMixin" => "")
+  vue_app = replace(vue_app, "}\"" => "} ")
+  vue_app = replace(vue_app, "\"$(getchannel(model))\"" => Stipple.channel_js_name)
+
+  output =
+  string(
+    "
+
+  function initStipple(rootSelector){
+    Stipple.init($( core_theme ? "{theme: '$theme'}" : "" ));
+    window.$vue_app_name = window.GENIEMODEL = new Vue($( replace(vue_app, "'$(Stipple.UNDEFINED_PLACEHOLDER)'"=>Stipple.UNDEFINED_VALUE) ));
+  } // end of initStipple
+
+    "
+
+    ,
+
+    "
+
+  function initWatchers(){
+    "
+
+    ,
+    join(
+      [Stipple.watch(string("window.", vue_app_name), field, Stipple.channel_js_name, debounce, 0, model) for field in fieldnames(Stipple.get_concrete_type(M))
+        if Stipple.has_frontend_watcher(field, model)]
+    )
+    ,
+
+    "
+  } // end of initWatchers
+
+    "
+
+    ,
+
+    """
+
+  window.parse_payload = function(payload){
+    if (payload.key) {
+       window.$(vue_app_name).updateField(payload.key, payload.value);
+    }
+  }
+
+  function app_ready() {
+      $vue_app_name.channel_ = window.CHANNEL;
+      $vue_app_name.isready = true;
+      Genie.Revivers.addReviver(window.$(vue_app_name).revive_jsfunction);
+      $(transport == Genie.WebChannels &&
+      "
+      try {
+        if (Genie.Settings.webchannels_keepalive_frequency > 0) {
+          clearInterval($vue_app_name.keepalive_interval);
+          $vue_app_name.keepalive_interval = setInterval(keepalive, Genie.Settings.webchannels_keepalive_frequency);
+        }
+      } catch (e) {
+        if (Genie.Settings.env === 'dev') {
+          console.error('Error setting WebSocket keepalive interval: ' + e);
+        }
+      }
+      ")
+
+      if (Genie.Settings.env === 'dev') {
+        console.info('App starting');
+      }
+  };
+
+  if ( window.autorun === undefined || window.autorun === true ) {
+    initStipple('#$vue_app_name');
+    initWatchers();
+
+    Genie.WebChannels.subscriptionHandlers.push(function(event) {
+      app_ready();
+    });
+  }
+  """
+  )
+
+  output = repr(output)
+  output[2:prevind(output, lastindex(output))]
+end
+
 #===#
 
 function quote_replace(s::String)
