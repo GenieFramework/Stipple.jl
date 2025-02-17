@@ -31,7 +31,7 @@ in the backend can construct a function.
 function parse_jsfunction(s::AbstractString)
     # look for classical function definition (not a full syntax check, though)
     m = match( r"^\s*function\s*\(([^)]*)\)\s*{(.*)}\s*$"s, s)
-    !isnothing(m) && length(m.captures) == 2 && return opts(arguments=m[1], body=m[2])
+    !isnothing(m) && length(m.captures) == 2 && return JSFunction(m[1], m[2])
     
     # look for pure function definition including unbracketed single parameter
     m = match( r"^\s*\(?([^=<>:;.(){}\[\]]*?)\)?\s*=>\s*({*.*?}*)\s*$"s , s )
@@ -93,7 +93,7 @@ There is also a string macro version `jsfunction"<js code>"`
 """
 function jsfunction(jscode::String)
   jsfunc = parse_jsfunction(jscode)
-  isnothing(jsfunc) ? JSFunction("", jscode) : JSFunction(jsfunc[:arguments], jsfunc[:body])
+  isnothing(jsfunc) ? JSFunction("", jscode) : jsfunc
 end
 
 """
