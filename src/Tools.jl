@@ -226,6 +226,25 @@ macro stipple_precompile(workload)
     end) |> esc
 end
 
+macro precompile_route(url, view, App = nothing)
+    quote
+        route($url) do
+            try
+                page(@init($App), $view) |> html
+                view_fn = $view isa Function ? html! : html
+                # without  `layout = nothing` the function is not compilable
+                if $App === nothing
+                    view_fn($view; layout = nothing, context = @__MODULE__, model = @init())
+                else
+                    view_fn($view; layout = nothing, context = @__MODULE__, model = @init($App))
+                end
+            catch e
+                html("Couldn't build precompile route, serving this instead!")
+            end
+        end
+    end |> esc
+end
+
 """
     striplines!(ex::Union{Expr, Vector})
 

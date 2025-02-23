@@ -27,6 +27,26 @@ end
 const _pages = Page[]
 pages() = _pages
 
+function add_page!(pages::Vector{Page}, page::Page)
+  if isempty(pages)
+    push!(pages, page)
+  else
+    new_page = true
+    replaced = false
+    for i in reverse(eachindex(pages))
+      if pages[i].route.path == page.route.path && pages[i].route.method == page.route.method
+        # if already replaced then delete the duplicate
+        replaced && deleteat!(pages, i)
+        Router.delete!(Router.routename(pages[i].route))
+        pages[i] = page
+        new_page = false
+        replaced = true
+      end
+    end
+    new_page && push!(pages, page)
+  end
+end
+
 function Page(  route::Union{Route,String};
                 view::Union{Genie.Renderers.FilePath,<:AbstractString,ParsedHTMLString,Vector{<:AbstractString},Function},
                 model::Union{M,Function,Nothing,Expr,Module,Type{M}} = Stipple.init(EmptyModel),
@@ -90,23 +110,7 @@ function Page(  route::Union{Route,String};
     page_fn(view; layout, context, model = model, kwargs...)
   end
 
-  if isempty(_pages)
-    push!(_pages, page)
-  else
-    new_page = true
-    replaced = false
-    for i in reverse(eachindex(_pages))
-      if _pages[i].route.path == route.path && _pages[i].route.method == route.method
-        # if already replaced then delete the duplicate
-        replaced && deleteat!(_pages, i)
-        Router.delete!(Router.routename(_pages[i].route))
-        _pages[i] = page
-        new_page = false
-        replaced = true
-      end
-    end
-    new_page && push!(_pages, page)
-  end
+  add_page!(_pages, page)
 
   Router.route(route)
 
@@ -119,6 +123,11 @@ end
 
 function remove_pages()
   empty!(_pages)
+end
+
+function Genie.route(p::Stipple.Pages.Page)
+  p ∈ Stipple.Pages._pages || push!(Stipple.Pages._pages, p)
+  route(p.route)
 end
 
 end

@@ -21,7 +21,7 @@ export @throttle, @clear_throttle
 export @clear, @clear_vars, @clear_handlers
 
 # app handling
-export @page, @init, @handlers, @app, @appname, @app_mixin, @modelstorage, @handler
+export @page, @route, @init, @handlers, @app, @appname, @app_mixin, @modelstorage, @handler, @init_routes
 
 # js functions on the front-end (see Vue.js docs)
 export @methods, @watch, @computed, @client_data, @add_client_data
@@ -1194,7 +1194,64 @@ macro page(expressions...)
       end
     end
 
-    :(Stipple.Pages.Page($(args...), $url, view = $view)) |> esc
+    quote
+      isdefined(@__MODULE__, :__pages__) || (const __pages__ = Stipple.Pages.Page[])
+      Stipple.Pages.add_page!(__pages__, Stipple.Pages.Page($(args...), $url, view = $view))[end]
+    end |> esc
+end
+
+function is_fn_expr(expr)
+  expr isa Expr && (expr.head == :function || expr.head == :->)
+end
+
+function find_args(expr)
+  expr isa Expr && length(expr.args) > 0 || return (0, 0)
+  n = length(expr.args)
+  pos = expr.args[1] isa Expr && expr.args[1].head == :parameters ? 2 : 1
+  n >= pos ? (pos, n - pos) : (0, 0)
+end
+
+macro route(args...)
+  newargs = Stipple.expressions_to_args(args)
+  (pos, n) = find_args(Expr(:call, :dummy, newargs...))
+  n != 2 && throw("The @route macro needs to be called with two arguments")
+    
+  # if not called with a function, make the second argument a function
+  if !is_fn_expr(newargs[1]) && !is_fn_expr(newargs[2])
+    body = wrap(newargs[2], :block)
+    newargs[2] = Expr(:->, Expr(:tuple), body.args...)
+  end
+  route_expr = :(r = Stipple.Genie.route($(newargs...)))
+
+  out = quote
+    isdefined(@__MODULE__, :__routes__) || (const __routes__ = LittleDict{Symbol, Stipple.Genie.Router.Route}())
+    __route_dummy__
+    r.name === nothing && (r.name = routename(r))
+    push!(__routes__, r.name, r)
+  end
+  replace!(out.args, :__route_dummy__ => route_expr)
+  out |> esc
+end
+
+function init_routes(context = @__MODULE__)
+  (context === @__MODULE__) && return
+  if isdefined(context, :__routes__)
+    for (name, route) in context.__routes__
+      Stipple.Genie.Router.route(route)
+    end
+  end
+  for p in Stipple.Pages._pages
+    Stipple.Genie.Router.route(p)
+  end
+end
+
+macro init_routes()
+  :(init_routes($__module__)) |> esc
+end
+
+macro route(expr)
+  expr.head == :do || throw("The @route needs to be called exactly like the `route()` function")
+  pushfirst!(ex.args[1].args, ex.args[2])
 end
 
 function __init()
