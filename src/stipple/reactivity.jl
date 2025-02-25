@@ -541,6 +541,7 @@ macro var_storage(expr, handler = nothing)
     esc(:($storage))
 end
 
+# TODO: the following definition is probably wrong and needs to be refactored
 Stipple.Genie.Router.delete!(M::Type{<:ReactiveModel}) = Stipple.Genie.Router.delete!(Symbol(Stipple.routename(M)))
 
 function clear_route(M::Type{<:ReactiveModel})
