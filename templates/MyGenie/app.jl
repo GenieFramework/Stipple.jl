@@ -1,6 +1,7 @@
 cd(@__DIR__)
 
-using MyGenieMulti
+using Genie
+@using MyGenie
 
 up(open_browser = true)
 
