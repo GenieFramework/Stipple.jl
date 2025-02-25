@@ -21,7 +21,7 @@ export @throttle, @clear_throttle
 export @clear, @clear_vars, @clear_handlers
 
 # app handling
-export @page, @route, @init, @handlers, @app, @appname, @app_mixin, @modelstorage, @handler, @init_routes
+export @page, @route, @init, @handlers, @app, @appname, @app_mixin, @modelstorage, @handler, @init_routes, @init_function
 
 # js functions on the front-end (see Vue.js docs)
 export @methods, @watch, @computed, @client_data, @add_client_data
@@ -1204,30 +1204,26 @@ function is_fn_expr(expr)
   expr isa Expr && (expr.head == :function || expr.head == :->)
 end
 
-function find_args(expr)
-  expr isa Expr && length(expr.args) > 0 || return (0, 0)
-  n = length(expr.args)
-  pos = expr.args[1] isa Expr && expr.args[1].head == :parameters ? 2 : 1
-  n >= pos ? (pos, n - pos) : (0, 0)
-end
-
 macro route(args...)
-  newargs = Stipple.expressions_to_args(args)
-  (pos, n) = find_args(Expr(:call, :dummy, newargs...))
+  newargs, kwargs = Stipple.split_args(Stipple.expressions_to_args(args))
+  
+  n = length(newargs)
   n != 2 && throw("The @route macro needs to be called with two arguments")
     
   # if not called with a function, make the second argument a function
   if !is_fn_expr(newargs[1]) && !is_fn_expr(newargs[2])
     body = wrap(newargs[2], :block)
-    newargs[2] = Expr(:->, Expr(:tuple), body.args...)
+    newargs[2] = Expr(:->, Expr(:tuple), body)
   end
-  route_expr = :(r = Stipple.Genie.route($(newargs...)))
+  route_expr = :(__r__ = Stipple.Genie.route($(newargs...); $(kwargs...)))
 
   out = quote
+    local __r__
     isdefined(@__MODULE__, :__routes__) || (const __routes__ = LittleDict{Symbol, Stipple.Genie.Router.Route}())
     __route_dummy__
-    r.name === nothing && (r.name = routename(r))
-    push!(__routes__, r.name, r)
+    __r__.name === nothing && (__r__.name = routename(__r__))
+    push!(__routes__, __r__.name, __r__)
+    __r__
   end
   replace!(out.args, :__route_dummy__ => route_expr)
   out |> esc
@@ -1235,18 +1231,20 @@ end
 
 function init_routes(context = @__MODULE__)
   (context === @__MODULE__) && return
-  if isdefined(context, :__routes__)
-    for (name, route) in context.__routes__
-      Stipple.Genie.Router.route(route)
-    end
+  isdefined(context, :__routes__) && for (name, route) in context.__routes__
+    Genie.Router.route(route)
   end
-  for p in Stipple.Pages._pages
-    Stipple.Genie.Router.route(p)
+  isdefined(context, :__pages__) && for p in context.__pages__
+    route(p)
   end
 end
 
 macro init_routes()
-  :(init_routes($__module__)) |> esc
+  :(Stipple.ReactiveTools.init_routes($__module__)) |> esc
+end
+
+macro init_function()
+  :(__init__() = Stipple.ReactiveTools.init_routes($__module__)) |> esc
 end
 
 macro route(expr)

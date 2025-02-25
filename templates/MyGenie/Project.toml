@@ -1,0 +1,9 @@
+name = "MyGenieMulti"
+uuid = "141a3f4f-6dd5-4f17-97c0-9df5bac62f5a"
+authors = ["Helmut Hänsel <helmut.haensel@gmx.de>"]
+version = "0.1.0"
+
+[deps]
+Genie = "c43c736e-a2d1-11e8-161f-af95117fbd1e"
+Stipple = "4acbeb90-81a0-11ea-1966-bdaff8155998"
+StippleUI = "a3c5d34a-b254-4859-a8fa-b86abb7e84a3"

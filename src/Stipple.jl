@@ -287,7 +287,7 @@ function init_storage end
 
 include("Tools.jl")
 include("ReactiveTools.jl")
-export @stipple_precompile
+export @stipple_precompile, @precompile_route
 
 #===#
 

@@ -108,6 +108,21 @@ end
 delete_kwarg(expressions, kwarg::Symbol) = delete_kwarg!(Any[copy(x) for x in expressions], kwarg)
 delete_kwargs(expressions, kwarg::Vector{Symbol}) = delete_kwargs!(Any[copy(x) for x in expressions], kwarg)
 
+function split_args(args)
+    hasparams = args[1] isa Expr && args[1].head == :parameters
+
+    params = hasparams ? args[1].args : Any[]
+    args = collect(hasparams ? args[2:end] : args)
+
+    for i in reverse(eachindex(args))
+        if args[i] isa Expr && args[i].head == :kw
+            pushfirst!(params, args[i])
+            deleteat!(args, i)
+        end
+    end
+    (args, params)
+end
+
 using PrecompileTools
 
 """
