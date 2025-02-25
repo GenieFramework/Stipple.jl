@@ -24,20 +24,11 @@ end
     @info "x or y changed to $x, $y"
 end
 
-ui() = [
+ui() = cell(class = "st-module", [
     row("Hello World {{ x }}, {{ y }}")
 
     slider(1:10, :x)
     slider(11:20, :y)
-]
-
-ui2() = cell(class = "st-module", [
-    row(h1("Hello World {{ x }}, {{ y }}"))
-
-    card(class = "q-my-lg", style = "max-width = 300px", [
-        cardsection(slider(1:10, :x))
-        cardsection(slider(11:20, :y))
-    ])
 ])
 
 @page("/", ui, model = MyApp)
@@ -62,7 +53,7 @@ end)
 
 @stipple_precompile begin
     @precompile_route("/", ui, MyApp)
-    @precompile_route("/page2", ui2, MyApp)
+    @precompile_route("/page2", ui, MyApp)
 
     precompile_get("/")
     precompile_get("/page2")
