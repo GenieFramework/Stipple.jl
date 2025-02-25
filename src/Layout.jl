@@ -79,7 +79,7 @@ function layout(output::Union{S,Vector}, m::Union{M, Vector{M}};
 
   partial && return content
   
-  head_content = join(head_content)
+  head_content = join(head_content) * "<style>[v-cloak] { display: none; }</style>"
   if !contains(head_content, "<meta name=\"sesstoken\"") && sess_token
     head_content *= Stipple.sesstoken()
   end
