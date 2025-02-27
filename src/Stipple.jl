@@ -683,7 +683,7 @@ function routename(::Type{M}) where M<:ReactiveModel
 end
 
 function gb_stipple_dir()
-  gbdir = joinpath(Base.DEPOT_PATH[1], "geniebuilder")
+  gbdir = get(ENV, "GB_DIR", joinpath(Base.DEPOT_PATH[1], "geniebuilder"))
   replace(strip(read(`julia --project=$gbdir -E 'dirname(dirname(Base.find_package("Stipple")))'`, String), ['"', '\n']), "\\\\" =>'/')
 end
 
