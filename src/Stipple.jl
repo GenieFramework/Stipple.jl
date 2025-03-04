@@ -684,7 +684,7 @@ end
 
 function gb_stipple_dir()
   gbdir = get(ENV, "GB_DIR", joinpath(Base.DEPOT_PATH[1], "geniebuilder"))
-  replace(strip(read(`julia --project=$gbdir -E 'dirname(dirname(Base.find_package("Stipple")))'`, String), ['"', '\n']), "\\\\" =>'/')
+  replace(strip(read(`julia --project=$gbdir -E 'dirname(dirname(Base.locate_package(Base.PkgId(Base.UUID("4acbeb90-81a0-11ea-1966-bdaff8155998"), "Stipple"))))'`, String), ['"', '\n']), "\\\\" =>'/')
 end
 
 function gb_compat_deps(::Type{M}) where M <: ReactiveModel
