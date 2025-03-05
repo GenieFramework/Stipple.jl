@@ -1,4 +1,4 @@
-function print_object(io, obj::T, omit = nothing, compact = false) where T <: ReactiveModel
+function print_object(io, obj::T, compact = false; omit = [:handlers__, :observerfunctions__]) where T <: ReactiveModel
     # currently no different printing for compact = true ...
     fields = [p for p in propertynames(obj)]
     omit !== nothing && setdiff!(fields, omit)
