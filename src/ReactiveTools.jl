@@ -749,7 +749,8 @@ macro handlers(typename, expr, handlers_fn_name = Symbol(typename, :_handlers), 
 
   expr = quote
     $(initcode_final)
-    Stipple.ReactiveTools.delete_events($typename)
+    # no longer adequate, because the events are no longer defined in the model
+    # Stipple.ReactiveTools.delete_events($typename)
 
     function $handlers_fn_name(__model__)
       $(handlercode_final...)
