@@ -728,3 +728,36 @@ end
     unsynchronize!(o1, o)
     @test length(o.listeners) == 0
 end
+
+@testset "Priority" begin
+    # test app example from the docstring
+    @app begin
+        # reactive variables
+        @in N = 0
+        @out result = 0
+     
+        @onchange N begin
+          result = 10 * N
+        end
+        
+        @onchange N begin
+          N[!] = clamp(N, 0, 10)
+        end priority = 1
+    end
+
+    model = @init
+    @test model.N[] == 0
+    @test model.result[] == 0
+
+    model.N[] = 5
+    @test model.N[] == 5
+    @test model.result[] == 50
+
+    model.N[] = -20
+    @test model.N[] == 0
+    @test model.result[] == 0
+
+    model.N[] = 20
+    @test model.N[] == 10
+    @test model.result[] == 100
+end

@@ -1026,7 +1026,7 @@ end
 
 # add a method to Observables.on to accept inverted order of arguments similar to route()
 import Observables.on
-on(observable::Observables.AbstractObservable, f::Function; weak = true) = on(f, observable; weak = weak)
+on(observable::Observables.AbstractObservable, f::Function; weak = true, kwargs...) = on(f, observable; weak, kwargs...)
 
 """
     onbutton(f::Function, button::R{Bool}; async = false, weak = false)
