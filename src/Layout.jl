@@ -317,9 +317,16 @@ function extract_kwargs!(args::Vector, kwarg_names)
   kwargs
 end
 
-function _wrap_expression(expr)
+function _wrap_expression(expr, context)
   new_expr = if expr isa Expr && expr.head == :call
-    kwargs = extract_kwargs!(expr.args, FLEXGRID_KWARGS[1:6])
+    for i in eachindex(expr.args)
+      if expr.args[i] isa Expr && expr.args[i].head == :macrocall && 
+              expr.args[i].args[1] ∈ (Symbol("@for"), Symbol("@if"), Symbol("@elseif"), Symbol("@else"), Symbol("@showif"))
+
+        expr.args[i] = macroexpand(context, expr.args[i])
+      end
+    end
+    kwargs = extract_kwargs!(expr.args, vcat(FLEXGRID_KWARGS[1:6], [:var"v-for", :var"v__for", :var"v-if", :var"v__if", :var"v-else", :var"v__else", :var"v-show", :var"v__show"]))
     # extra treatment for cell(), because col = 0 is default:
     # So if not set explicitly then add col = 0 to the wrapper kwargs and col = -1 in the child kwargs
     if expr.args[1] == :cell && :col ∉ [kwarg isa Expr ? kwarg.args[1] : kwarg for kwarg in kwargs.args]
@@ -377,9 +384,9 @@ julia> row(gutter = :md, @gutter [
 """
 macro gutter(expr)
   if expr isa Expr && expr.head ∈ (:vcat, :vect)
-      expr.args = _wrap_expression.(expr.args)
+      expr.args = _wrap_expression.(expr.args, Ref(__module__))
   else
-      expr = _wrap_expression(expr)
+      expr = _wrap_expression(expr, __module__)
   end
   expr |> esc
 end
