@@ -33,8 +33,11 @@ function print_object(io, obj::T, compact = false; omit = [:handlers__, :observe
                 "$fieldmode, non-reactive"
             end
         end
-
-        println(io, "    $fieldname ($fieldtype): ", Observables.to_value(field))
+        displaysize = get(io, :displaysize, (1, 80))
+        limit = get(io, :limit, true)
+        ioc = IOContext(IOBuffer(), :compact => compact, :limit => limit, :displaysize => displaysize)
+        show(ioc, "text/plain", Observables.to_value(field))
+        println(io, "    $fieldname ($fieldtype): ", String(take!(ioc.io)))
     end
 end
 
