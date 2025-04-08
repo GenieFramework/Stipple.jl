@@ -620,7 +620,8 @@ end
     end
     @test Stipple.stipple_parse(Union{Nothing, String}, nothing) === nothing
 
-    @enum Fruit apple banana kiwi
+    # defined above
+    # @enum Fruit apple=1 orange=2 kiwi=3
     @test Stipple.stipple_parse(Fruit, "apple") == apple
 end
 
