@@ -363,15 +363,15 @@ function handle_comparisons(expr)
   if expr isa Expr && expr.head == :call && expr.args[1] in (:(==), :!=, :<, :<=, :>, :>=, :in, :∈, :∉, :≤, :≥, :≠)
     op = string(expr.args[1])
     negation = op == "∉"
-    op = replace(op, "∈" => "in", "∉" => "in", "≤" => "<=", "≥" => ">=", "≠" => "!=")
+    utf8_ops = ("∈", "∉", "≤", "≥", "≠")
+    pos = findfirst(==(op), utf8_ops)
+    pos === nothing || (op = utf8_ops[pos])
+
     ls = expr.args[2]
     rs = expr.args[3]
-    ls = MacroTools.postwalk(ls) do expr
-      expr isa QuoteNode && expr.value isa Symbol ? JSONText(expr.value) : expr
-    end
-    rs = MacroTools.postwalk(rs) do expr
-      expr isa QuoteNode && expr.value isa Symbol ? JSONText(expr.value) : expr
-    end
+    ls isa QuoteNode && ls.value isa Symbol && (ls = JSONText(ls.value))
+    rs isa QuoteNode && rs.value isa Symbol && (rs = JSONText(rs.value))
+
     expr = :(json(render($ls)) * " $($op) " * json(render($rs)))
     negation && (expr = :("!($($expr))"))
   end
