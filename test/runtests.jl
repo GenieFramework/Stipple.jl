@@ -443,8 +443,8 @@ end
     el = column("Hello", @if(:visible))
     @test contains(el, "v-if=\"visible\"")
 
-    el = column("Hello", @else(:visible))
-    @test contains(el, "v-else=\"visible\"")
+    el = column("Hello", @else)
+    @test contains(el, "v-else")
 
     el = column("Hello", @elseif(:visible))
     @test contains(el, "v-else-if=\"visible\"")
@@ -454,6 +454,17 @@ end
 
     el = row(@for("i in [1, 2, 3, 4, 5]"), "{{ i }}")
     @test contains(el, "v-for=\"i in [1, 2, 3, 4, 5]\"")
+
+    # test Julia expressions
+    el = row(@showif(:n > 0), "The result is '{{ n }}'")
+    @test el == "<div v-show=\"n > 0\" class=\"row\">The result is '{{ n }}'</div>"
+
+    @enum Fruit apple=1 orange=2 kiwi=3
+
+    fruit = apple
+
+    el = row(@showif(:fruit == apple), "My fruit is a(n) '{{ fruit }}'")
+    @test el == "<div v-show=\"fruit == 'apple'\" class=\"row\">My fruit is a(n) '{{ fruit }}'</div>"
 end
 
 @testset "Compatibility of JSONText between JSON3 and JSON" begin
@@ -605,6 +616,9 @@ end
         @test Stipple.stipple_parse(Union{Nothing, SubString}, "hi") == SubString("hi")
     end
     @test Stipple.stipple_parse(Union{Nothing, String}, nothing) === nothing
+
+    @enum Fruit apple banana kiwi
+    @test Stipple.stipple_parse(Fruit, "apple") == apple
 end
 
 @testset "Exporting and loading model field values" begin
