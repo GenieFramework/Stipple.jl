@@ -459,6 +459,9 @@ end
     el = row(@showif(:n > 0), "The result is '{{ n }}'")
     @test el == "<div v-show=\"n > 0\" class=\"row\">The result is '{{ n }}'</div>"
 
+    el =  row("hello", @showif(:n^2 ∉ 3:2:11))
+    @test el == "<div v-show=\"!(n ** 2 ∉ [3,5,7,9,11])\" class=\"row\">hello</div>"
+
     @enum Fruit apple=1 orange=2 kiwi=3
 
     fruit = apple

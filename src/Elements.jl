@@ -359,6 +359,42 @@ function kw_to_str(; kwargs...)
   join(["$k = \"$v\"" for (k,v) in kwargs], ' ')
 end
 
+struct JSONExpr
+  s::String
+end
+JSONExpr(s::Symbol) = JSONExpr(String(s))
+
+@inline StructTypes.StructType(::Type{JSONExpr}) = JSON3.RawType()
+@inline StructTypes.construct(::Type{JSONExpr}, x::JSON3.RawValue) = JSONExpr(string(x))
+@inline JSON3.rawbytes(x::JSONExpr) = codeunits(x.s)
+
+function protect_vars(expr)
+  if expr isa QuoteNode && expr.value isa Symbol
+      :($(JSONExpr(expr.value)))
+  elseif expr isa Expr && expr.head != :. && (expr.head != :call || expr.args[1] ∉ (:getproperty, :getfield))
+      # Recurse into all arguments
+      Expr(expr.head, map(protect_vars, expr.args)...)
+  elseif expr isa Array
+      map(protect_vars, expr)
+  else
+      expr
+  end
+end
+
+for op in (:+, :- , :* , :/ , :%, :^ , :(==), :<, :>, :<=, :>=)
+  op_string = op == :^ ? " ** " : " $op "
+  eval(quote
+      # Handle the `^` operator separately, as it's a bit different
+      Base.$(op)(a::JSONExpr, b::JSONExpr) = JSONExpr(string(a.s, $op_string, b.s))
+      Base.$(op)(a::JSONExpr, b) = JSONExpr(string(a.s, $op_string, json(b)))
+      Base.$(op)(a, b::JSONExpr) = JSONExpr(string(json(a), $op_string, b.s))
+  end)
+end
+
+macro jsexpr(expr)
+  expr |> replace_quoted_vars |> protect_vars |> esc_expr
+end
+
 function handle_comparisons(expr)
   if expr isa Expr && expr.head == :call && expr.args[1] in (:(==), :!=, :<, :<=, :>, :>=, :in, :∈, :∉, :≤, :≥, :≠)
     op = string(expr.args[1])
@@ -367,10 +403,10 @@ function handle_comparisons(expr)
     pos = findfirst(==(op), utf8_ops)
     pos === nothing || (op = utf8_ops[pos])
 
-    ls = expr.args[2]
-    rs = expr.args[3]
-    ls isa QuoteNode && ls.value isa Symbol && (ls = JSONText(ls.value))
-    rs isa QuoteNode && rs.value isa Symbol && (rs = JSONText(rs.value))
+    ls = protect_vars(expr.args[2])
+    rs = protect_vars(expr.args[3])
+    # ls isa QuoteNode && ls.value isa Symbol && (ls = JSONText(ls.value))
+    # rs isa QuoteNode && rs.value isa Symbol && (rs = JSONText(rs.value))
 
     expr = :(json(render($ls)) * " $($op) " * json(render($rs)))
     negation && (expr = :("!($($expr))"))
@@ -395,6 +431,9 @@ Tentatively we now also support Julia expressions with comparison operators
 ```julia
 julia> cell(@if(:i ∉ 3:2:7))
 "<div class=\"st-col col\" v-if=\"!(i in [3,5,7])\"></div>"
+
+julia> row("hello", @showif(:n^2 ∉ 3:2:11))
+"<div v-show=\"!(n ** 2 ∉ [3,5,7,9,11])\" class=\"row\">hello</div>"
 ````
 """
 macro iif(expr)
