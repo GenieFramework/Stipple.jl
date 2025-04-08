@@ -359,6 +359,26 @@ function kw_to_str(; kwargs...)
   join(["$k = \"$v\"" for (k,v) in kwargs], ' ')
 end
 
+function handle_comparisons(expr)
+  if expr isa Expr && expr.head == :call && expr.args[1] in (:(==), :!=, :<, :<=, :>, :>=, :in, :∈, :∉, :≤, :≥, :≠)
+    op = string(expr.args[1])
+    negation = op == "∉"
+    op = replace(op, "∈" => "in", "∉" => "in", "≤" => "<=", "≥" => ">=", "≠" => "!=")
+    ls = expr.args[2]
+    rs = expr.args[3]
+    ls = MacroTools.postwalk(ls) do expr
+      expr isa QuoteNode && expr.value isa Symbol ? JSONText(expr.value) : expr
+    end
+    rs = MacroTools.postwalk(rs) do expr
+      expr isa QuoteNode && expr.value isa Symbol ? JSONText(expr.value) : expr
+    end
+    expr = :(json(render($ls)) * " $($op) " * json(render($rs)))
+    negation && (expr = :("!($($expr))"))
+  end
+
+  return expr
+end
+
 """
     @if(expr)
 
@@ -371,8 +391,14 @@ Generates `v-if` Vue.js code using `expr` as the condition.
 julia> span("Bad stuff's about to happen", class="warning", @if(:warning))
 "<span class=\"warning\" v-if='warning'>Bad stuff's about to happen</span>"
 ```
+Tentatively we now also support Julia expressions with comparison operators
+```julia
+julia> cell(@if(:i ∉ 3:2:7))
+"<div class=\"st-col col\" v-if=\"!(i in [3,5,7])\"></div>"
+````
 """
 macro iif(expr)
+  expr = handle_comparisons(expr)
   Expr(:kw, Symbol("v-if"), esc_expr(expr))
 end
 const var"@if" = var"@iif"
@@ -391,6 +417,7 @@ julia> span("An error has occurred", class="error", @elseif(:error))
 ```
 """
 macro elsiif(expr)
+  expr = handle_comparisons(expr)
   Expr(:kw, Symbol("v-else-if"), esc_expr(expr))
 end
 const var"@elseif" = var"@elsiif"
@@ -404,12 +431,12 @@ Generates `v-else` Vue.js code using `expr` as the condition.
 ### Example
 
 ```julia
-julia> span("Might want to keep an eye on this", class="notice", @else(:notice))
-"<span class=\"notice\" v-else='notice'>Might want to keep an eye on this</span>"
+julia> span(@else, "Might want to keep an eye on this", class="notice")
+"<span v-else class=\"notice\">Might want to keep an eye on this</span>"
 ```
 """
-macro els(expr)
-  Expr(:kw, Symbol("v-else"), esc_expr(expr))
+macro els()
+  Expr(:kw, Symbol("v-else"), true)
 end
 const var"@else" = var"@els"
 
@@ -447,9 +474,10 @@ It is also possible to loop over `(v, k)` or `v`; index will always be zero-base
 
 """
 macro recur(expr)
-  expr isa Expr && expr.head == :call && expr.args[1] == :in && (expr.args[2] = string(expr.args[2]))
-  expr = (MacroTools.@capture(expr, y_ in z_)) ? :("$($y) in $($z isa Union{AbstractDict, AbstractVector} ? Stipple.js_attr($z) : $z)") : :("$($expr)")
+  # expr isa Expr && expr.head == :call && expr.args[1] == :in && (expr.args[2] = string(expr.args[2]))
+  # expr = (MacroTools.@capture(expr, y_ in z_)) ? :("$($y) in $($z isa Union{AbstractDict, AbstractVector} ? Stipple.js_attr($z) : $z)") : :("$($expr)")
 
+  expr = handle_comparisons(expr)
   Expr(:kw, Symbol("v-for"), esc_expr(expr))
 end
 const var"@for" = var"@recur"
@@ -629,6 +657,7 @@ julia> h1("Hello!", @showif(:ok))
 ```
 """
 macro showif(expr)
+  expr = handle_comparisons(expr)
   Expr(:kw, Symbol("v-show"), esc_expr(expr))
 end
 
