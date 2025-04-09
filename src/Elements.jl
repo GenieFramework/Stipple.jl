@@ -15,6 +15,8 @@ export root, elem, vm, @if, @else, @elseif, @for, @text, @bind, @data, @on, @cli
 # deprecated exports
 export @iif, @els, @elsiif, @recur
 
+export @jsexpr, JSExpr, js_quote_replace
+
 export stylesheet, kw_to_str
 export add_plugins, remove_plugins
 
@@ -342,7 +344,7 @@ end
 
 #===#
 
-function quote_replace(s::String)
+function js_quote_replace(s::String)
   if occursin('"', s)
     # escape unescaped quotes
     replace(occursin(''', s) ? replace(s, r"(?<!\\)'" => "\\'") : s, '"' => ''')
@@ -352,30 +354,30 @@ function quote_replace(s::String)
 end
 
 function esc_expr(expr)
-    :(Stipple.Elements.quote_replace("$($(esc(expr)))"))
+    :(Stipple.Elements.js_quote_replace("$($(esc(expr)))"))
 end
 
 function kw_to_str(; kwargs...)
   join(["$k = \"$v\"" for (k,v) in kwargs], ' ')
 end
 
-struct JSONExpr
+struct JSExpr
   s::String
 end
-JSONExpr(s::Symbol) = JSONExpr(String(s))
+JSExpr(s::Symbol) = JSExpr(String(s))
 
-@inline StructTypes.StructType(::Type{JSONExpr}) = JSON3.RawType()
-@inline StructTypes.construct(::Type{JSONExpr}, x::JSON3.RawValue) = JSONExpr(string(x))
-@inline JSON3.rawbytes(x::JSONExpr) = codeunits(x.s)
+@inline StructTypes.StructType(::Type{JSExpr}) = JSON3.RawType()
+@inline StructTypes.construct(::Type{JSExpr}, x::JSON3.RawValue) = JSExpr(string(x))
+@inline JSON3.rawbytes(x::JSExpr) = codeunits(x.s)
 
-function protect_vars(expr)
+function vars_to_jsexpr(expr)
   if expr isa QuoteNode && expr.value isa Symbol
-      :($(JSONExpr(expr.value)))
+      :($(JSExpr(expr.value)))
   elseif expr isa Expr && expr.head != :. && (expr.head != :call || expr.args[1] ∉ (:getproperty, :getfield))
       # Recurse into all arguments
-      Expr(expr.head, map(protect_vars, expr.args)...)
+      Expr(expr.head, map(vars_to_jsexpr, expr.args)...)
   elseif expr isa Array
-      map(protect_vars, expr)
+      map(vars_to_jsexpr, expr)
   else
       expr
   end
@@ -385,14 +387,24 @@ for op in (:+, :- , :* , :/ , :%, :^ , :(==), :<, :>, :<=, :>=)
   op_string = op == :^ ? " ** " : " $op "
   eval(quote
       # Handle the `^` operator separately, as it's a bit different
-      Base.$(op)(a::JSONExpr, b::JSONExpr) = JSONExpr(string(a.s, $op_string, b.s))
-      Base.$(op)(a::JSONExpr, b) = JSONExpr(string(a.s, $op_string, json(b)))
-      Base.$(op)(a, b::JSONExpr) = JSONExpr(string(json(a), $op_string, b.s))
+      Base.$(op)(a::JSExpr, b::JSExpr) = JSExpr(string('(', a.s, $op_string, b.s, ')'))
+      Base.$(op)(a::JSExpr, b) = JSExpr(string('(', a.s, $op_string, js_quote_replace(json(b)), ')'))
+      Base.$(op)(a, b::JSExpr) = JSExpr(string('(', js_quote_replace(json(a)), $op_string, b.s, ')'))
   end)
 end
 
+"""
+    @jsexpr(expr)
+
+Generates a JS expression from a Julia expression. This is useful for creating Vue.js expressions that need to be passed as strings.
+They are rendered by `json()` as unmodified text, exactly like `JSONText`.
+### Example
+```julia
+julia> @jsexpr(:a + :b)
+JSExpr("(a + b)")
+"""
 macro jsexpr(expr)
-  expr |> replace_quoted_vars |> protect_vars |> esc_expr
+  expr |> vars_to_jsexpr
 end
 
 function handle_comparisons(expr)
@@ -403,10 +415,8 @@ function handle_comparisons(expr)
     pos = findfirst(==(op), utf8_ops)
     pos === nothing || (op = utf8_ops[pos])
 
-    ls = protect_vars(expr.args[2])
-    rs = protect_vars(expr.args[3])
-    # ls isa QuoteNode && ls.value isa Symbol && (ls = JSONText(ls.value))
-    # rs isa QuoteNode && rs.value isa Symbol && (rs = JSONText(rs.value))
+    ls = vars_to_jsexpr(expr.args[2])
+    rs = vars_to_jsexpr(expr.args[3])
 
     expr = :(json(render($ls)) * " $($op) " * json(render($rs)))
     negation && (expr = :("!($($expr))"))
