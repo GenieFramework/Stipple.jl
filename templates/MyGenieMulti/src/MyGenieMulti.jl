@@ -4,6 +4,8 @@ using Genie
 
 @using modules/ModuleA
 @using modules/ModuleB
+@using modules/ModuleC
+@using modules/ModuleD
 
 function __init__()
     cd(dirname(@__DIR__))
