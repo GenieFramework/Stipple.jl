@@ -27,24 +27,24 @@ end
 const _pages = Page[]
 pages() = _pages
 
-function add_page!(pages::Vector{Page}, page::Page)
+function add_page!(pages::Vector{Page}, page::Page; clear_routes::Bool = false)
   if isempty(pages)
     push!(pages, page)
   else
-    new_page = true
     replaced = false
     for i in reverse(eachindex(pages))
       if pages[i].route.path == page.route.path && pages[i].route.method == page.route.method
         # if already replaced then delete the duplicate
         replaced && deleteat!(pages, i)
-        Router.delete!(Router.routename(pages[i].route))
+        clear_routes && Router.delete!(Router.routename(pages[i].route))
         pages[i] = page
-        new_page = false
         replaced = true
       end
     end
-    new_page && push!(pages, page)
+    replaced || push!(pages, page)
   end
+
+  return page
 end
 
 function Page(  route::Union{Route,String};
