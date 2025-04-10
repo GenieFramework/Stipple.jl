@@ -33,10 +33,10 @@ ui() = cell(class = "st-module", [
 
     h3("Other Modules")
     row(gutter = "md", [
-        a(href = "/", "Module A", @showif("'$(modulename[end])' != 'A'"))
-        a(href = "/b", "Module B", @showif("'$(modulename[end])' != 'B'"))
-        a(href = "/c", "Module C", @showif("'$(modulename[end])' != 'C'"))
-        a(href = "/d", "Module D", @showif("'$(modulename[end])' != 'D'"))
+        a(href = "/", "Module A", @showif(modulename[end] != 'A'))
+        a(href = "/b", "Module B", @showif(modulename[end] != 'B'))
+        a(href = "/c", "Module C", @showif(modulename[end] != 'C'))
+        a(href = "/d", "Module D", @showif(modulename[end] != 'D'))
     ])
 ])
 

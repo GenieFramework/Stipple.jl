@@ -1243,8 +1243,8 @@ macro page(expressions...)
     end
 
     quote
-      isdefined(@__MODULE__, :__pages__) || (const __pages__ = Stipple.Pages.Page[])
-      Stipple.Pages.add_page!(__pages__, Stipple.Pages.Page($(args...), $url, view = $view))[end]
+      isdefined(@__MODULE__, :__pages__) || eval(:(const __pages__ = Stipple.Pages.Page[]))
+      Stipple.Pages.add_page!(__pages__, Stipple.Pages.Page($(args...), $url, view = $view))
     end |> esc
 end
 
