@@ -105,3 +105,11 @@ end
 function stipple_parse(::Type{Any}, v::T) where {T}
   v::T
 end
+
+# parsing of enum types
+function stipple_parse(::Type{T}, s::String) where T<:Enum
+    instances(T)[findfirst(==(Symbol(s)), Symbol.(instances(T)))]
+end
+function stipple_parse(::Type{T}, n::Integer) where T<:Enum
+  T(n)
+end

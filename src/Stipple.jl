@@ -683,8 +683,8 @@ function routename(::Type{M}) where M<:ReactiveModel
 end
 
 function gb_stipple_dir()
-  gbdir = joinpath(Base.DEPOT_PATH[1], "geniebuilder")
-  replace(strip(read(`julia --project=$gbdir -E 'dirname(dirname(Base.find_package("Stipple")))'`, String), ['"', '\n']), "\\\\" =>'/')
+  gbdir = get(ENV, "GB_DIR", joinpath(Base.DEPOT_PATH[1], "geniebuilder"))
+  replace(strip(read(`julia --project=$gbdir -E 'dirname(dirname(Base.locate_package(Base.PkgId(Base.UUID("4acbeb90-81a0-11ea-1966-bdaff8155998"), "Stipple"))))'`, String), ['"', '\n']), "\\\\" =>'/')
 end
 
 function gb_compat_deps(::Type{M}) where M <: ReactiveModel
@@ -1026,7 +1026,7 @@ end
 
 # add a method to Observables.on to accept inverted order of arguments similar to route()
 import Observables.on
-on(observable::Observables.AbstractObservable, f::Function; weak = true) = on(f, observable; weak = weak)
+on(observable::Observables.AbstractObservable, f::Function; weak = true, kwargs...) = on(f, observable; weak, kwargs...)
 
 """
     onbutton(f::Function, button::R{Bool}; async = false, weak = false)
@@ -1049,18 +1049,16 @@ onbutton(f::Function, button::R{Bool}; async = false, kwargs...) = on(button; kw
       @async begin
           try
             f()
-          catch ex
-            warn(ex)
+          finally
+            button[] = false
           end
-          button[] = false
       end
   else
       try
         f()
-      catch ex
-        @warn(ex)
+      finally
+        button[] = false
       end
-      button[] = false
   end
   return
 end

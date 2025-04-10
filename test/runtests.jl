@@ -443,8 +443,8 @@ end
     el = column("Hello", @if(:visible))
     @test contains(el, "v-if=\"visible\"")
 
-    el = column("Hello", @else(:visible))
-    @test contains(el, "v-else=\"visible\"")
+    el = column("Hello", @else)
+    @test contains(el, "v-else")
 
     el = column("Hello", @elseif(:visible))
     @test contains(el, "v-else-if=\"visible\"")
@@ -454,6 +454,20 @@ end
 
     el = row(@for("i in [1, 2, 3, 4, 5]"), "{{ i }}")
     @test contains(el, "v-for=\"i in [1, 2, 3, 4, 5]\"")
+
+    # test Julia expressions
+    el = row(@showif(:n > 0), "The result is '{{ n }}'")
+    @test el == "<div v-show=\"n > 0\" class=\"row\">The result is '{{ n }}'</div>"
+
+    el =  row("hello", @showif(:n^2 ∉ 3:2:11))
+    @test el == "<div v-show=\"!((n ** 2) in [3,5,7,9,11])\" class=\"row\">hello</div>"
+
+    @enum Fruit apple=1 orange=2 kiwi=3
+
+    fruit = apple
+
+    el = row(@showif(:fruit == apple), "My fruit is a(n) '{{ fruit }}'")
+    @test el == "<div v-show=\"fruit == 'apple'\" class=\"row\">My fruit is a(n) '{{ fruit }}'</div>"
 end
 
 @testset "Compatibility of JSONText between JSON3 and JSON" begin
@@ -465,6 +479,22 @@ end
     @test Stipple.json(jt1) == "json text 1"
     @test JSON.json(jt2) == "json text 2"
     @test Stipple.json(jt2) == "json text 2"
+end
+
+@testset "Javascript expressions: JSExpr" begin
+    # note, you cannot compare a JSExpr by `==` directly as `==` is overloaded for JSExpr
+    je1 = @jsexpr(:x+1)
+    je2 = @jsexpr(:y+2)
+    @test Stipple.json(je1 == je2) == "(x + 1) == (y + 2)"
+
+    je1 = @jsexpr(2 * :xx^2 + 2)
+    @test Stipple.json(je1) == "(2 * (xx ** 2)) + 2"
+
+    je2 = @jsexpr(:y + '2')
+    @test Stipple.json(je2) == "y + '2'"
+
+    @test Stipple.json(je1 * je2) == "((2 * (xx ** 2)) + 2) * (y + '2')"
+    @test Stipple.json(je1 + je2) == "((2 * (xx ** 2)) + 2) + (y + '2')"
 end
 
 @testset "@page macro with ParsedHTMLStrings" begin
@@ -605,6 +635,10 @@ end
         @test Stipple.stipple_parse(Union{Nothing, SubString}, "hi") == SubString("hi")
     end
     @test Stipple.stipple_parse(Union{Nothing, String}, nothing) === nothing
+
+    # defined above
+    # @enum Fruit apple=1 orange=2 kiwi=3
+    @test Stipple.stipple_parse(Fruit, "apple") == apple
 end
 
 @testset "Exporting and loading model field values" begin
@@ -727,4 +761,37 @@ end
 
     unsynchronize!(o1, o)
     @test length(o.listeners) == 0
+end
+
+@testset "Priority" begin
+    # test app example from the docstring
+    @app begin
+        # reactive variables
+        @in N = 0
+        @out result = 0
+     
+        @onchange N begin
+          result = 10 * N
+        end
+        
+        @onchange N begin
+          N[!] = clamp(N, 0, 10)
+        end priority = 1
+    end
+
+    model = @init
+    @test model.N[] == 0
+    @test model.result[] == 0
+
+    model.N[] = 5
+    @test model.N[] == 5
+    @test model.result[] == 50
+
+    model.N[] = -20
+    @test model.N[] == 0
+    @test model.result[] == 0
+
+    model.N[] = 20
+    @test model.N[] == 10
+    @test model.result[] == 100
 end
