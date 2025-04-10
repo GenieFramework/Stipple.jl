@@ -363,12 +363,17 @@ end
 
 struct JSExpr
   s::String
+  JSExpr(s::String) = new(s)
+  JSExpr(x::Any) = new(js_quote_replace(json(render(x))))
 end
 JSExpr(s::Symbol) = JSExpr(String(s))
 
 @inline StructTypes.StructType(::Type{JSExpr}) = JSON3.RawType()
 @inline StructTypes.construct(::Type{JSExpr}, x::JSON3.RawValue) = JSExpr(string(x))
-@inline JSON3.rawbytes(x::JSExpr) = codeunits(x.s)
+@inline function JSON3.rawbytes(x::JSExpr)
+  s = x.s
+  startswith(s, "(") && endswith(s, ")") ?  codeunits(s)[2:end-1] : codeunits(s)
+end
 
 function vars_to_jsexpr(expr)
   if expr isa QuoteNode && expr.value isa Symbol
@@ -383,15 +388,49 @@ function vars_to_jsexpr(expr)
   end
 end
 
-for op in (:+, :- , :* , :/ , :%, :^ , :(==), :<, :>, :<=, :>=)
-  op_string = op == :^ ? " ** " : " $op "
+"""
+    jsexpr(expr)
+
+Internal function to convert a julia expression to a julia expression that can be executed to generate a JS expression.
+Note that strings that are passed directly will not be converted, but such passed as variables or expressions
+will be wrapped in single quotes.
+This is the expected behaviour for passing js expressions to `@if`, `@for` etc.
+"""
+function jsexpr(expr)
+  if expr isa String
+    expr
+  else
+    js = vars_to_jsexpr(expr)
+    quote
+      js = $(esc(js))
+      if js isa JSExpr
+        json(js)
+      else
+        js_quote_replace(json(render(js)))
+      end
+    end
+  end
+end
+
+for op in (:+, :- , :* , :/ , :%, :^ , :(==), :<, :>, :<=, :>=, :!=, :in, :∉)
+  # the other operators like ≠, ≤, ≥ are synonyms for !=, <=, >= and hence don't need to be defined
+  op_string = String(op)
+  negation = op_string == "∉"
+  utf8_ops = ("∉", "^")
+  ops_replacements = ("in", "**")
+  pos = findfirst(==(op_string), utf8_ops)
+  pos === nothing || (op_string = ops_replacements[pos])
+  op_string = " $op_string "
+  expr_start = negation ? "!(" : "("
   eval(quote
       # Handle the `^` operator separately, as it's a bit different
-      Base.$(op)(a::JSExpr, b::JSExpr) = JSExpr(string('(', a.s, $op_string, b.s, ')'))
-      Base.$(op)(a::JSExpr, b) = JSExpr(string('(', a.s, $op_string, js_quote_replace(json(b)), ')'))
-      Base.$(op)(a, b::JSExpr) = JSExpr(string('(', js_quote_replace(json(a)), $op_string, b.s, ')'))
+      Base.$(op)(a::JSExpr, b::JSExpr) = JSExpr(string($expr_start, a.s, $op_string, b.s, ')'))
+      Base.$(op)(a::JSExpr, b) = JSExpr(string($expr_start, a.s, $op_string, js_quote_replace(json(render(b))), ')'))
+      Base.$(op)(a, b::JSExpr) = JSExpr(string($expr_start, js_quote_replace(json(render(a))), $op_string, b.s, ')'))
   end)
 end
+Base.getindex(js::JSExpr, i::Integer) = JSExpr(string(js.s, "[", i, "]"))
+Base.getindex(js::JSExpr, i::Any) = JSExpr(string(js.s, "[", js_quote_replace(json(render(i))), "]"))
 
 """
     @jsexpr(expr)
@@ -405,24 +444,6 @@ JSExpr("(a + b)")
 """
 macro jsexpr(expr)
   expr |> vars_to_jsexpr
-end
-
-function handle_comparisons(expr)
-  if expr isa Expr && expr.head == :call && expr.args[1] in (:(==), :!=, :<, :<=, :>, :>=, :in, :∈, :∉, :≤, :≥, :≠)
-    op = string(expr.args[1])
-    negation = op == "∉"
-    utf8_ops = ("∈", "∉", "≤", "≥", "≠")
-    pos = findfirst(==(op), utf8_ops)
-    pos === nothing || (op = utf8_ops[pos])
-
-    ls = vars_to_jsexpr(expr.args[2])
-    rs = vars_to_jsexpr(expr.args[3])
-
-    expr = :(json(render($ls)) * " $($op) " * json(render($rs)))
-    negation && (expr = :("!($($expr))"))
-  end
-
-  return expr
 end
 
 """
@@ -447,8 +468,7 @@ julia> row("hello", @showif(:n^2 ∉ 3:2:11))
 ````
 """
 macro iif(expr)
-  expr = handle_comparisons(expr)
-  Expr(:kw, Symbol("v-if"), esc_expr(expr))
+  Expr(:kw, Symbol("v-if"), jsexpr(expr))
 end
 const var"@if" = var"@iif"
 
@@ -466,8 +486,7 @@ julia> span("An error has occurred", class="error", @elseif(:error))
 ```
 """
 macro elsiif(expr)
-  expr = handle_comparisons(expr)
-  Expr(:kw, Symbol("v-else-if"), esc_expr(expr))
+  Expr(:kw, Symbol("v-else-if"), jsexpr(expr))
 end
 const var"@elseif" = var"@elsiif"
 
@@ -526,8 +545,7 @@ macro recur(expr)
   # expr isa Expr && expr.head == :call && expr.args[1] == :in && (expr.args[2] = string(expr.args[2]))
   # expr = (MacroTools.@capture(expr, y_ in z_)) ? :("$($y) in $($z isa Union{AbstractDict, AbstractVector} ? Stipple.js_attr($z) : $z)") : :("$($expr)")
 
-  expr = handle_comparisons(expr)
-  Expr(:kw, Symbol("v-for"), esc_expr(expr))
+  Expr(:kw, Symbol("v-for"), jsexpr(expr))
 end
 const var"@for" = var"@recur"
 
@@ -570,12 +588,12 @@ julia> input("", placeholder="Type your name", @bind(:name, :identity))
 ```
 """
 macro bind(expr)
-  Expr(:kw, Symbol("v-model"), esc_expr(expr))
+  Expr(:kw, Symbol("v-model"), jsexpr(expr))
 end
 
 macro bind(expr, type)
   vmodel = Symbol("v-model.", @eval(__module__, $type))
-  Expr(:kw, vmodel, esc_expr(expr))
+  Expr(:kw, vmodel, jsexpr(expr))
 end
 
 """
@@ -639,7 +657,11 @@ Sometimes preprocessing of the events is necessary, e.g. to add or skip informat
 ```
 """
 macro on(arg, expr, preprocess = nothing)
-  preprocess isa QuoteNode && preprocess == :(:addclient) && (preprocess = "event._addclient = true")
+  if preprocess isa QuoteNode && preprocess.value == :addclient
+    preprocess = "event._addclient = true"
+  elseif preprocess !== nothing
+    preprocess = jsexpr(preprocess)
+  end
   kw = Symbol("v-on:", arg isa String ? arg : arg isa QuoteNode ? arg.value : arg.head == :vect ? join(lstrip.(string.(arg.args), ':'), '.') :
     throw("Value '$arg' for `arg` not supported. `arg` should be of type Symbol, String, or Vector{Union{String, Symbol}}"))
 
@@ -648,13 +670,12 @@ macro on(arg, expr, preprocess = nothing)
       if preprocess === nothing
           :("(event) => { handle_event(event, '$($(esc(expr)))') }")
       else
-          :(replace("""(event) => {
-              const preprocess = (event) => { """ * replace($preprocess, '"' => "\\\"") * """; return event }
-              handle_event(preprocess(event), '$($(esc(expr)))')
-          }""", '\n' => ';'))
+          :(replace("""(event) => {const preprocess = (event) => { $($preprocess); return event }
+          handle_event(preprocess(event), '$($(esc(expr)))')
+          }""", '\n' => "; "))
       end
   else
-      esc_expr(expr)
+      jsexpr(expr)
   end
   Expr(:kw, kw, v)
 end
@@ -684,7 +705,7 @@ macro click(expr, modifiers = [])
   if expr isa QuoteNode && expr.value isa Symbol
     Expr(:kw, Symbol("v-on:click$m"), "$(expr.value) = true")
   else
-    Expr(:kw, Symbol("v-on:click$m"), esc_expr(expr))
+    Expr(:kw, Symbol("v-on:click$m"), jsexpr(expr))
   end
 end
 
@@ -706,8 +727,7 @@ julia> h1("Hello!", @showif(:ok))
 ```
 """
 macro showif(expr)
-  expr = handle_comparisons(expr)
-  Expr(:kw, Symbol("v-show"), esc_expr(expr))
+  Expr(:kw, Symbol("v-show"), jsexpr(expr))
 end
 
 

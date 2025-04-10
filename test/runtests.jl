@@ -460,7 +460,7 @@ end
     @test el == "<div v-show=\"n > 0\" class=\"row\">The result is '{{ n }}'</div>"
 
     el =  row("hello", @showif(:n^2 ∉ 3:2:11))
-    @test el == "<div v-show=\"!((n ** 2) ∉ [3,5,7,9,11])\" class=\"row\">hello</div>"
+    @test el == "<div v-show=\"!((n ** 2) in [3,5,7,9,11])\" class=\"row\">hello</div>"
 
     @enum Fruit apple=1 orange=2 kiwi=3
 
@@ -485,16 +485,16 @@ end
     # note, you cannot compare a JSExpr by `==` directly as `==` is overloaded for JSExpr
     je1 = @jsexpr(:x+1)
     je2 = @jsexpr(:y+2)
-    @test json(je1 == je2) == "((x + 1) == (y + 2))"
+    @test Stipple.json(je1 == je2) == "(x + 1) == (y + 2)"
 
     je1 = @jsexpr(2 * :xx^2 + 2)
-    @test json(je1) == "((2 * (xx ** 2)) + 2)"
+    @test Stipple.json(je1) == "(2 * (xx ** 2)) + 2"
 
     je2 = @jsexpr(:y + '2')
-    @test json(je2) == "(y + '2')"
+    @test Stipple.json(je2) == "y + '2'"
 
-    @test json(je1 * je2) == "(((2 * (xx ** 2)) + 2) * (y + '2'))"
-    @test json(je1 + je2) == "(((2 * (xx ** 2)) + 2) + (y + '2'))"
+    @test Stipple.json(je1 * je2) == "((2 * (xx ** 2)) + 2) * (y + '2')"
+    @test Stipple.json(je1 + je2) == "((2 * (xx ** 2)) + 2) + (y + '2')"
 end
 
 @testset "@page macro with ParsedHTMLStrings" begin
