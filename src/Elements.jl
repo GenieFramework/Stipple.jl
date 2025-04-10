@@ -377,10 +377,19 @@ end
 
 function vars_to_jsexpr(expr)
   if expr isa QuoteNode && expr.value isa Symbol
-      :($(JSExpr(expr.value)))
+    :($(JSExpr(expr.value)))
   elseif expr isa Expr && expr.head != :. && (expr.head != :call || expr.args[1] ∉ (:getproperty, :getfield))
-      # Recurse into all arguments
+    # Recurse into all arguments
+    if expr.head in (:||, :&&)
+      # Handle the shortcut operators separately, as they are a bit different
+      pushfirst!(expr.args, expr.head == :&& ? :∧ : :∥)
+      expr.head = :call
+      expr.args[2] = vars_to_jsexpr(expr.args[2])
+      expr.args[3] = vars_to_jsexpr(expr.args[3])
+      expr
+    else
       Expr(expr.head, map(vars_to_jsexpr, expr.args)...)
+    end
   elseif expr isa Array
       map(vars_to_jsexpr, expr)
   else
@@ -412,21 +421,29 @@ function jsexpr(expr)
   end
 end
 
-for op in (:+, :- , :* , :/ , :%, :^ , :(==), :<, :>, :<=, :>=, :!=, :in, :∉)
+function ∧(x, y) x && y end
+function ∥(x, y) x || y end
+
+for op in (:+, :- , :* , :/ , :%, :^ , :(==), :<, :>, :<=, :>=, :!=, :in, :∉, :∧, :∥)
   # the other operators like ≠, ≤, ≥ are synonyms for !=, <=, >= and hence don't need to be defined
   op_string = String(op)
   negation = op_string == "∉"
-  utf8_ops = ("∉", "^")
-  ops_replacements = ("in", "**")
-  pos = findfirst(==(op_string), utf8_ops)
+  special_ops = ("∉", "^", "∧", "∥")
+  ops_replacements = ("in", "**", "&&", "||")
+  pos = findfirst(==(op_string), special_ops)
   pos === nothing || (op_string = ops_replacements[pos])
   op_string = " $op_string "
   expr_start = negation ? "!(" : "("
+  M = if op in (:∧, :∥)
+    @__MODULE__
+  else
+    Base
+  end
   eval(quote
       # Handle the `^` operator separately, as it's a bit different
-      Base.$(op)(a::JSExpr, b::JSExpr) = JSExpr(string($expr_start, a.s, $op_string, b.s, ')'))
-      Base.$(op)(a::JSExpr, b) = JSExpr(string($expr_start, a.s, $op_string, js_quote_replace(json(render(b))), ')'))
-      Base.$(op)(a, b::JSExpr) = JSExpr(string($expr_start, js_quote_replace(json(render(a))), $op_string, b.s, ')'))
+      $M.$(op)(a::JSExpr, b::JSExpr) = JSExpr(string($expr_start, a.s, $op_string, b.s, ')'))
+      $M.$(op)(a::JSExpr, b) = JSExpr(string($expr_start, a.s, $op_string, js_quote_replace(json(render(b))), ')'))
+      $M.$(op)(a, b::JSExpr) = JSExpr(string($expr_start, js_quote_replace(json(render(a))), $op_string, b.s, ')'))
   end)
 end
 Base.getindex(js::JSExpr, i::Integer) = JSExpr(string(js.s, "[", i, "]"))
