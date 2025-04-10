@@ -6,6 +6,7 @@ using StippleUI
 @app MyApp begin
     @in x = 1
     @in y = x + 2
+    @in show_all = false
 
     @onchange x on_x()
     @onchange x, y on_x_y()
@@ -29,12 +30,15 @@ ui() = cell(class = "st-module", [
         cardsection(slider(11:200, :y))
     ])
 
+    separator(class = "q-my-md")
+
     h3("Other Modules")
+    toggle("Show all modules", :show_all)
     row(gutter = "md", [
-        a(href = "/", "Module A", @showif("'$(modulename[end])' != 'A'"))
-        a(href = "/b", "Module B", @showif("'$(modulename[end])' != 'B'"))
-        a(href = "/c", "Module C", @showif("'$(modulename[end])' != 'C'"))
-        a(href = "/d", "Module D", @showif("'$(modulename[end])' != 'D'"))
+        a(href = "/", "Module A", @showif(:show_all + (modulename[end] != 'A')))
+        a(href = "/b", "Module B", @showif(:show_all + (modulename[end] != 'B')))
+        a(href = "/c", "Module C", @showif(:show_all + (modulename[end] != 'C')))
+        a(href = "/d", "Module D", @showif(:show_all + (modulename[end] != 'D')))
     ])
 ])
 
