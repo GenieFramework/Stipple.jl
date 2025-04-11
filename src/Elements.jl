@@ -15,7 +15,7 @@ export root, elem, vm, @if, @else, @elseif, @for, @text, @bind, @data, @on, @cli
 # deprecated exports
 export @iif, @els, @elsiif, @recur
 
-export @jsexpr, JSExpr, js_quote_replace
+export @jsexpr, JSExpr, js_quote_replace, ∥, ∧
 
 export stylesheet, kw_to_str
 export add_plugins, remove_plugins
@@ -375,20 +375,22 @@ JSExpr(s::Symbol) = JSExpr(String(s))
   startswith(s, "(") && endswith(s, ")") ?  codeunits(s)[2:end-1] : codeunits(s)
 end
 
-function vars_to_jsexpr(expr)
+function vars_to_jsexpr(expr; imported::Bool = true)
+  or  = imported ? :∥ : Stipple.:∥
+  and = imported ? :∧ : Stipple.:∧
   if expr isa QuoteNode && expr.value isa Symbol
     :($(JSExpr(expr.value)))
   elseif expr isa Expr && expr.head != :. && (expr.head != :call || expr.args[1] ∉ (:getproperty, :getfield))
     # Recurse into all arguments
     if expr.head in (:||, :&&)
       # Handle the shortcut operators separately, as they are a bit different
-      pushfirst!(expr.args, expr.head == :&& ? :∧ : :∥)
+      pushfirst!(expr.args, expr.head == :&& ? and : or)
       expr.head = :call
-      expr.args[2] = vars_to_jsexpr(expr.args[2])
-      expr.args[3] = vars_to_jsexpr(expr.args[3])
+      expr.args[2] = vars_to_jsexpr(expr.args[2]; imported)
+      expr.args[3] = vars_to_jsexpr(expr.args[3]; imported)
       expr
     else
-      Expr(expr.head, map(vars_to_jsexpr, expr.args)...)
+      Expr(expr.head, map(x->vars_to_jsexpr(x; imported), expr.args)...)
     end
   elseif expr isa Array
       map(vars_to_jsexpr, expr)
@@ -398,18 +400,18 @@ function vars_to_jsexpr(expr)
 end
 
 """
-    jsexpr(expr)
+    jsexpr(expr; imported::Bool = true)
 
 Internal function to convert a julia expression to a julia expression that can be executed to generate a JS expression.
 Note that strings that are passed directly will not be converted, but such passed as variables or expressions
 will be wrapped in single quotes.
 This is the expected behaviour for passing js expressions to `@if`, `@for` etc.
 """
-function jsexpr(expr)
+function jsexpr(expr; imported::Bool = true)
   if expr isa String
     expr
   else
-    js = vars_to_jsexpr(expr)
+    js = vars_to_jsexpr(expr; imported)
     quote
       js = $(esc(js))
       if js isa JSExpr
@@ -449,6 +451,10 @@ end
 Base.getindex(js::JSExpr, i::Integer) = JSExpr(string(js.s, "[", i, "]"))
 Base.getindex(js::JSExpr, i::Any) = JSExpr(string(js.s, "[", js_quote_replace(json(render(i))), "]"))
 
+macro imported()
+  :(isdefined($__module__, :∥) && isdefined($__module__, :∧)) |> esc
+end
+
 """
     @jsexpr(expr)
 
@@ -460,7 +466,11 @@ julia> @jsexpr(:a + :b)
 JSExpr("(a + b)")
 """
 macro jsexpr(expr)
-  expr |> vars_to_jsexpr
+  # determine whether the user has imported the operators ∥ and ∧
+  # which is the case if Stipple is called via `using Stipple`
+  # The difference is a nicer syntax for the logical operators if the user has imported them.
+  imported = isdefined(__module__, :∥) && isdefined(__module__, :∧)
+  vars_to_jsexpr(expr; imported) |> esc
 end
 
 """
@@ -485,7 +495,8 @@ julia> row("hello", @showif(:n^2 ∉ 3:2:11))
 ````
 """
 macro iif(expr)
-  Expr(:kw, Symbol("v-if"), jsexpr(expr))
+  imported = isdefined(__module__, :∥) && isdefined(__module__, :∧)
+  Expr(:kw, Symbol("v-if"), jsexpr(expr; imported))
 end
 const var"@if" = var"@iif"
 
@@ -503,7 +514,8 @@ julia> span("An error has occurred", class="error", @elseif(:error))
 ```
 """
 macro elsiif(expr)
-  Expr(:kw, Symbol("v-else-if"), jsexpr(expr))
+  imported = isdefined(__module__, :∥) && isdefined(__module__, :∧)
+  Expr(:kw, Symbol("v-else-if"), jsexpr(expr; imported))
 end
 const var"@elseif" = var"@elsiif"
 
@@ -561,8 +573,8 @@ It is also possible to loop over `(v, k)` or `v`; index will always be zero-base
 macro recur(expr)
   # expr isa Expr && expr.head == :call && expr.args[1] == :in && (expr.args[2] = string(expr.args[2]))
   # expr = (MacroTools.@capture(expr, y_ in z_)) ? :("$($y) in $($z isa Union{AbstractDict, AbstractVector} ? Stipple.js_attr($z) : $z)") : :("$($expr)")
-
-  Expr(:kw, Symbol("v-for"), jsexpr(expr))
+  imported = isdefined(__module__, :∥) && isdefined(__module__, :∧)
+  Expr(:kw, Symbol("v-for"), jsexpr(expr; imported))
 end
 const var"@for" = var"@recur"
 
@@ -605,12 +617,14 @@ julia> input("", placeholder="Type your name", @bind(:name, :identity))
 ```
 """
 macro bind(expr)
-  Expr(:kw, Symbol("v-model"), jsexpr(expr))
+  imported = isdefined(__module__, :∥) && isdefined(__module__, :∧)
+  Expr(:kw, Symbol("v-model"), jsexpr(expr; imported))
 end
 
 macro bind(expr, type)
+  imported = isdefined(__module__, :∥) && isdefined(__module__, :∧)
   vmodel = Symbol("v-model.", @eval(__module__, $type))
-  Expr(:kw, vmodel, jsexpr(expr))
+  Expr(:kw, vmodel, jsexpr(expr; imported))
 end
 
 """
@@ -674,10 +688,11 @@ Sometimes preprocessing of the events is necessary, e.g. to add or skip informat
 ```
 """
 macro on(arg, expr, preprocess = nothing)
+  imported = isdefined(__module__, :∥) && isdefined(__module__, :∧)
   if preprocess isa QuoteNode && preprocess.value == :addclient
     preprocess = "event._addclient = true"
   elseif preprocess !== nothing
-    preprocess = jsexpr(preprocess)
+    preprocess = jsexpr(preprocess; imported)
   end
   kw = Symbol("v-on:", arg isa String ? arg : arg isa QuoteNode ? arg.value : arg.head == :vect ? join(lstrip.(string.(arg.args), ':'), '.') :
     throw("Value '$arg' for `arg` not supported. `arg` should be of type Symbol, String, or Vector{Union{String, Symbol}}"))
@@ -692,7 +707,7 @@ macro on(arg, expr, preprocess = nothing)
           }""", '\n' => "; "))
       end
   else
-      jsexpr(expr)
+      jsexpr(expr; imported)
   end
   Expr(:kw, kw, v)
 end
@@ -716,13 +731,14 @@ Modifers can be appended as String, Symbol or array of String/Symbol:
 ```
 """
 macro click(expr, modifiers = [])
+  imported = isdefined(__module__, :∥) && isdefined(__module__, :∧)
   mods = @eval __module__ $modifiers
   m = mods isa Symbol || ! isempty(mods) ? mods isa Vector ? '.' * join(String.(mods), '.') : ".$mods" : ""
   # mods = $(esc(modifiers))
   if expr isa QuoteNode && expr.value isa Symbol
     Expr(:kw, Symbol("v-on:click$m"), "$(expr.value) = true")
   else
-    Expr(:kw, Symbol("v-on:click$m"), jsexpr(expr))
+    Expr(:kw, Symbol("v-on:click$m"), jsexpr(expr; imported))
   end
 end
 
@@ -744,7 +760,8 @@ julia> h1("Hello!", @showif(:ok))
 ```
 """
 macro showif(expr)
-  Expr(:kw, Symbol("v-show"), jsexpr(expr))
+  imported = isdefined(__module__, :∥) && isdefined(__module__, :∧)
+  Expr(:kw, Symbol("v-show"), jsexpr(expr; imported))
 end
 
 
