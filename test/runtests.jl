@@ -293,9 +293,9 @@ end
     port = rand(8001:9000)
     up(;port, ws_port = port)
 
-    @test occursin("<p>DEMO UI</p>", string_get("http://localhost:$port"))
+    @test occursin(">DEMO UI<", string_get("http://localhost:$port"))
 
-    @test string_get("http://localhost:$port/nolayout") == "<!DOCTYPE html><html>\n  <body>\n    <p>no layout</p>\n  </body></html>"
+    @test contains(string_get("http://localhost:$port/nolayout"), r"<!DOCTYPE html><html>\n  <body>\s*(<p>)?no layout(</p>)?\s*</body></html>")
 
     @test get_debounce(port, "main_reactivemodel") == 300
 
@@ -353,9 +353,9 @@ end
     up(;port, ws_port = port)
 
     @clear_cache MyApp
-    @test occursin("<p>DEMO UI explicit</p>", string_get("http://localhost:$port"))
+    @test occursin(">DEMO UI explicit<", string_get("http://localhost:$port"))
 
-    @test string_get("http://localhost:$port/nolayout") == "<!DOCTYPE html><html>\n  <body>\n    <p>no layout (explicit)</p>\n  </body></html>"
+    @test contains(string_get("http://localhost:$port/nolayout"), r"<!DOCTYPE html><html>\n  <body>\s*(<p>)?no layout \(explicit\)(</p>)?\s*</body></html>")
 
     @test get_debounce(port, "myapp") == 300
 
@@ -541,19 +541,22 @@ end
 
     # Supply a String instead of a ParsedHTMLString.
     # As the '@' character is not correctly parsed, the match is expected to differ
+    # Update, since XML2_jll version 2.14.0, the '@' character is correctly parsed, hence we need to differentiate between the two cases
+    
+    test_fn = VersionNumber(Genie.Assets.package_version("XML2_jll")) > v"2.14.0-" ? (==) : (!=)
     ui() = join(view())
 
     # route function resulting in String
     @page("/", ui)
     payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
-    @test match(r"<div id=\"test\" .*?div>", payload).match != p1
+    @test test_fn(match(r"<div id=\"test\" .*?div>", payload).match, p1)
     @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
     @test contains(payload, r"<a>test \d+</a>")
 
     # route constant String
     @page("/", ui())
     payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
-    @test match(r"<div id=\"test\" .*?div>", payload).match != p1
+    @test test_fn(match(r"<div id=\"test\" .*?div>", payload).match, p1)
     @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
     @test contains(payload, r"<a>test \d+</a>")
 
