@@ -686,6 +686,12 @@ Sometimes preprocessing of the events is necessary, e.g. to add or skip informat
 ```julia
 @on(:uploaded, :uploaded, "for (f in event.files) { event.files[f].fname = event.files[f].name }")
 ```
+In some cases, e.g. row-clicked event of the `q-table` component, the event and another argument are passed to the handler.
+The event is passed as the first argument, the second argument is the value of the row that was clicked. In that case we can add
+the row value to the event object by using the `preprocess` argument of the `@on` macro.
+```julia
+table(:table, @on(:row__click, :rowclick, "event.row = args[0]"))
+```
 """
 macro on(arg, expr, preprocess = nothing)
   imported = isdefined(__module__, :∥) && isdefined(__module__, :∧)
@@ -702,8 +708,8 @@ macro on(arg, expr, preprocess = nothing)
       if preprocess === nothing
           :("(event) => { handle_event(event, '$($(esc(expr)))') }")
       else
-          :(replace("""(event) => {const preprocess = (event) => { $($preprocess); return event }
-          handle_event(preprocess(event), '$($(esc(expr)))')
+          :(replace("""(event, ...args) => {const preprocess = (event, ...args) => { $($preprocess); return event }
+          handle_event(preprocess(event, ...args), '$($(esc(expr)))')
           }""", '\n' => "; "))
       end
   else
