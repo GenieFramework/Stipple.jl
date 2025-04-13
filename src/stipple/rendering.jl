@@ -124,6 +124,10 @@ Stipple.stipple_parse(::Complex, z::Dict{String, Any}) = float(z["re"]) + z["im"
 jsrender(x, args...) = render(x, args...)
 jsrender(r::Reactive, args...) = jsrender(getfield(getfield(r,:o), :val), args...)
 
+const MIXINS = Ref(["watcherMixin", "reviveMixin", "eventMixin", "filterMixin"])
+add_mixins(mixins::Vector{String}) = union!(push!(MIXINS[], mixins...))
+add_mixins(mixin::String) = union!(push!(MIXINS[], mixin))
+
 """
     function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dict{Symbol,Any} where {M<:ReactiveModel}
 
@@ -145,7 +149,7 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
   data = json(merge(result, client_data(app)))
 
   vue = Dict(
-    :mixins => JSONText("[watcherMixin, reviveMixin, eventMixin, filterMixin]"),
+    :mixins => JSONText.(MIXINS[]),
     :data => JSONText("() => ($data)")
   )
   for (f, field) in ((js_methods, :methods), (js_computed, :computed), (js_watch, :watch))

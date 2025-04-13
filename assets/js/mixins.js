@@ -108,7 +108,7 @@ const eventMixin = {
   methods: {
     handle_event: function (event_data, event_handler, mode) {
       if (event_data === undefined) { event_data = {} }
-      console.debug('event: ', event_data, "\nevent (json): " + JSON.stringify(event_data) + ":" + event_handler)
+      console.debug('event: ', event_data, "\nevent (json): " + JSON.stringify(event_data) + "\nevent handler: :" + event_handler)
       if (mode=='addclient') { event_data._addclient = true}
       this.WebChannel.sendMessageTo(this.channel_, 'events', {
           'event': {
@@ -121,6 +121,8 @@ const eventMixin = {
         new_event = {}
         new_event.x = event.x
         new_event.y = event.y
+        new_event.clientX = event.clientX
+        new_event.clientY = event.clientY
         new_event.offsetX = event.offsetX
         new_event.offsetY = event.offsetY
         new_event.layerX = event.layerX
