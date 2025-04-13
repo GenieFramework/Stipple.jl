@@ -116,6 +116,31 @@ const eventMixin = {
               'event': event_data
           }
       })
+    },
+    addClickInfo: function (event) {
+        new_event = {}
+        new_event.x = event.x
+        new_event.y = event.y
+        new_event.offsetX = event.offsetX
+        new_event.offsetY = event.offsetY
+        new_event.layerX = event.layerX
+        new_event.layerY = event.layerY
+        new_event.pageX = event.pageX
+        new_event.pageY = event.pageY
+        new_event.screenX = event.screenX
+        new_event.screenY = event.screenY
+        
+        new_event.button = event.button
+        new_event.buttons = event.buttons
+        new_event.ctrlKey = event.ctrlKey
+        new_event.shiftKey = event.shiftKey
+        new_event.altKey = event.altKey
+        new_event.metaKey = event.metaKey
+        new_event.detail = event.detail
+        new_event.target = event.target
+        new_event.timeStamp = event.timeStamp
+        new_event.type = event.type
+        return {...new_event, ...event}
     }
   }
 }

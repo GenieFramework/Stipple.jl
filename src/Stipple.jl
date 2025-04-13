@@ -899,7 +899,7 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
     Genie.Assets.add_fileroute(assets_config, VUEJS; basedir = normpath(joinpath(@__DIR__, "..")))
     Genie.Assets.add_fileroute(assets_config, "stipplecore.js"; basedir = normpath(joinpath(@__DIR__, "..")))
     Genie.Assets.add_fileroute(assets_config, "vue_filters.js"; basedir = normpath(joinpath(@__DIR__, "..")))
-    Genie.Assets.add_fileroute(assets_config, "watchers.js"; basedir = normpath(joinpath(@__DIR__, "..")))
+    Genie.Assets.add_fileroute(assets_config, "mixins.js"; basedir = normpath(joinpath(@__DIR__, "..")))
 
     if Genie.config.webchannels_keepalive_frequency > 0 && is_channels_webtransport()
       Genie.Assets.add_fileroute(assets_config, "keepalive.js"; basedir = normpath(joinpath(@__DIR__, "..")))
@@ -961,7 +961,7 @@ function deps(m::M) :: Vector{String} where {M<:ReactiveModel}
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file=(Genie.Configuration.isprod() ? "vue.global.prod" : "vue.global"))),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="stipplecore")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue_filters"), defer=true),
-    Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="watchers")),
+    Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="mixins")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue2compat")),
 
     (
@@ -1064,17 +1064,6 @@ onbutton(f::Function, button::R{Bool}; async = false, kwargs...) = on(button; kw
 end
 
 onbutton(button::R{Bool}, f::Function; kwargs...) = onbutton(f, button; kwargs...)
-
-"""
-    @js_str -> JSONText
-
-Construct a JSONText, such as `js"button=false"`, without interpolation and unescaping
-(except for quotation marks `"`` which still has to be escaped). Avoiding escaping `"`` can be done by
-`js\"\"\"alert("Hello World")\"\"\"`.
-"""
-macro js_str(expr)
-  :( JSONText($(esc(expr))) )
-end
 
 function mygensym(sym::Symbol, context = @__MODULE__)
   i = 1
