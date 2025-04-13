@@ -108,7 +108,7 @@ const eventMixin = {
   methods: {
     handle_event: function (event_data, event_handler, mode) {
       if (event_data === undefined) { event_data = {} }
-      console.debug('event: ' + JSON.stringify(event_data) + ":" + event_handler)
+      console.debug('event: ', event_data, "\nevent (json): " + JSON.stringify(event_data) + ":" + event_handler)
       if (mode=='addclient') { event_data._addclient = true}
       this.WebChannel.sendMessageTo(this.channel_, 'events', {
           'event': {

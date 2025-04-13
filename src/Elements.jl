@@ -665,8 +665,8 @@ julia> input("", @bind(:input), @on("keyup.enter", "process = true"))
 "<input  v-model='input' v-on:keyup.enter='process = true' />"
 ```
 
-If `expr` is a symbol, there must exist `Stipple.notify` override, i.e. an event
-handler function for a corresponding event with the name `expr`.
+If `expr` is a symbol, the event will be sent to the backend. In order to handle the event
+a respective `Stipple.notify` method needs to be defined either manually or via the `@event` macro.
 
 ### Example
 
@@ -677,6 +677,13 @@ or if event information is needed
 ```julia
 Stipple.notify(model, ::Val{:my_click}, event_info) = println(event_info)
 ```
+or via the `@event` macro:
+```julia
+@event :my_click begin
+  @info "clicked, event_info is " event
+  notify(__model__, "Info from the backend: Clicked")
+end
+```
 Note that in the handler `model` refers to the receiving model and event is a Dict of event information.
 The handler is linked in the ui-element
 ```julia
@@ -686,35 +693,86 @@ Sometimes preprocessing of the events is necessary, e.g. to add or skip informat
 ```julia
 @on(:uploaded, :uploaded, "for (f in event.files) { event.files[f].fname = event.files[f].name }")
 ```
-In some cases, e.g. row-clicked event of the `q-table` component, the event and another argument are passed to the handler.
-The event is passed as the first argument, the second argument is the value of the row that was clicked. In that case we can add
-the row value to the event object by using the `preprocess` argument of the `@on` macro.
+This is necessary because in some cases, e.g. in case of the click event not all fields are automatically converted by JSON.stringify.
+Other events, e.g. the `row-clicked` event of the `q-table` component pass more arguments than just the event itself. These arguments are
+accessible as `args`.
 ```julia
 table(:table, @on(:row__click, :rowclick, "event.row = args[0]"))
+```
+You can also use predefined handlers as preprocessors. This is useful if you want to use the same handler for multiple events.
+Handler names are passed as Symbols.
+```julia
+@methods [
+    :addTableIndex => js\"\"\"
+        function (event, row, id) {
+            const keys = Object.keys(row)
+            event.row = id + 1;
+            event.column = event.target.closest('td').cellIndex + 1;
+            event.value = row[keys[event.column]];
+            event.row_data = row;
+            event.column_keys = keys;
+            return event;
+        }
+    \"\"\"
+]
+
+cell(@on(:click, :rowclick, :addTableIndex))
+```
+Finally, you can also pass arrays of handlers as preprocessors, make sure in this case that each handler returns the event object, as the handlers are chained. Mixing of symbols and strings is also possible.
+```julia
+cell(@click("rowclick", [:addTableIndex, "console.log('Click coords: ' + event.clientX + '|' + event.clientY)", :myHandler]))
 ```
 """
 macro on(arg, expr, preprocess = nothing)
   imported = isdefined(__module__, :∥) && isdefined(__module__, :∧)
-  if preprocess isa QuoteNode && preprocess.value == :addclient
-    preprocess = "event._addclient = true"
-  elseif preprocess !== nothing
-    preprocess = jsexpr(preprocess; imported)
+
+  if preprocess === nothing
+    preprocess_chain = []
+  elseif preprocess isa Expr && preprocess.head == :vect
+    preprocess_chain = preprocess.args
+  else
+    preprocess_chain = [preprocess]
   end
-  kw = Symbol("v-on:", arg isa String ? arg : arg isa QuoteNode ? arg.value : arg.head == :vect ? join(lstrip.(string.(arg.args), ':'), '.') :
-    throw("Value '$arg' for `arg` not supported. `arg` should be of type Symbol, String, or Vector{Union{String, Symbol}}"))
+  replace!(preprocess_chain, :(:addclient) => "event._addclient = true")
+
+  js_funcs = String[]
+  stmts = String[]
+  nonquoted_count = 0
+
+  for p in preprocess_chain
+    if p isa QuoteNode && p.value isa Symbol
+      push!(js_funcs, string(p.value))
+    else
+      nonquoted_count += 1
+      fname = "preprocess$nonquoted_count"
+      stmt = "const $fname = (event, ...args) => { $p; return event }"
+      push!(stmts, stmt)
+      push!(js_funcs, fname)
+    end
+  end
+
+  kw = Symbol("v-on:", arg isa String ? arg :
+                    arg isa QuoteNode ? arg.value :
+                    arg.head == :vect ? join(lstrip.(string.(arg.args), ':'), '.') :
+                    throw("Value '$arg' for `arg` not supported."))
 
   isevent = expr isa QuoteNode && expr.value isa Symbol
   v = if isevent
-      if preprocess === nothing
-          :("(event) => { handle_event(event, '$($(esc(expr)))') }")
-      else
-          :(replace("""(event, ...args) => {const preprocess = (event, ...args) => { $($preprocess); return event }
-          handle_event(preprocess(event, ...args), '$($(esc(expr)))')
-          }""", '\n' => "; "))
-      end
+    stmt_block = join(stmts, "; ")
+    push!(stmts, if length(js_funcs) < 3
+      chain_str = foldl((x, f) -> "$f($x, ...args)", js_funcs, init = "event")
+      "handle_event($chain_str, '$(expr.value)')"
+    else """
+      preprocess_chain = [$(join(js_funcs, ", "))]
+      event = preprocess_chain.reduce((event, f) => f(event, ...args), event)
+      handle_event(event, '$(expr.value)')
+      """
+    end)
+    :(replace("""(event, ...args) => { $(join($stmts, "; ")) }""", '\n' => "; "))
   else
-      jsexpr(expr; imported)
+    jsexpr(expr; imported)
   end
+
   Expr(:kw, kw, v)
 end
 
