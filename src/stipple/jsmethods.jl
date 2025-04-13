@@ -260,3 +260,57 @@ end
 function js_watch_auto(x)
 ""
 end
+
+# methods to be used directly as arguments to js_methods
+
+export add_click_info
+
+"""
+    add_click_info()
+
+Adds information about the click event to the event object.
+
+### Example
+```julia
+@app begin
+    @in x = 1
+end
+
+@methods add_click_info
+
+@event :myclick begin
+    @info event
+    notify(__model__, "(x, y) clicked: (\$(event["clientX"]), \$(event["clientY"]))")
+end
+
+ui() = cell("Hello world!", @on(:click, :myclick, :addClickInfo))
+"""
+function add_click_info()
+  :addClickInfo => js"""function (event) {
+    console.log('Hi')
+      new_event = {}
+      new_event.x = event.x
+      new_event.y = event.y
+      new_event.offsetX = event.offsetX
+      new_event.offsetY = event.offsetY
+      new_event.layerX = event.layerX
+      new_event.layerY = event.layerY
+      new_event.pageX = event.pageX
+      new_event.pageY = event.pageY
+      new_event.screenX = event.screenX
+      new_event.screenY = event.screenY
+      
+      new_event.button = event.button
+      new_event.buttons = event.buttons
+      new_event.ctrlKey = event.ctrlKey
+      new_event.shiftKey = event.shiftKey
+      new_event.altKey = event.altKey
+      new_event.metaKey = event.metaKey
+      new_event.detail = event.detail
+      new_event.target = event.target
+      new_event.timeStamp = event.timeStamp
+      new_event.type = event.type
+      return {...new_event, ...event}
+  }
+  """
+end
