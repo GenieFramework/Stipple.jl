@@ -43,7 +43,7 @@ function Page(  route::Union{Route,String};
 
   model isa Expr && (model = @eval context model)
   # assert that model is a ReactiveModel and not a Module, because GenieBuilder assumes that
-  model isa Module && (model = @eval context Stipple.@type())
+  model isa Module && (model = @eval model Stipple.@type())
   view = if isa(view, Function) || isa(view, ParsedHTMLString)
     view
   elseif isa(view, Vector{ParsedHTMLString})

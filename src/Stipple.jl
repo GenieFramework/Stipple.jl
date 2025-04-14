@@ -296,6 +296,7 @@ if !isdefined(Base, :get_extension)
 end
 
 function __init__()
+  assets_config.version = Genie.Assets.package_version(Stipple)
   if (get(ENV, "STIPPLE_TRANSPORT", "webchannels") |> lowercase) == "webthreads"
     webtransport!(Genie.WebThreads)
   else

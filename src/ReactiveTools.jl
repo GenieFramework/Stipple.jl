@@ -1235,10 +1235,10 @@ macro page(expressions...)
       # the next lines are added for backward compatibility
       # if the app is programmed according to the latest API,
       # eval will not be called; will e removed in the future
-      typename = model_typename(__module__)
-      if !isdefined(__module__, typename)
+      typename = model_typename(model)
+      if !isdefined(model, typename)
         @warn "App not yet defined, this is strongly discouraged, please define an app first"
-        @eval(__module__, @app)
+        @eval(model, @app)
       end
     end
 
