@@ -1357,4 +1357,6 @@ using Stipple.ReactiveTools
 #   PRECOMPILE[] = false
 # end
 
+include("stipple/jspredefined.jl")
+
 end

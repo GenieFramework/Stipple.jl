@@ -200,7 +200,7 @@ myreviver: function(key, value) { return (key.endsWith('_onebased') ? value - 1 
 \"\"\"
 @mounted "Genie.Revivers.addReviver(this.myreviver)"
 ```
-"""  
+"""
 function js_add_reviver(revivername::String)
   """
   Genie.WebChannels.subscriptionHandlers.push(function(event) {
@@ -226,3 +226,4 @@ function js_initscript(initscript::String)
   });
   """
 end
+
