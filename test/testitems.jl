@@ -288,7 +288,7 @@ end
     begin
         @page("/", ui)
         @page("/nolayout", ui, layout = "no layout")
-        @page("/debounce", ui, debounce = 50)
+        @page("/debounce1", ui, debounce = 50)
         @page("/debounce2", ui; debounce)
         @page("/static", ui; model)
     end
@@ -303,7 +303,7 @@ end
 
     @clear_cache
     # first get the main page to trigger init function, which sets up the assets
-    string_get("http://localhost:$port/debounce")
+    string_get("http://localhost:$port/debounce1")
     @test get_debounce(port, app_js_name) == 50
 
     @clear_cache
@@ -354,8 +354,8 @@ end
     begin
         @page("/", ui; model = MyApp)
         @page("/nolayout", ui, layout = "no layout (explicit)", model = MyApp)
-        @page("/debounce", ui, debounce = 51; model = MyApp)
-        @page("/debounce2", ui; debounce, model = MyApp)
+        @page("/debounce3", ui, debounce = 51; model = MyApp)
+        @page("/debounce4", ui; debounce, model = MyApp)
         @page("/static1", ui; model)
     end
 
@@ -371,11 +371,11 @@ end
 
     @clear_cache MyApp
     # first get the main page to trigger init function, which sets up the assets
-    string_get("http://localhost:$port/debounce")
+    string_get("http://localhost:$port/debounce3")
     @test get_debounce(port, app_js_name) == 51
 
     @clear_cache MyApp
-    string_get("http://localhost:$port/debounce2")
+    string_get("http://localhost:$port/debounce4")
     @test get_debounce(port, app_js_name) == 11
 
     s1 = string_get("http://localhost:$port/")
@@ -478,6 +478,9 @@ end
 
     el = row(@showif(:fruit == apple), "My fruit is a(n) '{{ fruit }}'")
     @test el == "<div v-show=\"fruit == 'apple'\" class=\"row\">My fruit is a(n) '{{ fruit }}'</div>"
+    
+    el = htmldiv("Hello World", Stipple.@showif(:s == """abc"d"e"""))
+    @test contains(el, raw"""<div v-show="s == 'abc\'d\'e'">""")
 end
 
 @testitem "Compatibility of JSONText between JSON3 and JSON" begin
@@ -498,6 +501,7 @@ end
     @test Stipple.json(je1 == je2) == "(x + 1) == (y + 2)"
 
     je1 = @jsexpr(2 * :xx^2 + 2)
+    @test je1.s == "((2 * (xx ** 2)) + 2)"
     @test Stipple.json(je1) == "(2 * (xx ** 2)) + 2"
 
     je2 = @jsexpr(:y + '2')
