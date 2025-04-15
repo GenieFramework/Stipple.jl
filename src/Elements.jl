@@ -367,12 +367,12 @@ struct JSExpr
   JSExpr(x::Any) = new(js_quote_replace(json(render(x))))
 end
 JSExpr(s::Symbol) = JSExpr(String(s))
+JSExpr(je::JSExpr) = je
 
 @inline StructTypes.StructType(::Type{JSExpr}) = JSON3.RawType()
 @inline StructTypes.construct(::Type{JSExpr}, x::JSON3.RawValue) = JSExpr(string(x))
 @inline function JSON3.rawbytes(x::JSExpr)
   s = js_quote_replace(x.s)
-  @info s
   startswith(s, "(") && endswith(s, ")") ?  codeunits(s)[2:end-1] : codeunits(s)
 end
 
