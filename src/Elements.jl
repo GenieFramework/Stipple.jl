@@ -371,7 +371,8 @@ JSExpr(s::Symbol) = JSExpr(String(s))
 @inline StructTypes.StructType(::Type{JSExpr}) = JSON3.RawType()
 @inline StructTypes.construct(::Type{JSExpr}, x::JSON3.RawValue) = JSExpr(string(x))
 @inline function JSON3.rawbytes(x::JSExpr)
-  s = x.s
+  s = js_quote_replace(x.s)
+  @info s
   startswith(s, "(") && endswith(s, ")") ?  codeunits(s)[2:end-1] : codeunits(s)
 end
 
@@ -409,7 +410,7 @@ This is the expected behaviour for passing js expressions to `@if`, `@for` etc.
 """
 function jsexpr(expr; imported::Bool = true)
   if expr isa String
-    expr
+    js_quote_replace(expr)
   else
     js = vars_to_jsexpr(expr; imported)
     quote
@@ -470,7 +471,8 @@ macro jsexpr(expr)
   # which is the case if Stipple is called via `using Stipple`
   # The difference is a nicer syntax for the logical operators if the user has imported them.
   imported = isdefined(__module__, :∥) && isdefined(__module__, :∧)
-  vars_to_jsexpr(expr; imported) |> esc
+  ex = vars_to_jsexpr(expr; imported) |> esc
+  :(JSExpr($ex))
 end
 
 """
