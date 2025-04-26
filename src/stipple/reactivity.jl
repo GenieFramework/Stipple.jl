@@ -513,8 +513,8 @@ macro var_storage(expr, handler = nothing)
           handlers_expr = if pre_length + post_length > 0 && isdefined(m, handlers_expr_name)
             varnames = setdiff(collect(keys(mixin_storage)), Stipple.AUTOFIELDS, Stipple.INTERNALFIELDS)
             oldvarnames = [Symbol("$var"[1 + pre_length:end-post_length]) for var in varnames]
-      
-            handlers_expr = @eval(m, $handlers_expr_name)
+            # make a deepcopy of the handlers_expr, because we modify it by prefix and postfix
+            handlers_expr = deepcopy(@eval(m, $handlers_expr_name))
             for h in handlers_expr
               h isa Expr || continue
               postwalk!(h) do x
