@@ -1346,12 +1346,12 @@ function vue_options(hook_type, args...)
     expr = args[1]
     quote
       let M = Stipple.@type
-        Stipple.$(Symbol("js_$hook_type"))(::M) = $expr
+        Stipple.$(Symbol("js_$hook_type"))(::Type{<:M}) = $expr
       end
     end |> esc
   elseif length(args) == 2
     T, expr = args[1], args[2]
-    esc(:(Stipple.$(Symbol("js_$hook_type"))(::$T) = $expr))
+    esc(:(Stipple.$(Symbol("js_$hook_type"))(::Type{<:$T}) = $expr))
   else
     error("Invalid number of arguments for vue options")
   end
@@ -1464,7 +1464,7 @@ macro client_data(expr)
 
   esc(quote
     let M = Stipple.@type
-      Stipple.client_data(::M) = $output
+      Stipple.client_data(::Type{<:M}) = $output
     end
   end)
 end
@@ -1481,7 +1481,7 @@ macro client_data(M, expr)
     push!(output.args, e)
   end
 
-  :(Stipple.client_data(::$(esc(M))) = $(esc(output)))
+  :(Stipple.client_data(::Type{<:$(esc(M))}) = $(esc(output)))
 end
 
 macro add_client_data(expr)
@@ -1500,7 +1500,7 @@ macro add_client_data(expr)
     let M = Stipple.@type
       cd_old = Stipple.client_data(M())
       cd_new = $output
-      Stipple.client_data(::M) = merge(d1, d2)
+      Stipple.client_data(::Type{<:M}) = merge(d1, d2)
     end
   end)
 end
