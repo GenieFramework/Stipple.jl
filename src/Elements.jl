@@ -656,7 +656,7 @@ macro data(expr)
 end
 
 """
-    on(action, expr)
+    `@on(action, expr)`
 
 Defines a js routine that is called by the given `action` of the Vue component, e.g. `:click`, `:input`
 
@@ -696,7 +696,7 @@ Sometimes preprocessing of the events is necessary, e.g. to add or skip informat
 @on(:uploaded, :uploaded, "for (f in event.files) { event.files[f].fname = event.files[f].name }")
 ```
 This is necessary because in some cases, e.g. in case of the click event not all fields are automatically converted by JSON.stringify.
-Other events, e.g. the `row-clicked` event of the `q-table` component pass more arguments than just the event itself. These arguments are
+Other events, e.g. the `row-click` event of the `q-table` component pass more arguments than just the event itself. These arguments are
 accessible as `args`.
 ```julia
 table(:table, @on(:row__click, :rowclick, "event.row = args[0]"))
