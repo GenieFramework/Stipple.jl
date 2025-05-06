@@ -507,12 +507,12 @@ macro var_storage(expr, handler = nothing)
         M_expr, prefix, postfix = e.M, e.prefix, e.postfix
         M = @eval(m, $M_expr)
         push!(mixins, Mixin(M, prefix, postfix))
-        mixin_storage = Stipple.var_to_storage(M, prefix, postfix; mixin_name = mixin)
+        mixin_storage = Stipple.var_to_storage(M, prefix, postfix; mixin_name = M_expr)
 
         pre_length = lastindex(prefix)
         post_length = lastindex(postfix)
     
-        handlers_expr_name = Symbol(mixin, :var"!_handlers_expr")
+        handlers_expr_name = Symbol(M_expr, :var"!_handlers_expr")
         handlers_expr = if pre_length + post_length > 0 && isdefined(m, handlers_expr_name)
           varnames = setdiff(collect(keys(mixin_storage)), Stipple.AUTOFIELDS, Stipple.INTERNALFIELDS)
           oldvarnames = [Symbol("$var"[1 + pre_length:end-post_length]) for var in varnames]
