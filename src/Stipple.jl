@@ -15,9 +15,11 @@ existing Vue.js libraries.
 """
 module Stipple
 
-const ALWAYS_REGISTER_CHANNELS = Ref(true)
-const USE_MODEL_STORAGE = Ref(true)
-const PRECOMPILE = Ref(false)
+import Base.RefValue
+
+const ALWAYS_REGISTER_CHANNELS = RefValue(true)
+const USE_MODEL_STORAGE = RefValue(true)
+const PRECOMPILE = RefValue(false)
 
 import MacroTools
 import Pkg.TOML
@@ -127,8 +129,8 @@ const IF_ITS_THAT_LONG_IT_CANT_BE_A_FILENAME = 500
 
 const LAST_ACTIVITY = Dict{Symbol, DateTime}()
 const PURGE_TIME_LIMIT = Ref{Period}(Day(1))
-const PURGE_NUMBER_LIMIT = Ref(1000)
-const PURGE_CHECK_DELAY = Ref(60)
+const PURGE_NUMBER_LIMIT = RefValue(1000)
+const PURGE_CHECK_DELAY = RefValue(60)
 
 const DEBOUNCE = LittleDict{Type{<:ReactiveModel}, LittleDict{Symbol, Any}}()
 const THROTTLE = LittleDict{Type{<:ReactiveModel}, LittleDict{Symbol, Any}}()
@@ -235,7 +237,7 @@ function isendoflive(@nospecialize(m::ReactiveModel))
 end
 
 function setup_purge_checker(@nospecialize(m::ReactiveModel))
-  modelref = Ref(m)
+  modelref = RefValue(m)
   channel = Symbol(getchannel(m))
   function(timer)
     if ! isnothing(modelref[]) && Stipple.isendoflive(modelref[])
@@ -1009,7 +1011,7 @@ end
 
 deps!(M::Type{<:ReactiveModel}, modul::Module; extra_deps = true) = deps!(M, modul.deps; extra_deps)
 
-deps!(m::Any, v::Vector{Union{Function, Module}}) = deps!.(Ref(m), v)
+deps!(m::Any, v::Vector{Union{Function, Module}}) = deps!.(RefValue(m), v)
 deps!(m::Any, t::Tuple) = [deps!(m, f) for f in t]
 deps!(m, args...) = [deps!(m, f) for f in args]
 
@@ -1277,7 +1279,7 @@ macro mixin_old(expr, prefix = "", postfix = "")
   T = x isa DataType ? x : typeof(x)
   mix = x isa DataType ? x() : x
   fnames = fieldnames(get_concrete_type(T))
-  values = getfield.(Ref(mix), fnames)
+  values = getfield.(RefValue(mix), fnames)
   output = quote end
   for (f, type, v) in zip(Symbol.(pre, fnames, post), fieldtypes(get_concrete_type(T)), values)
     f in Symbol.(prefix, [INTERNALFIELDS..., AUTOFIELDS...], postfix) && continue

@@ -26,7 +26,7 @@ function struct_to_dict(s::T, f::Union{Nothing, Function} = !isnothing) where T 
     ftest = isnothing(f) ? x -> true : f
     
     isempty(fieldnames(T)) && return s
-    Dict{Symbol, Any}(k => struct_to_dict(v) for (k, v) in zip(fieldnames(T), getfield.(Ref(s), fieldnames(T))) if ftest(v))
+    Dict{Symbol, Any}(k => struct_to_dict(v) for (k, v) in zip(fieldnames(T), getfield.(RefValue(s), fieldnames(T))) if ftest(v))
 end
 
 function deserialize!(d::Dict{T, Any}) where T

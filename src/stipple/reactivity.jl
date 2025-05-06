@@ -1,4 +1,4 @@
-const REVISE_DEBUG_INFO = Ref(false)
+const REVISE_DEBUG_INFO = RefValue(false)
 
 """
         mutable struct Reactive{T} <: Observables.AbstractObservable{T}
@@ -216,7 +216,7 @@ function var_to_storage(T, prefix = "", postfix = ""; mode = READONLY, mixin_nam
   end
 
   fields = collect(fieldnames(M))
-  values = Any[getfield.(Ref(m), fields)...]
+  values = Any[getfield.(RefValue(m), fields)...]
   ftypes = Any[fieldtypes(M)...]
   has_reactives = any(ftypes .<: Reactive)
 
@@ -473,8 +473,8 @@ macro var_storage(expr, handler = nothing)
   required_vars = Set()
   all_vars = Set()
   let_block = Expr(:block, :(_ = 0))
-  required_evals!.(expr.args, Ref(required_vars), Ref(all_vars))
-  add_brackets!.(expr.args, Ref(required_vars))
+  required_evals!.(expr.args, RefValue(required_vars), RefValue(all_vars))
+  add_brackets!.(expr.args, RefValue(required_vars))
   for e in expr.args
       if e isa LineNumberNode
         source = e
@@ -553,7 +553,7 @@ macro clear_route(App)
 end
 
 function clear_cache(M::Type{<:ReactiveModel})
-  delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: M, keys(Stipple.DEPS)))
+  delete!.(RefValue(Stipple.DEPS), filter(x -> x isa Type && x <: M, keys(Stipple.DEPS)))
   Stipple.Genie.Router.delete!(M)
   return nothing
 end
@@ -630,7 +630,7 @@ macro type(modelname, storage)
       $modelconst
     end
 
-    delete!.(Ref(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
+    delete!.(Base.RefValue(Stipple.DEPS), filter(x -> x isa Type && x <: $modelname, keys(Stipple.DEPS)))
     Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
 
     $modelname
@@ -657,7 +657,7 @@ end
 
 macro define_mixin(mixin_name, expr)
   storage = @eval(__module__, Stipple.@var_storage($expr))
-  delete!.(Ref(storage),  [:channel__, Stipple.AUTOFIELDS...])
+  delete!.(RefValue(storage),  [:channel__, Stipple.AUTOFIELDS...])
 
   quote
       Base.@kwdef struct $mixin_name
@@ -983,7 +983,7 @@ function unsynchronize!(o::AbstractObservable, o_sync::Union{AbstractObservable,
       # remove back syncs if o2 === nothing  
       if o2 === nothing
         cbs2 = filter!(o -> getfield(o, propertynames(o)[2]) === o1, get_syncing_listeners(o_source))
-        off.(Ref(o_source), cbs2)
+        off.(RefValue(o_source), cbs2)
       end
       off(o1, cb)
     end
