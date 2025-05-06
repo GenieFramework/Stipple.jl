@@ -600,9 +600,30 @@ function init(t::Type{M};
       client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
 
       try
-        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) && use_model_storage() &&
-          Genie.Router.params!(Stipple.ModelStorage.Sessions.GenieSession.PARAMS_SESSION_KEY,
-                                Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
+        sesstoken = get(payload, "sesstoken", "")
+        if !isempty(sesstoken) && use_model_storage()
+          if sesstoken == "__undefined__"
+            @warn """
+            Session token not defined, make sure that `<% Stipple.sesstoken() %>` is part of the head section of your layout, e.g.
+            
+            <head>
+              <meta charset="utf-8">
+              
+              <% Stipple.sesstoken() %>
+              <title>Genie App</title>    
+            </head>
+            
+            Alternatively, you can switch off model storage by calling
+            
+            `Stipple.enable_model_storage(false)`
+            
+            in your app.
+            """
+          else
+            Genie.Router.params!(Stipple.ModelStorage.Sessions.GenieSession.PARAMS_SESSION_KEY,
+                                 Stipple.ModelStorage.Sessions.GenieSession.load(sesstoken |> Genie.Encryption.decrypt))
+          end
+        end
       catch ex
         @error ex
       end
