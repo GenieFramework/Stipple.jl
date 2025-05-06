@@ -15,9 +15,11 @@ existing Vue.js libraries.
 """
 module Stipple
 
-const ALWAYS_REGISTER_CHANNELS = Ref(true)
-const USE_MODEL_STORAGE = Ref(true)
-const PRECOMPILE = Ref(false)
+import Base.RefValue
+
+const ALWAYS_REGISTER_CHANNELS = RefValue(true)
+const USE_MODEL_STORAGE = RefValue(true)
+const PRECOMPILE = RefValue(false)
 
 import MacroTools
 import Pkg.TOML
@@ -127,8 +129,8 @@ const IF_ITS_THAT_LONG_IT_CANT_BE_A_FILENAME = 500
 
 const LAST_ACTIVITY = Dict{Symbol, DateTime}()
 const PURGE_TIME_LIMIT = Ref{Period}(Day(1))
-const PURGE_NUMBER_LIMIT = Ref(1000)
-const PURGE_CHECK_DELAY = Ref(60)
+const PURGE_NUMBER_LIMIT = RefValue(1000)
+const PURGE_CHECK_DELAY = RefValue(60)
 
 const DEBOUNCE = LittleDict{Type{<:ReactiveModel}, LittleDict{Symbol, Any}}()
 const THROTTLE = LittleDict{Type{<:ReactiveModel}, LittleDict{Symbol, Any}}()
@@ -235,7 +237,7 @@ function isendoflive(@nospecialize(m::ReactiveModel))
 end
 
 function setup_purge_checker(@nospecialize(m::ReactiveModel))
-  modelref = Ref(m)
+  modelref = RefValue(m)
   channel = Symbol(getchannel(m))
   function(timer)
     if ! isnothing(modelref[]) && Stipple.isendoflive(modelref[])
@@ -600,9 +602,30 @@ function init(t::Type{M};
       client = transport == Genie.WebChannels ? Genie.WebChannels.id(Genie.Requests.wsclient()) : Genie.Requests.wtclient()
 
       try
-        haskey(payload, "sesstoken") && ! isempty(payload["sesstoken"]) && use_model_storage() &&
-          Genie.Router.params!(Stipple.ModelStorage.Sessions.GenieSession.PARAMS_SESSION_KEY,
-                                Stipple.ModelStorage.Sessions.GenieSession.load(payload["sesstoken"] |> Genie.Encryption.decrypt))
+        sesstoken = get(payload, "sesstoken", "")
+        if !isempty(sesstoken) && use_model_storage()
+          if sesstoken == "__undefined__"
+            @warn """
+            Session token not defined, make sure that `<% Stipple.sesstoken() %>` is part of the head section of your layout, e.g.
+            
+            <head>
+              <meta charset="utf-8">
+              
+              <% Stipple.sesstoken() %>
+              <title>Genie App</title>    
+            </head>
+            
+            Alternatively, you can switch off model storage by calling
+            
+            `Stipple.enable_model_storage(false)`
+            
+            in your app.
+            """
+          else
+            Genie.Router.params!(Stipple.ModelStorage.Sessions.GenieSession.PARAMS_SESSION_KEY,
+                                 Stipple.ModelStorage.Sessions.GenieSession.load(sesstoken |> Genie.Encryption.decrypt))
+          end
+        end
       catch ex
         @error ex
       end
@@ -988,7 +1011,7 @@ end
 
 deps!(M::Type{<:ReactiveModel}, modul::Module; extra_deps = true) = deps!(M, modul.deps; extra_deps)
 
-deps!(m::Any, v::Vector{Union{Function, Module}}) = deps!.(Ref(m), v)
+deps!(m::Any, v::Vector{Union{Function, Module}}) = deps!.(RefValue(m), v)
 deps!(m::Any, t::Tuple) = [deps!(m, f) for f in t]
 deps!(m, args...) = [deps!(m, f) for f in args]
 
@@ -1256,7 +1279,7 @@ macro mixin_old(expr, prefix = "", postfix = "")
   T = x isa DataType ? x : typeof(x)
   mix = x isa DataType ? x() : x
   fnames = fieldnames(get_concrete_type(T))
-  values = getfield.(Ref(mix), fnames)
+  values = getfield.(RefValue(mix), fnames)
   output = quote end
   for (f, type, v) in zip(Symbol.(pre, fnames, post), fieldtypes(get_concrete_type(T)), values)
     f in Symbol.(prefix, [INTERNALFIELDS..., AUTOFIELDS...], postfix) && continue

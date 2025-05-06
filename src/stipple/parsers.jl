@@ -4,7 +4,7 @@ function stipple_parse(::Type{T}, value) where T
     ff = [String(f) for f in fieldnames(T)]
     kk = String.(keys(value))
     # if all fieldnames are present, generate the type directly from the fields
-    if all(ff .∈ Ref(kk))
+    if all(ff .∈ RefValue(kk))
       T([stipple_parse(Ft, value[String(f)]) for (f, Ft) in zip(ff, fieldtypes(T))]...)
     # otherwise, try to generate it via kwargs, e.g. when the type is defined via @kwdef
     else

@@ -1,4 +1,4 @@
-const UPDATE_MUTABLE = Ref(false)
+const UPDATE_MUTABLE = RefValue(false)
 
 """
     setindex_withoutwatchers!(field::Reactive, val; notify=(x)->true)

@@ -12,7 +12,9 @@ export page, app, row, column, cell, container, flexgrid_kwargs, htmldiv, @gutte
 
 export theme, googlefonts_css, stipplecore_css, genie_footer
 
-const THEMES = Ref(Function[])
+import Base.RefValue
+
+const THEMES = RefValue(Function[])
 
 const FLEXGRID_KWARGS = [:col, :xs, :sm, :md, :lg, :xl, :gutter, :xgutter, :ygutter]
 
@@ -384,7 +386,7 @@ julia> row(gutter = :md, @gutter [
 """
 macro gutter(expr)
   if expr isa Expr && expr.head ∈ (:vcat, :vect)
-      expr.args = _wrap_expression.(expr.args, Ref(__module__))
+      expr.args = _wrap_expression.(expr.args, Base.RefValue(__module__))
   else
       expr = _wrap_expression(expr, __module__)
   end
@@ -622,8 +624,8 @@ const set_theme = set_theme!
 
 const THEME_DOTFILE = joinpath(".theme")
 const DEFAULT_USER_THEME_FILE = joinpath("css", Stipple.THEMES_FOLDER, "theme.css")
-const USER_THEME_WATCHER = Ref(false)
-const DOTTHEME_WATCHER = Ref(false)
+const USER_THEME_WATCHER = RefValue(false)
+const DOTTHEME_WATCHER = RefValue(false)
 
 
 function set_user_theme_watcher() :: Bool

@@ -6,11 +6,13 @@ module Theme
 using Genie
 using Stipple
 
+import Base.RefValue
+
 """
 A dictionary of themes. Each theme is a string that represents a CSS class.
 Add your own themes here.
 """
-const THEMES = Ref(Dict{Symbol, String}(
+const THEMES = RefValue(Dict{Symbol, String}(
 	:default => "theme-default-light",
   :dark => "theme-default-dark",
 ))
@@ -19,13 +21,13 @@ const THEMES = Ref(Dict{Symbol, String}(
 """
 The current theme.
 """
-const CURRENT_THEME = Ref(:default)
+const CURRENT_THEME = RefValue(:default)
 
 
 """
 Stores the index of the theme in Stipple.Layout.THEMES[]
 """
-const THEME_INDEX = Ref(0) #TODO: this will need to be refactored to manage themes in a dict by name -- but it will be breaking
+const THEME_INDEX = RefValue(0) #TODO: this will need to be refactored to manage themes in a dict by name -- but it will be breaking
 
 
 """
