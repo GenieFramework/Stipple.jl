@@ -1,3 +1,9 @@
+struct Mixin
+  M::Type{<:ReactiveModel}
+  prefix::String
+  postfix::String
+end
+
 """
     js_print(io::IO, x)
 
@@ -23,6 +29,7 @@ Parameters:
 - `pre`: preprocessor function that is applied to the resulting string of each element
 - `stip_delimiter`: If true strips a potential delimiter at the end of a string
 - `pre_delim`: preprocessor function for delimiter, if `nothing` it defaults to `pre`
+- `unique`: if true, remove duplicates before joining
 
 ### Example
 ```
@@ -39,8 +46,38 @@ julia> join_js([1, f, "2 "], " - ", pre = strip)
 "1 - hi - 2"
 ```
 """
-function join_js(xx::Union{Tuple, AbstractArray}, delim = ""; skip_empty = true, pre::Function = identity, strip_delimiter = true, pre_delim::Union{Function,Nothing} = nothing)
-  io = IOBuffer()
+function join_js(xx::Union{Tuple, AbstractArray}, delim = "";
+  skip_empty = true,
+  pre::Function = identity,
+  strip_delimiter = true,
+  pre_delim::Union{Function,Nothing} = nothing,
+  unique = false,
+)
+  a = collect_js(xx, delim; skip_empty, pre, strip_delimiter, pre_delim, unique)
+  join(a, delim)
+end
+
+function flatten(arr)
+  rst = Any[]
+  grep(v) =   for x in v
+              if isa(x, Tuple) ||  isa(x, Array)
+              grep(x) 
+              else push!(rst, x) end
+              end
+  grep(arr)
+  rst
+end
+
+function collect_js(xx::Union{Tuple, AbstractArray}, delim = "";
+  skip_empty::Bool = true,
+  pre::Function = identity,
+  strip_delimiter::Bool = true,
+  pre_delim::Union{Function,Nothing} = nothing,
+  unique::Bool = false,
+  key_replacement::Function = identity,
+)
+  xx = flatten(xx)
+  a = String[]
   firstrun = true
   s_delim = pre_delim === nothing ? pre(delim) : pre_delim(delim)
   n_delim = ncodeunits(s_delim)
@@ -48,7 +85,7 @@ function join_js(xx::Union{Tuple, AbstractArray}, delim = ""; skip_empty = true,
     x = x_raw isa Base.Callable ? x_raw() : x_raw
     io2 = IOBuffer()
     if x isa Union{AbstractDict, Pair, Base.Iterators.Pairs, Vector{<:Pair}}
-      s = json(Dict(k => JSONText(v) for (k, v) in (x isa Pair ? [x] : x)))[2:end - 1]
+      s = json(Dict(key_replacement(k) => JSONText(v) for (k, v) in (x isa Pair ? [x] : x)))[2:end - 1]
       print(io2, s)
     elseif x isa JSONText
       print(io2, x.s)
@@ -58,17 +95,13 @@ function join_js(xx::Union{Tuple, AbstractArray}, delim = ""; skip_empty = true,
     s = String(take!(io2))
     hasdelimiter = strip_delimiter && endswith(s, delim)
     s = pre(hasdelimiter ? s[1:end - ncodeunits(delim)] : s)
-    # if delimter has been removed already don't check for pretreated delimiter
-    firstrun || (skip_empty && isempty(s)) || print(io, delim)
-    # if first was not printed, firstrun stays true
-    firstrun && (firstrun = (skip_empty && isempty(s)))
-    print(io, strip_delimiter && ! hasdelimiter && endswith(s, s_delim) ? s[1:end - n_delim] : s)
+    (skip_empty && isempty(s)) || push!(a, s)
   end
-  String(take!(io))
+  unique ? unique!(a) : a
 end
 
-function join_js(x, delim = ""; skip_empty = true, pre::Function = identity, strip_delimiter = true, pre_delim::Union{Function,Nothing} = nothing)
-  join_js([x], delim; skip_empty, pre, strip_delimiter, pre_delim)
+function join_js(x, delim = ""; skip_empty = true, pre::Function = identity, strip_delimiter = true, pre_delim::Union{Function,Nothing} = nothing, unique = false)
+  join_js([x], delim; skip_empty, pre, strip_delimiter, pre_delim, unique)
 end
 
 const RENDERING_MAPPINGS = Dict{String,String}()
@@ -128,6 +161,96 @@ const MIXINS = Ref(["watcherMixin", "reviveMixin", "eventMixin", "filterMixin"])
 add_mixins(mixins::Vector{String}) = union!(push!(MIXINS[], mixins...))
 add_mixins(mixin::String) = union!(push!(MIXINS[], mixin))
 
+function mixins(::Type{<:ReactiveModel})
+  Mixin[]
+end
+Stipple.mixins(::T) where T <: ReactiveModel = Stipple.mixins(T)
+
+function get_known_js_vars(::Type{M}) where M<:ReactiveModel
+  CM = Stipple.get_concrete_type(M)
+  vars = vcat(setdiff(fieldnames(CM), Stipple.AUTOFIELDS, Stipple.INTERNALFIELDS), Symbol.(keys(client_data(CM))))
+  
+  computed_vars = Symbol.(strip.(first.(split.(collect_js([js_methods(M)]), ':', limit = 2)), '"'))
+  method_vars = Symbol.(strip.(first.(split.(collect_js([js_computed(M)]), ':', limit = 2)), '"'))
+
+  vars = vcat(vars, computed_vars, method_vars)
+  sort!(sort!(vars), by = x->length(String(x)), rev = true)
+end
+
+function js_mixin(m::Mixin, js_f, delim)
+  M, prefix, postfix = m.M, m.prefix, m.postfix
+  vars = get_known_js_vars(M)
+  empty_var = Symbol("") ∈ vars
+  empty_var && setdiff!(vars, [Symbol("")])
+
+  replace_rule1 = Regex("\\b(this|GENIEMODEL)\\.($(join(vars, '|')))\\b") => SubstitutionString("\\1.$prefix\\2$postfix")
+  replace_rule2 = Regex("\\b(this|GENIEMODEL)\\. ") => SubstitutionString("\\1.$prefix$postfix ")
+
+  no_modifiers = isempty(prefix) && isempty(postfix) || js_f ∉ (js_methods, js_computed, js_watch)
+  add_fixes(s) = Symbol(prefix, s, postfix)
+  add_fixes(s::JSONText) = Symbol(s.s)
+  xx = collect_js([js_f(M)], delim; pre = strip, key_replacement = no_modifiers ? identity : add_fixes)
+  
+  no_modifiers && return xx
+
+  for i in eachindex(xx)
+    s = replace(xx[i], replace_rule1)
+    empty_var && (s = replace(s, replace_rule2))
+    xx[i] = s
+  end
+  
+  return xx
+end
+
+function render_js_options!(::Union{M, Type{M}}, vue::Dict{Symbol, Any} = Dict{Symbol, Any}(); mixin = false, indent = 4) where {M<:ReactiveModel}
+  indent isa Integer && (indent = repeat(" ", indent))
+  pre = isempty(indent) ? strip : s -> replace(strip(s), "\n" => "\n$indent")
+  sep1 = ",\n\n$indent"
+  sep2 = "\n\n$indent"
+
+  for (f, field) in ((js_methods, :methods), (js_computed, :computed), (js_watch, :watch))
+    xx = Any[f(M)]
+    for m in mixins(M)
+      push!(xx, js_mixin(m, f, sep1))
+    end
+
+    if field == :watch
+      watch_auto = strip(js_watch_auto(M))
+      watch_auto == "" || push!(xx, watch_auto)
+    end
+
+    js = join_js(xx, sep1; pre, unique = true)
+    isempty(js) || push!(vue, field => JSONText("{\n    $js\n}"))
+  end
+
+  for (f, field) in (
+    (js_before_create, :beforeCreate), (js_created, :created), (js_before_mount, :beforeMount), (js_mounted, :mounted),
+    (js_before_update, :beforeUpdate), (js_updated, :updated), (js_activated, :activated), (js_deactivated, :deactivated),
+    (js_before_destroy, :beforeDestroy), (js_destroyed, :destroyed), (js_error_captured, :errorCaptured),)
+
+    xx = Any[f(M)]
+    for m in mixins(M)
+      push!(xx, js_mixin(m, f, sep2))
+    end
+
+    if field == :created
+      created_auto = strip(Stipple.js_created_auto(M))
+      created_auto == "" || push!(xx, created_auto)
+    elseif field == :mounted && ! mixin
+      mounted_auto = """setTimeout(() => {
+          this.WebChannel.unsubscriptionHandlers.push(() => this.handle_event({}, 'finalize'))
+          console.log('Unsubscription handler installed')
+      }, 100)
+      """
+      push!(xx, mounted_auto)
+    end
+
+    js = join_js(xx, sep2; pre, unique = true)
+    isempty(js) || push!(vue, field => JSONText("function(){\n    $js\n}"))
+  end
+  vue
+end
+
 """
     function Stipple.render(app::M, fieldname::Union{Symbol,Nothing} = nothing)::Dict{Symbol,Any} where {M<:ReactiveModel}
 
@@ -152,34 +275,8 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
     :mixins => JSONText.(MIXINS[]),
     :data => JSONText("() => ($data)")
   )
-  for (f, field) in ((js_methods, :methods), (js_computed, :computed), (js_watch, :watch))
-    js = join_js(f(app), ",\n    "; pre = strip)
-    if field == :watch
-      watch_auto = join_js(Stipple.js_watch_auto(app), ",\n    "; pre = strip)
-      watch_auto == "" || (js = join_js([js, watch_auto], ",\n    "))
-    end
-    isempty(js) || push!(vue, field => JSONText("{\n    $js\n}"))
-  end
 
-  for (f, field) in (
-    (js_before_create, :beforeCreate), (js_created, :created), (js_before_mount, :beforeMount), (js_mounted, :mounted),
-    (js_before_update, :beforeUpdate), (js_updated, :updated), (js_activated, :activated), (js_deactivated, :deactivated),
-    (js_before_destroy, :beforeDestroy), (js_destroyed, :destroyed), (js_error_captured, :errorCaptured),)
-
-    js = join_js(f(app), "\n\n    "; pre = strip)
-    if field == :created
-      created_auto = join_js(Stipple.js_created_auto(app), "\n\n    "; pre = strip)
-      created_auto == "" || (js = join_js([js, created_auto], "\n\n    "))
-    elseif field == :mounted
-      mounted_auto = """setTimeout(() => {
-          this.WebChannel.unsubscriptionHandlers.push(() => this.handle_event({}, 'finalize'))
-          console.log('Unsubscription handler installed')
-      }, 100)
-      """
-      js = join_js([js, mounted_auto], "\n\n    ")
-    end
-    isempty(js) || push!(vue, field => JSONText("function(){\n    $js\n}"))
-  end
+  render_js_options!(app, vue)
 
   vue
 end
