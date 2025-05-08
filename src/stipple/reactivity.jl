@@ -721,6 +721,9 @@ notify(observable, 1)
 
 # only notify listeners with priority greater than 0
 notify(observable, >(0))
+
+# notify all listeners except those with priority 1
+notify(observable, ≠(1))
 ```
 """
 function Base.notify(@nospecialize(observable::AbstractObservable), priority::Union{Int, Function})

@@ -1,16 +1,15 @@
 const UPDATE_MUTABLE = RefValue(false)
 
 """
-    setindex_withoutwatchers!(field::Reactive, val; notify=(x)->true)
-    setindex_withoutwatchers!(field::Reactive, val, keys::Int...; notify=(x)->true)
+    setindex_withoutwatchers!(field::Reactive, val)
+    setindex_withoutwatchers!(field::Reactive, val, priorities::Int...)
 
 Change the content of a Reactive field without triggering the listeners.
-If keys are specified, only these listeners are exempted from triggering.
+If priorities are specified, the respective listeners are exempted from being triggered.
 """
-function setindex_withoutwatchers!(field::Reactive{T}, val, keys::Int...; notify=(x)->true) where T
+function setindex_withoutwatchers!(field::Reactive{T}, val, priorities::Int...) where T
   field.o.val = val
-
-  callwatchers(field, val, keys...; notify)
+  notify(field, ∉(priorities))
 
   return field
 end
@@ -62,17 +61,17 @@ function callwatchers(field, val, keys...; notify)
 end
 
 """
-    setfield_withoutwatchers!(app::ReactiveModel, field::Symmbol, val; notify=(x)->true)
-    setfield_withoutwatchers!(app::ReactiveModel, field::Symmbol, val, keys...; notify=(x)->true)
+    setfield_withoutwatchers!(app::ReactiveModel, field::Symmbol, val)
+    setfield_withoutwatchers!(app::ReactiveModel, field::Symmbol, val, priorities...)
 
 Change the field of a ReactiveModel without triggering the listeners.
-If keys are specified, only these listeners are exempted from triggering.
+If priorities are specified, only these listeners are exempted from triggering.
 """
-function setfield_withoutwatchers!(app::T, field::Symbol, val, keys...; notify=(x)->true) where T <: ReactiveModel
+function setfield_withoutwatchers!(app::T, field::Symbol, val, priorities...) where T <: ReactiveModel
   f = getfield(app, field)
 
   if f isa Reactive
-    setindex_withoutwatchers!(f, val, keys...; notify)
+    setindex_withoutwatchers!(f, val, priorities...)
   else
     setfield!(app, field, val)
   end
@@ -98,15 +97,15 @@ function update!(model::M, field::Symbol, newval::T1, oldval::T2)::M where {T1, 
   ischanged = false
 
   if f isa Reactive
-    if UPDATE_MUTABLE[] # experimental
+    if UPDATE_MUTABLE[] # experimental, default is currently false
+      object = f[]
       if newval isa Vector || newval isa Dict
-        push!(getproperty(model, field)[] |> empty!, newval...)
+        push!(object |> empty!, newval...)
         ischanged = true
       elseif newval isa Ref
-        getproperty(model, field)[][] = newval[]
+        object[] = newval[]
         ischanged = true
       elseif isstructtype(typeof(newval)) && ! isa(newval, AbstractString)
-        object = getproperty(model, field)[]
         for field in fieldnames(typeof(newval))
           setfield!(object, field, getfield(newval, field))
         end
@@ -115,9 +114,10 @@ function update!(model::M, field::Symbol, newval::T1, oldval::T2)::M where {T1, 
     end
 
     if ischanged
-      f.r_mode == PRIVATE || f.no_backend_watcher ? nothing : callwatchers(f, newval, 1)
+      f.r_mode == PRIVATE || f.no_backend_watcher || notify(f, ≠(1))
     else
-      f.r_mode == PRIVATE || f.no_backend_watcher ? f[] = newval : setindex_withoutwatchers!(f, newval, 1)
+      # we changed filtering of watchers to priorities, so no need to differentiate here
+      setindex_withoutwatchers!(f, newval, 1)
     end
   else
     setfield!(model, field, newval)

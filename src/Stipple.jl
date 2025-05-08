@@ -774,7 +774,7 @@ function setup(model::M, channel = Genie.config.webchannels_default_route)::M wh
 
     has_backend_watcher(field) || continue
 
-    on(field) do _
+    on(field, priority = 1) do _
       push!(model, f => field, channel = channel)
     end
   end
