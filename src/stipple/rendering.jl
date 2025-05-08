@@ -191,7 +191,7 @@ function js_mixin(m::Mixin, js_f, delim)
   add_fixes(s::JSONText) = Symbol(s.s)
   xx = collect_js([js_f(M)], delim; pre = strip, key_replacement = no_modifiers ? identity : add_fixes)
   
-  no_modifiers && return xx
+  isempty(prefix) && isempty(postfix) && return xx
 
   for i in eachindex(xx)
     s = replace(xx[i], replace_rule1)
