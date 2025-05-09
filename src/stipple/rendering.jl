@@ -1,5 +1,5 @@
 struct Mixin
-  M::Type{<:ReactiveModel}
+  M::DataType
   prefix::String
   postfix::String
 end
@@ -175,6 +175,10 @@ function get_known_js_vars(::Type{M}) where M<:ReactiveModel
 
   vars = vcat(vars, computed_vars, method_vars)
   sort!(sort!(vars), by = x->length(String(x)), rev = true)
+end
+
+function get_known_js_vars(::Type{T}) where T
+  Symbol[fieldnames(T)...]
 end
 
 function js_mixin(m::Mixin, js_f, delim)

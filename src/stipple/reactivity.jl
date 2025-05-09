@@ -615,7 +615,7 @@ macro type(modelname, storage)
   storage = @eval __module__ $storage
 
   mixins = if haskey(storage, :mixins__)
-    eval(pop!(storage, :mixins__))
+    __module__.eval(pop!(storage, :mixins__))
   else
     Mixin[]
   end
