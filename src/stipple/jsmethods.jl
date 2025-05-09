@@ -32,7 +32,7 @@ js_bye() = :bye => "function() {console.log('Bye!')}"
 js_methods(::Type{<:MyDashboard}) = [js_greet, js_bye]
 ```
 """
-js_methods(::Type{<:ReactiveModel})::String = ""
+js_methods(::DataType) = ""
 js_methods(::T) where T = js_methods(T)
 
 # deprecated, now part of the model
@@ -71,7 +71,7 @@ js_computed(app::MyDashboard) = \"\"\"
 \"\"\"
 ```
 """
-js_computed(::Type{<:ReactiveModel})::String = ""
+js_computed(::DataType) = ""
 js_computed(::T) where T = js_computed(T)
 
 const jscomputed = js_computed
@@ -103,7 +103,7 @@ js_watch(::Type{<:MyDashboard}) = \"\"\"
 \"\"\"
 ```
 """
-js_watch(::Type{<:ReactiveModel})::String = ""
+js_watch(::DataType) = ""
 js_watch(::T) where T = js_watch(T)
 
 const jswatch = js_watch
@@ -263,13 +263,11 @@ function js_initscript(initscript::String)
   """
 end
 
-function js_created_auto(x)
-  ""
-end
+js_created_auto(::DataType) = ""
+js_created_auto(::T) where T = js_created_auto(T)
 
-function js_watch_auto(x)
-  ""
-end
+js_watch_auto(::DataType) = ""
+js_watch_auto(::T) where T = js_watch_auto(T)
 
 # methods to be used directly as arguments to js_methods
 
