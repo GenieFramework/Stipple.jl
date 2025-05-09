@@ -219,8 +219,8 @@ function render_js_options!(::Union{M, Type{M}}, vue::Dict{Symbol, Any} = Dict{S
     end
 
     if field == :watch
-      watch_auto = strip(js_watch_auto(M))
-      watch_auto == "" || push!(xx, watch_auto)
+      watch_auto = js_watch_auto(M)
+      isempty(watch_auto) || push!(xx, watch_auto)
     end
 
     js = join_js(xx, sep1; pre, unique = true)
@@ -238,8 +238,8 @@ function render_js_options!(::Union{M, Type{M}}, vue::Dict{Symbol, Any} = Dict{S
     end
 
     if field == :created
-      created_auto = strip(Stipple.js_created_auto(M))
-      created_auto == "" || push!(xx, created_auto)
+      created_auto = Stipple.js_created_auto(M)
+      isempty(created_auto) || push!(xx, created_auto)
     elseif field == :mounted && ! mixin
       mounted_auto = """setTimeout(() => {
           this.WebChannel.unsubscriptionHandlers.push(() => this.handle_event({}, 'finalize'))
