@@ -180,7 +180,7 @@ for (f, field) in (
     $($f)(::MyDashboard) = [startcamera, stopcamera]
     ```
     """
-    $f(::Type{<:ReactiveModel})::String = ""
+    $f(::DataType)::String = ""
     $f(::T) where T = $f(T)
   end)
 end
