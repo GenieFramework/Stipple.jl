@@ -1170,7 +1170,7 @@ include("stipple/reactive_props.jl")
 #===#
 
 
-function attributes(kwargs::Union{Vector{<:Pair}, Base.Iterators.Pairs, Dict},
+function attributes(kwargs::Union{Vector{<:Pair}, Base.Iterators.Pairs, AbstractDict},
                     mappings::Dict{String,String} = Dict{String,String}())::NamedTuple
 
   attrs = Stipple.OptDict()

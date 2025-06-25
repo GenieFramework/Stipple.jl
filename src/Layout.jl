@@ -219,7 +219,7 @@ end
 
 function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = true, flexgrid_mappings::Dict{Symbol,Symbol} = Dict{Symbol,Symbol}(), kwargs...)
   container = iscontainer(class)
-  kwargs = Dict{Symbol,Any}(kwargs...)
+  kwargs = OrderedDict{Symbol,Any}(kwargs...)
 
   # support all different types of classes that vue supports: String, Expressions (Symbols), Arrays, Dicts
   # todo check if vector contains only strings ...
