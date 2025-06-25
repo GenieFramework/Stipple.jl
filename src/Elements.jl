@@ -573,8 +573,10 @@ It is also possible to loop over `(v, k)` or `v`; index will always be zero-base
 
 """
 macro recur(expr)
-  # expr isa Expr && expr.head == :call && expr.args[1] == :in && (expr.args[2] = string(expr.args[2]))
-  # expr = (MacroTools.@capture(expr, y_ in z_)) ? :("$($y) in $($z isa Union{AbstractDict, AbstractVector} ? Stipple.js_attr($z) : $z)") : :("$($expr)")
+  if expr isa Expr && expr.head == :call && expr.args[1] == :in
+    expr = (MacroTools.@capture(expr, y_ in z_)) ? :("$($y) in $($z isa Union{AbstractDict, AbstractVector} ? Stipple.js_attr($z) : $z)") : :("$($expr)")
+  end
+  
   imported = isdefined(__module__, :∥) && isdefined(__module__, :∧)
   Expr(:kw, Symbol("v-for"), jsexpr(expr; imported))
 end
