@@ -418,7 +418,8 @@ function jsexpr(expr; imported::Bool = true)
       if js isa JSExpr
         json(js)
       else
-        js_quote_replace(json(render(js)))
+        x = render(js)
+        js_quote_replace(x isa String ? x : json(x))
       end
     end
   end
