@@ -20,6 +20,7 @@ import Base.RefValue
 const ALWAYS_REGISTER_CHANNELS = RefValue(true)
 const USE_MODEL_STORAGE = RefValue(true)
 const PRECOMPILE = RefValue(false)
+const FIXED_TYPES = Dict{Module, Vector{Symbol}}()
 
 import MacroTools
 import Pkg.TOML
@@ -281,6 +282,7 @@ export newapp
 export onbutton
 export init
 export isconnected
+export fixtype!, freetype!
 
 #===#
 
@@ -1089,11 +1091,88 @@ end
 
 onbutton(button::R{Bool}, f::Function; kwargs...) = onbutton(f, button; kwargs...)
 
+function is_fixedtype(context, appname)
+    haskey(FIXED_TYPES, context) && appname ∈ FIXED_TYPES[context]
+end
+
+"""
+    fixtype!(M::Type{<:ReactiveModel})
+
+Register the app `M` to disallow any change of its type.
+This is a slightly hacky solution to prevent Revise from raising a world age error 
+during first compilation of apps with mixins.
+This error occurs either
+- when including modules via `Revise.include()`
+- tracking code via `Revise.track(AppModul, <path of app>)`
+- after code modification of precompiled app modules (modules that are included via `using`)
+
+### Example Usage
+```
+module MyAppModule
+
+using Stipple, Stipple.ReactiveTools
+export MyApp
+
+@app MyMixin begin
+    @out _data = collect(1:5)
+end
+
+fixtype!(MyMixin)
+
+@app MyApp begin
+    @in x = 1
+    @out user = "hh"
+
+    @mixin hh::MyMixin
+end
+
+end # module
+```
+There's also a macro version in ReactiveTools with the following syntax
+```
+@fixtype MyMixin
+```
+Releasing the type restriction for code modification during development is done by `freetype!()`.
+"""
+function fixtype!(context, appname)
+  apps = get!(FIXED_TYPES, context, Symbol[])
+  appname ∈ apps || push!(apps, appname)
+  nothing
+end
+
+fixtype!(M::Type{<:ReactiveModel}) = fixtype!(parentmodule(M), nameof(get_abstract_type(M)))
+
+"""
+    freetype!(M::Type{<:ReactiveModel})
+
+Release model type restriction setup by `fixtype!()`.
+"""
+function freetype!(context, appname)
+  if haskey(FIXED_TYPES, context)
+    apps = FIXED_TYPES[context]
+    setdiff!(apps, [appname])
+    isempty(apps) && delete!(FIXED_TYPES, context)
+  end
+  nothing
+end
+
+freetype!(M::Type{<:ReactiveModel}) = freetype!(parentmodule(M), nameof(get_abstract_type(M)))
+
+"""
+    mygensym(sym::Symbol, context = @__MODULE__)
+
+Internal function used to generate a new symbol that is not yet defined in the context.
+In case that the symbol is listed in the module's entry of FIXED_TYPES, the index is reduced by 1,
+preventing a new symbol creation except if there hasn't been any definition of that symbol yet. The latter
+functionality has been introduced to prevent Revise from generating new names particularly in the case of apps that are used 
+as mixins. Otherwise apps with app-mixins are not precompilable.
+"""
 function mygensym(sym::Symbol, context = @__MODULE__)
   i = 1
   while isdefined(context, Symbol(sym, :_, i))
     i += 1
   end
+  is_fixedtype(context, Symbol(String(sym)[1:end-1])) && (i -= 1)
   Symbol(sym, :_, i)
 end
 

@@ -29,6 +29,8 @@ export @props, @template, @name, @components
 
 export @before_create, @created, @before_mount, @mounted, @before_update, @updated, @activated, @deactivated, @before_destroy, @destroyed, @error_captured
 
+export @fixtype, @freetype
+
 export DEFAULT_LAYOUT, Page
 
 function DEFAULT_LAYOUT(; title::String = "Genie App",
@@ -150,8 +152,8 @@ function delete_handlers_fn(m::Module)
 end
 
 function delete_events(m::Module)
-  modelname = model_typename(m)
-  M = @eval m $modelname
+  appname = model_typename(m)
+  M = @eval m $appname
   delete_events(M)
 end
 
@@ -200,8 +202,8 @@ end
 
 import Stipple.@type
 macro type()
-  modelname = model_typename(__module__)
-  esc(:($modelname))
+  appname = model_typename(__module__)
+  esc(:($appname))
 end
 
 import Stipple.@clear_cache
@@ -212,6 +214,66 @@ end
 import Stipple.@clear_route
 macro clear_route()
   :(Stipple.clear_route(Stipple.@type)) |> esc
+end
+
+"""
+    @fixtype MyApp
+
+Register the app `MyApp` to disallow any change of its type.
+This is a slightly hacky solution to prevent Revise from raising a world age error 
+during first compilation of apps with mixins.
+This error occurs either
+- when including modules via `Revise.include()`
+- tracking code via `Revise.track(AppModul, <path of app>)`
+- after code modification of precompiled app modules (modules that are included via `using`)
+
+### Example Usage
+```
+module MyAppModule
+
+using Stipple, Stipple.ReactiveTools
+export MyApp
+
+@app MyMixin begin
+    @out _data = collect(1:5)
+end
+
+@fixtype MyMixin
+
+@app MyApp begin
+    @in x = 1
+    @out user = "hh"
+
+    @mixin hh::MyMixin
+end
+
+end # module
+```
+Releasing the type restriction for code modification during development is done by `@freetype`.
+"""
+macro fixtype(expr)
+  :(Stipple.fixtype!($(esc(expr))))
+end
+
+macro fixtype()
+  appname = QuoteNode(model_typename(__module__))
+  :(fixtype!($__module__, $appname))
+end
+
+"""
+```julia
+@freetype
+```
+Assert generation of a new symbol during redefinition of apps.
+This is only required to reset the behaviour after it had been changed by @fixtype
+"""
+macro freetype(expr)
+  :(Stipple.freetype!($(esc(expr))))
+end
+
+macro freetype()
+  appname = QuoteNode(model_typename(__module__))
+  :(freetype!($__module__, $appname))
 end
 
 function _prepare(fieldname)
@@ -483,9 +545,9 @@ end
 import Stipple: @vars
 
 macro vars(expr)
-  modelname = model_typename(__module__)
+  appname = model_typename(__module__)
   quote
-    Stipple.ReactiveTools.@vars $modelname $expr
+    Stipple.ReactiveTools.@vars $appname $expr
   end |> esc
 end
 
@@ -607,10 +669,10 @@ In any handler you can abort the handler queue by returning `Consume(true)`. In 
 handlers will be skipped. If a priority > 0 is set, the client will not be updated.
 """
 macro app(expr = Expr(:block))
-  modelname = model_typename(__module__)
+  appname = model_typename(__module__)
   quote
-    Stipple.ReactiveTools.@app $modelname $expr __GF_AUTO_HANDLERS__
-    $modelname
+    Stipple.ReactiveTools.@app $appname $expr __GF_AUTO_HANDLERS__
+    $appname
   end |> esc
 end
 
@@ -711,17 +773,17 @@ macro app_mixin(typename, expr, handlers_fn_name = Symbol(typename, :_handlers))
 end
 
 macro handlers()
-  modelname = model_typename(__module__)
+  appname = model_typename(__module__)
   empty_block = Expr(:block)
   quote
-    Stipple.ReactiveTools.@handlers $modelname $empty_block __GF_AUTO_HANDLERS__
+    Stipple.ReactiveTools.@handlers $appname $empty_block __GF_AUTO_HANDLERS__
   end |> esc
 end
 
 macro handlers(expr)
-  modelname = model_typename(__module__)
+  appname = model_typename(__module__)
   quote
-    Stipple.ReactiveTools.@handlers $modelname $expr __GF_AUTO_HANDLERS__
+    Stipple.ReactiveTools.@handlers $appname $expr __GF_AUTO_HANDLERS__
   end |> esc
 end
 
