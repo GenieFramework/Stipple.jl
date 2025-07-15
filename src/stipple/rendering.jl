@@ -48,7 +48,7 @@ function join_js(xx::Union{Tuple, AbstractArray}, delim = ""; skip_empty = true,
     x = x_raw isa Base.Callable ? x_raw() : x_raw
     io2 = IOBuffer()
     if x isa Union{AbstractDict, Pair, Base.Iterators.Pairs, Vector{<:Pair}}
-      s = json(Dict(k => JSONText(v) for (k, v) in (x isa Pair ? [x] : x)))[2:end - 1]
+      s = json(Dict(k => v isa AbstractString ? JSONText(string(v)) : v for (k, v) in (x isa Pair ? [x] : x)))[2:end - 1]
       print(io2, s)
     elseif x isa JSONText
       print(io2, x.s)
@@ -133,32 +133,40 @@ add_mixins(mixin::String) = union!(push!(MIXINS[], mixin))
 
 Renders the Julia `ReactiveModel` `app` as the corresponding Vue.js JavaScript code.
 """
-function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
-  result = OptDict()
+function Stipple.render(app::M; component_mode::Bool = false)::Dict{Symbol,Any} where {M<:ReactiveModel}
+  data_dict = OptDict()
 
   for field in fieldnames(typeof(app))
     f = getfield(app, field)
 
     occursin(SETTINGS.private_pattern, String(field)) && continue
     f isa Reactive && f.r_mode == PRIVATE && continue
+    component_mode && field ∈ Stipple.AUTOFIELDS && continue
 
-    result[field] = Stipple.jsrender(f, field)
+    data_dict[field] = Stipple.jsrender(f, field)
   end
 
   # convert :data to () => ({   })
-  data = json(merge(result, client_data(app)))
+  data = json(merge!(data_dict, client_data(app)))
 
-  vue = Dict(
-    :mixins => JSONText.(MIXINS[]),
-    :data => JSONText("() => ($data)")
-  )
-  for (f, field) in ((js_methods, :methods), (js_computed, :computed), (js_watch, :watch))
-    js = join_js(f(app), ",\n    "; pre = strip)
-    if field == :watch
+  vue = opts()
+  component_mode || push!(vue, :mixins => JSONText.(MIXINS[]))
+  isempty(data_dict) || push!(vue, :data => JSONText("() => ($data)"))
+
+  for (f, field) in ((js_methods, :methods), (js_computed, :computed), (js_watch, :watch), (js_props, :props), (js_template, :template))
+    content = f(app)
+    js = join_js(content, ",\n    "; pre = strip)
+    if field == :watch && !component_mode
       watch_auto = join_js(Stipple.js_watch_auto(app), ",\n    "; pre = strip)
       watch_auto == "" || (js = join_js([js, watch_auto], ",\n    "))
     end
-    isempty(js) || push!(vue, field => JSONText("{\n    $js\n}"))
+    if !isempty(js)
+      if field != :template
+        push!(vue, field => JSONText("{\n    $js\n}"))
+      else
+        push!(vue, field => JSONText("`$js`"))
+      end
+    end
   end
 
   for (f, field) in (
@@ -167,10 +175,10 @@ function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
     (js_before_destroy, :beforeDestroy), (js_destroyed, :destroyed), (js_error_captured, :errorCaptured),)
 
     js = join_js(f(app), "\n\n    "; pre = strip)
-    if field == :created
+    if field == :created && !component_mode
       created_auto = join_js(Stipple.js_created_auto(app), "\n\n    "; pre = strip)
       created_auto == "" || (js = join_js([js, created_auto], "\n\n    "))
-    elseif field == :mounted
+    elseif field == :mounted && !component_mode
       mounted_auto = """setTimeout(() => {
           this.WebChannel.unsubscriptionHandlers.push(() => this.handle_event({}, 'finalize'))
           console.log('Unsubscription handler installed')
@@ -232,3 +240,16 @@ function js_attr(x)
 end
 
 Stipple.render(X::Matrix) = [X[:, i] for i in 1:size(X, 2)]
+
+function js_name(App::Type{<:ReactiveModel})
+    nameof(Stipple.get_abstract_type(App))
+end
+
+function render_component(app::App) where App <: ReactiveModel
+    rd = render(app, component_mode = true)
+    JSONText(json(rd))
+end
+
+function render_component(::Type{App}, args...; kwargs...) where App <: ReactiveModel
+    render_component(App())
+end

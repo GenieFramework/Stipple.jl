@@ -111,6 +111,19 @@ end
 
 const jswatch = js_watch
 
+function js_props(m::T)::String where {T<:ReactiveModel}
+  ""
+end
+
+const jsprops = js_props
+
+function js_template(m::T)::String where {T<:ReactiveModel}
+  ""
+end
+
+const jstemplate = js_template
+
+
 """
     function client_data(app::T)::String where {T<:ReactiveModel}
 

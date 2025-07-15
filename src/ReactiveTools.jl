@@ -25,6 +25,7 @@ export @page, @init, @handlers, @app, @appname, @app_mixin, @modelstorage, @hand
 
 # js functions on the front-end (see Vue.js docs)
 export @methods, @watch, @computed, @client_data, @add_client_data
+export @props, @template, @name, @components
 
 export @before_create, @created, @before_mount, @mounted, @before_update, @updated, @activated, @deactivated, @before_destroy, @destroyed, @error_captured
 
@@ -1246,7 +1247,7 @@ macro page(expressions...)
 end
 
 function __init()
-  for f in (:methods, :watch, :computed)
+  for f in (:methods, :watch, :computed, :props, :template)
     f_str = string(f)
     Core.eval(@__MODULE__, quote
       """
@@ -1513,6 +1514,99 @@ macro notify(args...)
   quote
     Base.notify(__model__, $(args...))
   end |> esc
+end
+
+"""
+@name(App, name)
+
+Set the name of an App to be used as a Vue component.
+
+### Example
+```julia
+@name VueMyComponent :MyComponent
+```
+"""
+macro name(App, name)
+  :(Stipple.js_name(::Type{<:$App}) = Symbol($name)) |> esc
+end
+
+"""
+@components(App, Component)
+
+Register a component `Component` to be used in the app `App`.
+
+```julia
+# implicit App name
+@components MyComponent
+
+# explicit App name
+@components MyApp MyComponent
+```
+### Full Component Example
+```julia
+using Stipple, Stipple.ReactiveTools
+using StippleUI
+import Stipple.opts
+
+# Defining a simple copy button component
+@app VueCopyButton begin
+    @out copied = false
+end
+
+@methods VueCopyButton [
+    :handleCopy => js\"\"\"function () {
+        const text = typeof this.text === 'function' ? this.text() : this.text;
+        Quasar.copyToClipboard(text).then(() => {
+          this.copied = true;
+          setTimeout(() => {
+            this.copied = false;
+          }, 700);
+        });
+      }
+    \"\"\"
+]
+
+@props VueCopyButton opts(
+    text = opts(
+        type = [js"String", js"Function"],
+        required = true
+    )
+)
+
+@template VueCopyButton btn(
+    icon = R"this.copied ? 'check' : 'content_copy'",
+    aria__label = R"this.copied ? 'Copied!' : 'Copy to clipboard'",
+    flat = true, size = "sm",
+    @click("this.handleCopy")
+)
+
+copybutton(text, args...; kwargs...) = vue(:copy__button, args...; text, kwargs...)
+
+# defining a simple app with a copy button
+@app MyApp begin
+    @in text = "Copy this text"
+end
+
+# Registering the component in the app
+@components MyApp VueCopyButton
+
+ui() = row([
+    textfield("Text to be copied", :text, style = "max-width: 200px;"),
+    copybutton(:text, class = "q-mt-md")
+])
+
+@page("/", ui, model = MyApp)
+
+up(open_browser = true)
+```
+"""
+macro components(App, Component)
+  :(Stipple.register_components($(esc(App)), $(esc(Component))))
+end
+
+macro components(Component)
+  appname = model_typename(__module__)
+  :(Stipple.register_components($(esc(appname)), $(esc(Component))))
 end
 
 __init()

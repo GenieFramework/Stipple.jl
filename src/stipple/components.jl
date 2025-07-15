@@ -15,7 +15,13 @@ Stipple.register_components(HelloPie, StippleCharts.COMPONENTS)
 function register_components(model::Type{M}, keysvals::Union{AbstractVector, AbstractDict}; legacy::Bool = false) where {M<:ReactiveModel}
   haskey(COMPONENTS, model) || (COMPONENTS[model] = LittleDict())
   for kv in keysvals
-    (k, v) = kv isa Pair ? kv : (kv, kv)
+    (k, v) = if kv isa Pair
+      kv
+    elseif kv isa DataType && kv <: ReactiveModel
+      js_name(kv), render_component(kv)
+    else
+      kv, kv
+    end
     legacy && (v = "window.vueLegacy.components['$v']")
     delete!(COMPONENTS[model], k)
     push!(COMPONENTS[model], k => v)
