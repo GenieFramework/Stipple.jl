@@ -147,7 +147,10 @@ function Stipple.render(app::M; component_mode::Bool = false)::Dict{Symbol,Any} 
   end
 
   # convert :data to () => ({   })
-  data = json(merge!(data_dict, client_data(app)))
+  for (k, v) in client_data(app)
+    data_dict[Symbol(k)] = v
+  end
+  data = json(data_dict)
 
   vue = opts()
   component_mode || push!(vue, :mixins => JSONText.(MIXINS[]))
