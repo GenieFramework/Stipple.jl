@@ -736,7 +736,7 @@ macro on(arg, expr, preprocess = nothing)
   elseif preprocess isa Expr && preprocess.head == :vect
     preprocess_chain = preprocess.args
   else
-    preprocess_chain = [preprocess]
+    preprocess_chain = Union{String, QuoteNode}[preprocess]
   end
   replace!(preprocess_chain, :(:addclient) => "event._addclient = true")
 
