@@ -291,6 +291,7 @@ function deletemode! end
 function init_storage end
 
 include("Tools.jl")
+include("Authorization.jl")
 include("ReactiveTools.jl")
 export @stipple_precompile
 
