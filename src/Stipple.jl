@@ -292,6 +292,7 @@ function init_storage end
 
 include("Tools.jl")
 include("Authorization.jl")
+using .Authorization
 include("ReactiveTools.jl")
 export @stipple_precompile
 

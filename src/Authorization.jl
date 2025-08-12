@@ -7,7 +7,7 @@ Provides a collection of functions to handle user authorization:
 They are predefined such that get_user(App) returns the default user, who has the role default_role(App) and is authorized.
 In order to customize authorization get_user(App) and get_roles(App) or is_authorized(App) need to be overwritten.
 
-### Example 1 - numbered users and admins
+### Example 1 - Numbered Users and Admins for a all Apps
 ```julia
 using Stipple, Stipple.ReactiveTools, Stipple.Authorization
 
@@ -16,10 +16,10 @@ using Stipple, Stipple.ReactiveTools, Stipple.Authorization
 end
 
 # define roles as the first part of the string
-Stipple.get_roles(::Type{MyApp}, user::String) = String[split(user, '_')[1]]
+Stipple.get_roles(::Type{<:ReactiveModel}, user::String) = String[split(user, '_')[1]]
 
 # case 1: normal user
-get_user(::Type{MyApp}) = "user_1"
+Stipple.get_user(::Type{<:ReactiveModel}) = "user_1"
 
 get_roles(MyApp)
 # ["user"]
@@ -31,7 +31,7 @@ is_authorized(MyApp, role = "admin")
 # false
 
 # case 2: Admin
-get_user(::Type{MyApp}) = "admin_1"
+Stipple.get_user(::Type{MyApp}) = "admin_1"
 
 get_roles(MyApp)
 # ["admin"]
@@ -43,7 +43,7 @@ is_authorized(MyApp, role = "admin")
 # true
 ```
 
-### Example 2 - user list via roles
+### Example 2 - User List via Roles for a single App
 ```julia
 using Stipple, Stipple.ReactiveTools, Stipple.Authorization
 
@@ -77,7 +77,7 @@ is_authorized(MyApp, role = userlist())
 # true
 ```
 
-### Example 3 - using an implicit model and overwriting `is_authorized`
+### Example 3 - Overwriting `is_authorized()` for a specific implicit model
 ```julia
 using Stipple, Stipple.ReactiveTools, Stipple.Authorization
 
@@ -93,9 +93,7 @@ App = Stipple.@type
 
 # define `is_authorized()` for the implicit App
 # Note that it is important to allow for kwargs, because internal handling will call `is_authorized()` with the `role` kwarg.
-function is_authorized(::Type{App}, user::String; kwargs...) where App <: ReactiveModel
-    user ∈ userlist()
-end
+Stipple.is_authorized(::Type{App}, user::String; kwargs...) = user ∈ userlist()
 
 Stipple.get_user(::Type{App}) = "user_1"
 is_authorized(App)
@@ -113,7 +111,7 @@ is_authorized(App)
 ### Example 4 - applying authorization to a Genie web application
 
 ```julia
-using Stipple, Stipple.Authorization
+using Stipple, Stipple.ReactiveTools, Stipple.Authorization
 
 @app MyApp begin
     @in x = 1
@@ -147,18 +145,23 @@ export default_user, default_role, get_user, get_roles, is_authorized, not_found
 
 not_found() = throw(Genie.Exceptions.NotFoundException(Genie.Requests.matchedroute().path))
 
-default_user(::Type{<:ReactiveModel})::String = "default"
-default_role(::Type{<:ReactiveModel})::String = "user"
+default_user(::Type)::String = "default"
+default_user() = default_user(ReactiveModel)
+
+default_role(::Type)::String = "user"
+default_role() = default_role(ReactiveModel)
 
 get_user(::Type{App}) where App <: ReactiveModel = default_user(App)
+get_user() = get_user(ReactiveModel)
 
-function get_roles(::Type{App}, user::String) where App <: ReactiveModel
+function get_roles(::Type{App}, user::String) where App
     user == default_user(App) ? [default_role(App)] : String[]
 end
 
 get_roles(::Type{App}) where App <: ReactiveModel = get_roles(App, get_user(App))
+get_roles(user::String = get_user(ReactiveModel)) = get_roles(ReactiveModel, user)
 
-function is_authorized(::Type{App}, user::String; role::Union{String, Vector{String}} = "user") where App <: ReactiveModel
+function is_authorized(::Type{App}, user::String; role::Union{String, Vector{String}} = "user") where App
     roles = get_roles(App, user)
     if role isa String
         role ∈ roles
@@ -170,5 +173,7 @@ end
 function is_authorized(::Type{App}; role::Union{String, Vector{String}} = "user") where App <: ReactiveModel
     is_authorized(App, get_user(App); role)
 end
+
+is_authorized(; role::Union{String, Vector{String}} = "user") = is_authorized(ReactiveModel; role)
 
 end # module Authorization
