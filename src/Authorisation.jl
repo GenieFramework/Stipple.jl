@@ -21,25 +21,25 @@ Stipple.get_roles(::Type{<:ReactiveModel}, user::String) = String[split(user, '_
 # case 1: normal user
 Stipple.get_user(::Type{<:ReactiveModel}) = "user_1"
 
-get_roles(MyApp)
+get_roles()
 # ["user"]
 
-is_authorised(MyApp)
+is_authorised()
 # true
 
-is_authorised(MyApp, role = "admin")
+is_authorised(role = "admin")
 # false
 
 # case 2: Admin
-Stipple.get_user(::Type{MyApp}) = "admin_1"
+Stipple.get_user(::Type{<:ReactiveModel}) = "admin_1"
 
-get_roles(MyApp)
+get_roles()
 # ["admin"]
 
-is_authorised(MyApp)
+is_authorised()
 # false
 
-is_authorised(MyApp, role = "admin")
+is_authorised(role = "admin")
 # true
 ```
 
@@ -117,7 +117,7 @@ using Stipple, Stipple.ReactiveTools, Stipple.Authorisation
     @in x = 1
 end
 
-# define a admin check which returns nothing in case of success and a not-found-page in case of failure
+# define an admin check which returns nothing in case of success and a not-found-page in case of failure
 admin_check() = is_authorised(MyApp, role = "admin") ? nothing : not_found()
 
 ui() = "Hello Admin!"
@@ -145,23 +145,18 @@ export default_user, default_role, get_user, get_roles, is_authorised, not_found
 
 not_found() = throw(Genie.Exceptions.NotFoundException(Genie.Requests.matchedroute().path))
 
-default_user(::Type)::String = "default"
-default_user() = default_user(ReactiveModel)
+# functions to be specialised
 
+default_user(::Type) = "default_user"
 default_role(::Type)::String = "user"
-default_role() = default_role(ReactiveModel)
 
-get_user(::Type{App}) where App <: ReactiveModel = default_user(App)
-get_user() = get_user(ReactiveModel)
+get_user(::Type{App}) where App = default_user(App)
 
-function get_roles(::Type{App}, user::String) where App
+function get_roles(::Type{App}, user) where App
     user == default_user(App) ? [default_role(App)] : String[]
 end
 
-get_roles(::Type{App}) where App <: ReactiveModel = get_roles(App, get_user(App))
-get_roles(user::String = get_user(ReactiveModel)) = get_roles(ReactiveModel, user)
-
-function is_authorised(::Type{App}, user::String; role::Union{String, Vector{String}} = "user") where App
+function is_authorised(::Type{App}, user; role::Union{String, Vector{String}} = default_role(App)) where App
     roles = get_roles(App, user)
     if role isa String
         role ∈ roles
@@ -170,10 +165,21 @@ function is_authorised(::Type{App}, user::String; role::Union{String, Vector{Str
     end
 end
 
+# ----------------------------------------------------------------
+
+default_user() = default_user(ReactiveModel)
+default_role() = default_role(ReactiveModel)
+get_user() = get_user(ReactiveModel)
+
+get_roles(::Type{App}) where App <: ReactiveModel = get_roles(App, get_user(App))
+get_roles(user = get_user(ReactiveModel)) = get_roles(ReactiveModel, user)
+
 function is_authorised(::Type{App}; role::Union{String, Vector{String}} = "user") where App <: ReactiveModel
     is_authorised(App, get_user(App); role)
 end
 
-is_authorised(; role::Union{String, Vector{String}} = "user") = is_authorised(ReactiveModel; role)
+function is_authorised(user = get_user(ReactiveModel); role::Union{String, Vector{String}} = "user")
+    is_authorised(ReactiveModel, user; role)
+end
 
 end # module Authorisation
