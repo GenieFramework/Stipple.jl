@@ -171,9 +171,16 @@ function vue_integration(::Type{M};
     }
 
     function app_ready(app) {
-      if (app.isready) return;
+      if (app.isready) {
+        // force an update of isready, in order to check whether handlers are attached.
+        // unnecessary double activation of isready in the backend is avoided by the update handler.
+        app.push('isready');
+        return
+      }
       Genie.Revivers.addReviver(app.revive_jsfunction);
-      app.isready = true;
+      // update and push to avoid missing update due to debouncing
+      app.updateField('isready', true)
+      app.push('isready');
     """,
     transport == Genie.WebChannels &&
     """

@@ -670,9 +670,15 @@ function init(t::Type{M};
             h(model)
           end
           push!(model)
+          
+          # trigger isready-listeners
+          model.isready[] && update!(model, field, newval, oldval)
         end
 
-        update!(model, field, newval, oldval)
+        # avoid double triggering of isready
+        if !(field == :isready && model.isready[] && newval === true)
+          update!(model, field, newval, oldval)
+        end
       catch ex
         # send the error to the frontend
         if Genie.Configuration.isdev()
