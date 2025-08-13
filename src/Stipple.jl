@@ -537,6 +537,12 @@ end
 
 function Base.notify(model::ReactiveModel, ::Val{:finalize})
   @info("Calling finalizers")
+  # stripping handlers to prevent a disconnected model from reacting
+  # to messages on the same channel. We must not delete channels here, because 
+  # there can be other models linked to the same channel. This work is done by 
+  # the purge_checker.
+  # Moreover, disconnected models can be revived after a back navigation in the browser
+  # by re-attaching the handlers.
   strip_observers(model)
   strip_handlers(model)
 end
@@ -655,6 +661,17 @@ function init(t::Type{M};
       LAST_ACTIVITY[Symbol(channel)] = now()
 
       try
+        if field == :isready && isempty(model.isready.o.listeners) && newval === true
+          # model has been finalised, so handlers need to be re-attached
+          @info "Re-attaching handlers to model $AM and updating values"
+
+          setup(model, model.channel__)
+          for h in model.handlers__
+            h(model)
+          end
+          push!(model)
+        end
+
         update!(model, field, newval, oldval)
       catch ex
         # send the error to the frontend
