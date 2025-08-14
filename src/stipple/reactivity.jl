@@ -175,7 +175,7 @@ function setchannel(m::M, value) where {M<:ReactiveModel}
   setfield!(m, :channel__, String(value))
 end
 
-const AUTOFIELDS = [:isready, :isprocessing, :fileuploads, :ws_disconnected] # not DRY but we need a reference to the auto-set fields
+const AUTOFIELDS = [:isready, :isprocessing, :fileuploads, :ws_disconnected, :isconnected] # not DRY but we need a reference to the auto-set fields
 const INTERNALFIELDS = [:channel__, :modes__, :handlers__, :observerfunctions__] # not DRY but we need a reference to the auto-set fields
 
 @pour reactors begin

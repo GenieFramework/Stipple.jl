@@ -511,6 +511,7 @@ function init_storage(handler::Union{Nothing, Symbol, Expr} = nothing)
     :isprocessing => :(isprocessing::Stipple.R{Bool} = false),
     :fileuploads => :(fileuploads::Stipple.R{Dict{AbstractString,AbstractString}} = Dict{AbstractString,AbstractString}()),
     :ws_disconnected => :(ws_disconnected::Stipple.R{Bool} = false),
+    :isconnected => :(isconnected::Stipple.R{Bool} = (false, PRIVATE)),
   )
 end
 
@@ -661,7 +662,7 @@ function init(t::Type{M};
       LAST_ACTIVITY[Symbol(channel)] = now()
 
       try
-        if field == :isready && isempty(model.isready.o.listeners) && newval === true
+        if field == :isready && newval === true && isempty(model.isready.o.listeners)
           # model has been finalised, so handlers need to be re-attached
           @info "Re-attaching handlers to model $AM and updating values"
 
@@ -670,14 +671,16 @@ function init(t::Type{M};
             h(model)
           end
           push!(model)
-          
-          # trigger isready-listeners
-          model.isready[] && update!(model, field, newval, oldval)
         end
 
         # avoid double triggering of isready
-        if !(field == :isready && model.isready[] && newval === true)
+        if !(field == :isready && newval === true && model.isready[])
           update!(model, field, newval, oldval)
+        end
+
+        # trigger isconnected in any case
+        if field == :isready && newval === true
+          model.isconnected[] = true
         end
       catch ex
         # send the error to the frontend
