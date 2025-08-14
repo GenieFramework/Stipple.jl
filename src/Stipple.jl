@@ -662,7 +662,10 @@ function init(t::Type{M};
       LAST_ACTIVITY[Symbol(channel)] = now()
 
       try
-        if field == :isready && newval === true && isempty(model.isready.o.listeners)
+        re_attach_handlers = field == :isready && newval === true && isempty(model.isready.o.listeners)
+        connect = field == :isready && newval === true && !model.isready[]
+
+        if re_attach_handlers
           # model has been finalised, so handlers need to be re-attached
           @info "Re-attaching handlers to model $AM and updating values"
 
@@ -674,12 +677,12 @@ function init(t::Type{M};
         end
 
         # avoid double triggering of isready
-        if !(field == :isready && newval === true && model.isready[])
+        if field != :isready || connect
           update!(model, field, newval, oldval)
         end
 
-        # trigger isconnected in any case
-        if field == :isready && newval === true
+        # trigger isconnected
+        if connect || re_attach_handlers
           model.isconnected[] = true
         end
       catch ex
