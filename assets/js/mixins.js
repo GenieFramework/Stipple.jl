@@ -154,6 +154,12 @@ const navigationMixin = {
     },
     reloadPage: function() {
       window.location.reload()
-    }
+    },
+    goBack: function(steps = 1) {
+      window.history.go(-steps)
+    },
+    goForward: function(steps = 1) {
+      window.history.go(steps)
+    },
   }
 }
