@@ -453,6 +453,7 @@ for op in (:+, :- , :* , :/ , :%, :^ , :(==), :<, :>, :<=, :>=, :!=, :in, :∉, 
   eval(quote
       # Handle the `^` operator separately, as it's a bit different
       $M.$(op)(a::JSExpr, b::JSExpr) = JSExpr(string($expr_start, a.s, $op_string, b.s, ')'))
+      $M.$(op)(a::JSExpr, b::AbstractDict) = JSExpr(string($expr_start, a.s, $op_string, js_quote_replace(json(render(b))), ')'))
       $M.$(op)(a::JSExpr, b) = JSExpr(string($expr_start, a.s, $op_string, js_quote_replace(json(render(b))), ')'))
       $M.$(op)(a, b::JSExpr) = JSExpr(string($expr_start, js_quote_replace(json(render(a))), $op_string, b.s, ')'))
   end)
@@ -565,9 +566,14 @@ julia> p(" {{todo}} ", class="warning", @for("todo in todos"))
 \"\"\"
 ```
 ### Julia expression
+In Julia expressions js variables are denoted by Symbols. Variables are evaluated.
+
 ```julia
+julia> htmldiv(@for :i in 2:2:8)
+"<div v-for=\"i in [2,4,6,8]\"></div>"
+
 julia> dict = Dict(:a => "b", :c => 4);
-julia> ul(li("k: {{ k }}, v: {{ v }}, i: {{ i }}", @for((v, k, i) in dict)))
+julia> ul(li("k: {{ k }}, v: {{ v }}, i: {{ i }}", @for((:v, :k, :i) in dict)))
 \"\"\"
 <ul>
     <li v-for="(v, k, i) in {'a':'b','c':4}">
@@ -577,12 +583,12 @@ julia> ul(li("k: {{ k }}, v: {{ v }}, i: {{ i }}", @for((v, k, i) in dict)))
 \"\"\"
 ```
 Note the inverted order of value, key and index compared to Stipple destructuring.
-It is also possible to loop over `(v, k)` or `v`; index will always be zero-based
+It is also possible to loop over `(v, k)` or `v`; index will always be zero-based.
 
 """
 macro recur(expr)
   if expr isa Expr && expr.head == :call && expr.args[1] == :in
-    expr = (MacroTools.@capture(expr, y_ in z_)) ? :("$($y) in $($z isa Union{AbstractDict, AbstractVector} ? Stipple.js_attr($z) : $z)") : :("$($expr)")
+    expr = (MacroTools.@capture(expr, y_ in z_)) ? :("$($y isa Tuple ? '(' * json($y)[2:end-1] * ')' : json($y)) in $($z isa Union{AbstractDict, AbstractVector} ? Stipple.js_attr($z) : $z)") : :("$($expr)")
   end
   
   imported = isdefined(__module__, :∥) && isdefined(__module__, :∧)
