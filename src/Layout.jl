@@ -629,7 +629,7 @@ const DOTTHEME_WATCHER = RefValue(false)
 
 
 function set_user_theme_watcher() :: Bool
-  (USER_THEME_WATCHER[] || Stipple.PRECOMPILE[] || ! Genie.Configuration.isdev()) && return false
+  (USER_THEME_WATCHER[] || Genie.Util.isprecompiling() || ! Genie.Configuration.isdev()) && return false
 
   path_to_user_theme = joinpath(Genie.config.server_document_root, DEFAULT_USER_THEME_FILE)
   @async Genie.Revise.entr([path_to_user_theme]) do
@@ -645,7 +645,7 @@ end
 
 
 function set_dottheme_watcher() :: Bool
-  (DOTTHEME_WATCHER[] || Stipple.PRECOMPILE[] || ! Genie.Configuration.isdev()) && return false
+  (DOTTHEME_WATCHER[] || Genie.Util.isprecompiling() || ! Genie.Configuration.isdev()) && return false
 
   @async Genie.Revise.entr([THEME_DOTFILE]) do
     theme_from_dotfile = read_theme_dotfile()

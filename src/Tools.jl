@@ -180,42 +180,40 @@ macro stipple_precompile(setup, workload)
 
     quote
         Stipple.@setup_workload begin
-        HTTP = Stipple.Genie.HTTPUtils.HTTP
-        Stipple.PRECOMPILE[] = true
+            HTTP = Stipple.Genie.HTTPUtils.HTTP
 
-        $setup
+            $setup
 
-        Stipple.@compile_workload begin
-            # all calls in this block will be precompiled, regardless of whether
-            # they belong to your package or not (on Julia 1.8 and higher)
-            # set secret in order to avoid automatic generation of a new one,
-            # which would invalidate the precompiled file
-            Stipple.Genie.Secrets.secret_token!(repeat("f", 64))
+            Stipple.@compile_workload begin
+                # all calls in this block will be precompiled, regardless of whether
+                # they belong to your package or not (on Julia 1.8 and higher)
+                # set secret in order to avoid automatic generation of a new one,
+                # which would invalidate the precompiled file
+                Stipple.Genie.Secrets.secret_token!(repeat("f", 64))
 
-            port = tryparse(Int, get(ENV, "STIPPLE_PRECOMPILE_PORT", ""))
-            port === nothing && (port = rand(8081:8999))
-            precompile_requests = tryparse(Bool, get(ENV, "STIPPLE_PRECOMPILE_REQUESTS", "true"))
-            # for compatibility with older versions
-            precompile_requests |= tryparse(Bool, get(ENV, "STIPPLE_PRECOMPILE_GET", "true"))
+                port = tryparse(Int, get(ENV, "STIPPLE_PRECOMPILE_PORT", ""))
+                port === nothing && (port = rand(8081:8999))
+                precompile_requests = tryparse(Bool, get(ENV, "STIPPLE_PRECOMPILE_REQUESTS", "true"))
+                # for compatibility with older versions
+                precompile_requests |= tryparse(Bool, get(ENV, "STIPPLE_PRECOMPILE_GET", "true"))
 
-            function precompile_request(method, location, args...; kwargs...)
-                precompile_requests && HTTP.request(method, "http://localhost:$port/$(lstrip(location, '/'))", args...; kwargs...)
+                function precompile_request(method, location, args...; kwargs...)
+                    precompile_requests && HTTP.request(method, "http://localhost:$port/$(lstrip(location, '/'))", args...; kwargs...)
+                end
+
+                precompile_get(location::String, args...; kwargs...) = precompile_request(:GET, location, args...; kwargs...)
+                precompile_post(location::String, args...; kwargs...) = precompile_request(:POST, location, args...; kwargs...)
+
+                Stipple.Logging.with_logger(Stipple.Logging.SimpleLogger(stdout, Stipple.Logging.Error)) do
+                    Stipple.up(port)
+
+                    $workload
+
+                    Stipple.down()
+                end
+                # reset secret back to empty string in case that the application sets the token during precompilation
+                Stipple.Genie.Secrets.secret_token!("")
             end
-
-            precompile_get(location::String, args...; kwargs...) = precompile_request(:GET, location, args...; kwargs...)
-            precompile_post(location::String, args...; kwargs...) = precompile_request(:POST, location, args...; kwargs...)
-
-            Stipple.Logging.with_logger(Stipple.Logging.SimpleLogger(stdout, Stipple.Logging.Error)) do
-                Stipple.up(port)
-
-                $workload
-
-                Stipple.down()
-            end
-            # reset secret back to empty string
-            Stipple.Genie.Secrets.secret_token!("")
-        end
-        Stipple.PRECOMPILE[] = false
         end
     end |> esc
 end

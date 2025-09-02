@@ -595,7 +595,7 @@ function init(t::Type{M};
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
   LAST_ACTIVITY[Symbol(getchannel(model))] = now()
 
-  PRECOMPILE[] || Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
+  Genie.Util.isprecompiling() || Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
 
   # register channels and routes only if within a request
   if haskey(Genie.Router.params(), :CHANNEL) || haskey(Genie.Router.params(), :ROUTE) || always_register_channels
