@@ -208,7 +208,7 @@ function js_mixin(m::Mixin, js_f, delim)
   return xx
 end
 
-function render_js_options!(::Union{M, Type{M}}, vue::Dict{Symbol, Any} = Dict{Symbol, Any}(); mixin = false, indent = 4) where {M<:ReactiveModel}
+function render_js_options!(::Union{M, Type{M}}, vue::OrderedDict{Symbol, Any} = OrderedDict{Symbol, Any}(); mixin = false, indent = 4) where {M<:ReactiveModel}
   indent isa Integer && (indent = repeat(" ", indent))
   pre = isempty(indent) ? strip : s -> replace(strip(s), "\n" => "\n$indent")
   sep1 = ",\n\n$indent"
