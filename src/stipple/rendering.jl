@@ -172,8 +172,8 @@ function get_known_js_vars(::Type{M}) where M<:ReactiveModel
   CM = Stipple.get_concrete_type(M)
   vars = vcat(setdiff(fieldnames(CM), Stipple.AUTOFIELDS, Stipple.INTERNALFIELDS), Symbol.(keys(client_data(CM))))
   
-  computed_vars = Symbol.(strip.(first.(split.(collect_js([js_methods(M)]), ':', limit = 2)), '"'))
-  method_vars = Symbol.(strip.(first.(split.(collect_js([js_computed(M)]), ':', limit = 2)), '"'))
+  computed_vars = Symbol.(strip.(first.(split.(collect_js([js_computed(M)]), ':', limit = 2)), '"'))
+  method_vars = Symbol.(strip.(first.(split.(collect_js([js_methods(M)]), ':', limit = 2)), '"'))
 
   vars = vcat(vars, computed_vars, method_vars)
   sort!(sort!(vars), by = x->length(String(x)), rev = true)
