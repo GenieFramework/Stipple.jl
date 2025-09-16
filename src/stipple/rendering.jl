@@ -87,7 +87,7 @@ function collect_js(xx::Union{Tuple, AbstractArray}, delim = "";
     x = x_raw isa Base.Callable ? x_raw() : x_raw
     io2 = IOBuffer()
     if x isa Union{AbstractDict, Pair, Base.Iterators.Pairs, Vector{<:Pair}}
-      s = json(Dict(key_replacement(k) => JSONText(v) for (k, v) in (x isa Pair ? [x] : x)))[2:end - 1]
+      s = json(Dict(key_replacement(k) => v isa AbstractString ? JSONText(string(v)) : v for (k, v) in (x isa Pair ? [x] : x)))[2:end - 1]
       print(io2, s)
     elseif x isa JSONText
       print(io2, x.s)
@@ -159,7 +159,7 @@ Stipple.stipple_parse(::Complex, z::Dict{String, Any}) = float(z["re"]) + z["im"
 jsrender(x, args...) = render(x, args...)
 jsrender(r::Reactive, args...) = jsrender(getfield(getfield(r,:o), :val), args...)
 
-const MIXINS = RefValue(["watcherMixin", "reviveMixin", "eventMixin", "filterMixin"])
+const MIXINS = RefValue(["watcherMixin", "reviveMixin", "eventMixin", "filterMixin", "navigationMixin"])
 add_mixins(mixins::Vector{String}) = union!(push!(MIXINS[], mixins...))
 add_mixins(mixin::String) = union!(push!(MIXINS[], mixin))
 
@@ -262,25 +262,28 @@ end
 
 Renders the Julia `ReactiveModel` `app` as the corresponding Vue.js JavaScript code.
 """
-function Stipple.render(app::M)::Dict{Symbol,Any} where {M<:ReactiveModel}
-  result = OptDict()
+function Stipple.render(app::M; component_mode::Bool = false)::Dict{Symbol,Any} where {M<:ReactiveModel}
+  data_dict = OptDict()
 
   for field in fieldnames(typeof(app))
     f = getfield(app, field)
 
     occursin(SETTINGS.private_pattern, String(field)) && continue
     f isa Reactive && f.r_mode == PRIVATE && continue
+    component_mode && field ∈ Stipple.AUTOFIELDS && continue
 
-    result[field] = Stipple.jsrender(f, field)
+    data_dict[field] = Stipple.jsrender(f, field)
   end
 
   # convert :data to () => ({   })
-  data = json(merge(result, client_data(app)))
+  for (k, v) in client_data(app)
+    data_dict[Symbol(k)] = v
+  end
+  data = json(data_dict)
 
-  vue = Dict(
-    :mixins => JSONText.(MIXINS[]),
-    :data => JSONText("() => ($data)")
-  )
+  vue = opts()
+  component_mode || push!(vue, :mixins => JSONText.(MIXINS[]))
+  isempty(data_dict) || push!(vue, :data => JSONText("() => ($data)"))
 
   render_js_options!(app, vue)
 
@@ -335,3 +338,16 @@ function js_attr(x)
 end
 
 Stipple.render(X::Matrix) = [X[:, i] for i in 1:size(X, 2)]
+
+function js_name(App::Type{<:ReactiveModel})
+    nameof(Stipple.get_abstract_type(App))
+end
+
+function render_component(app::App) where App <: ReactiveModel
+    rd = render(app, component_mode = true)
+    JSONText(json(rd))
+end
+
+function render_component(::Type{App}, args...; kwargs...) where App <: ReactiveModel
+    render_component(App())
+end

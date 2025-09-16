@@ -24,7 +24,7 @@
   <p>
     <a href="https://www.genieframework.com/">
       <img
-        src="https://github.com/GenieFramework/Genie.jl/raw/master/docs/content/img/genie.gif"
+        src="https://github.com/GenieFramework/Genie.jl/raw/main/docs/content/img/genie.gif"
         alt="Screenshot"
         width="100%"
       />
@@ -56,7 +56,14 @@ The Stipple ecosystem also includes:
 * [StipplePlotly.jl](https://github.com/GenieFramework/StipplePlotly.jl) - Plotting library for `Stipple.jl` based on [Plotly](https://plotly.com/javascript/)'s Graphing Library including event forwarding for interactive plots.
 * [StipplePlotlyExport.jl](https://github.com/GenieFramework/StipplePlotlyExport.jl) - add-on for `StipplePlotly.jl` to allow server side generation and exporting of plots. 
 * [StippleLatex.jl](https://github.com/GenieFramework/StippleLatex.jl) - support for reactive Latex content based on the [Vue-Katex](https://github.com/lucpotage/vue-katex) plugin. 
-## News (v0.31.3/0.31.4):
+
+### News (0.31.4 - v0.31.25):
+
+- Support GenieBuilder with Vue 3
+- Add `@fixtype` to prevent Revise from raising a world-age issue when revising app-mixins
+- Generate Vue Components from apps, see example below:
+
+### News (v0.31.3/0.31.4):
 ### Features
 #### Synchronization
 - add functions `synchronize!(o1, o2)` and `unsynchronize!(o1, o2)` to sync/unsync reactive variables to external Observables. Sync is bidirectional by default
@@ -199,6 +206,65 @@ end
 
 up()
 ```
+
+## Example 3 (Generate a Vue Component for an animated Copy Button)
+
+```julia
+using Stipple, Stipple.ReactiveTools
+using StippleUI
+import Stipple.opts
+
+# defining a simple copy button component
+@app VueCopyButton begin
+    @out copied = false
+end
+
+@methods VueCopyButton [
+    :handleCopy => js"""function () {
+        const text = typeof this.text === 'function' ? this.text() : this.text;
+        Quasar.copyToClipboard(text).then(() => {
+          this.copied = true;
+          setTimeout(() => {
+            this.copied = false;
+          }, 700);
+        });
+      }
+    """
+]
+
+@props VueCopyButton opts(
+    text = opts(
+        type = [js"String", js"Function"],
+        required = true
+    )
+)
+
+@template VueCopyButton btn(
+    icon = R"this.copied ? 'check' : 'content_copy'",
+    aria__label = R"this.copied ? 'Copied!' : 'Copy to clipboard'",
+    flat = true, size = "sm",
+    @click("this.handleCopy")
+)
+
+copybutton(text, args...; kwargs...) = vue(:copy__button, args...; text, kwargs...)
+
+# defining a simple app with a copy button
+@app MyApp begin
+    @in text = "Copy this text"
+end
+
+# registering the component in the app
+@components MyApp VueCopyButton
+
+ui() = row([
+    textfield("Text to be copied", :text, style = "max-width: 200px;"),
+    copybutton(:text, class = "q-mt-md")
+])
+
+@page("/", ui, model = MyApp)
+up(open_browser = true)
+```
+
 ## More information
 
 While Stipple/StippleUI documentation is still evolving, you can find help and many small examples via docstrings of the functions.

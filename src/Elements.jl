@@ -171,9 +171,16 @@ function vue_integration(::Type{M};
     }
 
     function app_ready(app) {
-      if (app.isready) return;
+      if (app.isready) {
+        // force an update of isready, in order to check whether handlers are attached.
+        // unnecessary double activation of isready in the backend is avoided by the update handler.
+        app.push('isready');
+        return
+      }
       Genie.Revivers.addReviver(app.revive_jsfunction);
-      app.isready = true;
+      // update and push to avoid missing update due to debouncing
+      app.updateField('isready', true)
+      app.push('isready');
     """,
     transport == Genie.WebChannels &&
     """
@@ -418,7 +425,8 @@ function jsexpr(expr; imported::Bool = true)
       if js isa JSExpr
         json(js)
       else
-        js_quote_replace(json(render(js)))
+        x = render(js)
+        js_quote_replace(x isa String ? x : json(x))
       end
     end
   end
@@ -445,6 +453,7 @@ for op in (:+, :- , :* , :/ , :%, :^ , :(==), :<, :>, :<=, :>=, :!=, :in, :∉, 
   eval(quote
       # Handle the `^` operator separately, as it's a bit different
       $M.$(op)(a::JSExpr, b::JSExpr) = JSExpr(string($expr_start, a.s, $op_string, b.s, ')'))
+      $M.$(op)(a::JSExpr, b::AbstractDict) = JSExpr(string($expr_start, a.s, $op_string, js_quote_replace(json(render(b))), ')'))
       $M.$(op)(a::JSExpr, b) = JSExpr(string($expr_start, a.s, $op_string, js_quote_replace(json(render(b))), ')'))
       $M.$(op)(a, b::JSExpr) = JSExpr(string($expr_start, js_quote_replace(json(render(a))), $op_string, b.s, ')'))
   end)
@@ -561,9 +570,21 @@ julia> p(" {{todo}} ", class="warning", @for("todo in todos"))
 \"\"\"
 ```
 ### Julia expression
+The for variable (left of the `in` operator) can be denoted either by a Symbol or a Variable name
+The iterator is evaluated as Julia expression and then converted to a js expression.
+Within the expressions Symbols are converted to js variables.
 ```julia
+julia> htmldiv(@for :i in 2:2:8)
+"<div v-for=\"i in [2,4,6,8]\"></div>"
+
+julia> htmldiv(@for i in 2:2:8)
+"<div v-for=\"i in [2,4,6,8]\"></div>"
+
+julia> htmldiv(@for i in :my_js_variable)
+"<div v-for=\"i in my_js_variable\"></div>"
+
 julia> dict = Dict(:a => "b", :c => 4);
-julia> ul(li("k: {{ k }}, v: {{ v }}, i: {{ i }}", @for((v, k, i) in dict)))
+julia> ul(li("k: {{ k }}, v: {{ v }}, i: {{ i }}", @for((:v, :k, :i) in dict)))
 \"\"\"
 <ul>
     <li v-for="(v, k, i) in {'a':'b','c':4}">
@@ -573,12 +594,28 @@ julia> ul(li("k: {{ k }}, v: {{ v }}, i: {{ i }}", @for((v, k, i) in dict)))
 \"\"\"
 ```
 Note the inverted order of value, key and index compared to Stipple destructuring.
-It is also possible to loop over `(v, k)` or `v`; index will always be zero-based
+It is also possible to loop over `(v, k)` or `v`; index will always be zero-based.
 
 """
 macro recur(expr)
-  # expr isa Expr && expr.head == :call && expr.args[1] == :in && (expr.args[2] = string(expr.args[2]))
-  # expr = (MacroTools.@capture(expr, y_ in z_)) ? :("$($y) in $($z isa Union{AbstractDict, AbstractVector} ? Stipple.js_attr($z) : $z)") : :("$($expr)")
+  if expr isa Expr && expr.head == :call && expr.args[1] == :in
+    # convert Symbols of the lefhand side in QuoteNodes
+    # so either syntax '@for a in b' or '@for :a in b' is possible
+    # expr.args[2] = MacroTools.postwalk(expr.args[2]) do x
+    #   x isa Symbol ? QuoteNode(x) : x
+    # end
+    expr = if (MacroTools.@capture(expr, y_ in z_))
+      y = MacroTools.postwalk(y) do x
+        x isa Symbol ? QuoteNode(x) : x
+      end
+      z = MacroTools.postwalk(z) do x
+        x isa QuoteNode ? "$(x.value)" : x
+      end
+      :("$($y isa Tuple ? '(' * json($y)[2:end-1] * ')' : json($y)) in $($z isa Union{AbstractDict, AbstractVector} ? Stipple.js_attr($z) : $z)")
+    else
+      :("$($expr)")
+    end
+  end
   imported = isdefined(__module__, :∥) && isdefined(__module__, :∧)
   Expr(:kw, Symbol("v-for"), jsexpr(expr; imported))
 end
@@ -737,7 +774,7 @@ macro on(arg, expr, preprocess = nothing)
   elseif preprocess isa Expr && preprocess.head == :vect
     preprocess_chain = preprocess.args
   else
-    preprocess_chain = [preprocess]
+    preprocess_chain = Union{String, QuoteNode}[preprocess]
   end
   replace!(preprocess_chain, :(:addclient) => "event._addclient = true")
 

@@ -146,3 +146,20 @@ const eventMixin = {
     }
   }
 }
+
+const navigationMixin = {
+  methods: {
+    goTo: function (location) {
+      window.location = location
+    },
+    reloadPage: function() {
+      window.location.reload()
+    },
+    goBack: function(steps = 1) {
+      window.history.go(-steps)
+    },
+    goForward: function(steps = 1) {
+      window.history.go(steps)
+    },
+  }
+}

@@ -85,6 +85,7 @@ function layout(output::Union{S,Vector}, m::Union{M, Vector{M}};
   if !contains(head_content, "<meta name=\"sesstoken\"") && sess_token
     head_content *= Stipple.sesstoken()
   end
+  head_content = "<style>[v-cloak] {display: none}</style>" * head_content
   Genie.Renderer.Html.doc(
     Genie.Renderer.Html.html([
       Genie.Renderer.Html.head([
@@ -120,6 +121,7 @@ function page(model::Union{M, Vector{M}}, args...;
               prepend::Union{S,Vector} = "", append::Union{T,Vector} = [],
               core_theme::Bool = true,
               sess_token::Bool = true,
+              v__cloak::Bool = true,
               kwargs...)::ParsedHTMLString where {M<:Stipple.ReactiveModel, S<:AbstractString,T<:AbstractString}
   uis = if !isempty(args)
     args[1] isa Vector && model isa Vector ? args[1] : [args[1]]
@@ -138,7 +140,7 @@ function page(model::Union{M, Vector{M}}, args...;
   layout(
     [
       join(prepend)
-      pagetemplate([Genie.Renderer.Html.div(id = rootselector(m), ui, args[2:end]...; class = class, kwargs...) for (m, ui) in zip(model, uis)]...)
+      pagetemplate([Genie.Renderer.Html.div(id = rootselector(m), ui, args[2:end]...; class = class, v__cloak, kwargs...) for (m, ui) in zip(model, uis)]...)
       join(append)
     ], model;
     partial, title, style, head_content, channel, core_theme, sess_token)
@@ -219,7 +221,7 @@ end
 
 function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = true, flexgrid_mappings::Dict{Symbol,Symbol} = Dict{Symbol,Symbol}(), kwargs...)
   container = iscontainer(class)
-  kwargs = Dict{Symbol,Any}(kwargs...)
+  kwargs = OrderedDict{Symbol,Any}(kwargs...)
 
   # support all different types of classes that vue supports: String, Expressions (Symbols), Arrays, Dicts
   # todo check if vector contains only strings ...
@@ -629,7 +631,7 @@ const DOTTHEME_WATCHER = RefValue(false)
 
 
 function set_user_theme_watcher() :: Bool
-  (USER_THEME_WATCHER[] || Stipple.PRECOMPILE[] || ! Genie.Configuration.isdev()) && return false
+  (USER_THEME_WATCHER[] || Genie.Util.isprecompiling() || ! Genie.Configuration.isdev()) && return false
 
   path_to_user_theme = joinpath(Genie.config.server_document_root, DEFAULT_USER_THEME_FILE)
   @async Genie.Revise.entr([path_to_user_theme]) do
@@ -645,7 +647,7 @@ end
 
 
 function set_dottheme_watcher() :: Bool
-  (DOTTHEME_WATCHER[] || Stipple.PRECOMPILE[] || ! Genie.Configuration.isdev()) && return false
+  (DOTTHEME_WATCHER[] || Genie.Util.isprecompiling() || ! Genie.Configuration.isdev()) && return false
 
   @async Genie.Revise.entr([THEME_DOTFILE]) do
     theme_from_dotfile = read_theme_dotfile()

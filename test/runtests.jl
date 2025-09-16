@@ -454,6 +454,21 @@ end
 
     el = row(@for("i in [1, 2, 3, 4, 5]"), "{{ i }}")
     @test contains(el, "v-for=\"i in [1, 2, 3, 4, 5]\"")
+    
+    el = row(@for(:i in 1:5), "{{ i }}")
+    @test contains(el, "v-for=\"i in [1,2,3,4,5]\"")
+
+    el = row(@for(i in 1:5), "{{ i }}")
+    @test contains(el, "v-for=\"i in [1,2,3,4,5]\"")
+
+    el = htmldiv(@for i in :my_js_variable)
+    @test contains(el, "v-for=\"i in my_js_variable\"")
+
+    el = ul(li("k: {{ k }}, v: {{ v }}, i: {{ i }}", @for((:v, :k, :i) in OrderedDict("a" => "A", "b" => "B"))))
+    @test contains(el, "v-for=\"(v,k,i) in {'a':'A','b':'B'}\"")
+
+    el = ul(li("k: {{ k }}, v: {{ v }}, i: {{ i }}", @for((v, k, i) in OrderedDict("a" => "A", "b" => "B"))))
+    @test contains(el, "v-for=\"(v,k,i) in {'a':'A','b':'B'}\"")
 
     # test Julia expressions
     el = row(@showif(:n > 0), "The result is '{{ n }}'")
