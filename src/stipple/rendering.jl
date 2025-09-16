@@ -42,7 +42,7 @@ World
 
 julia> f() = "hi - ";
 
-julia> join_js([1, f, "2 "], " - ", pre = strip)
+julia> join_js([1, f, "2 ", 1], " - ", pre = strip, unique = true)
 "1 - hi - 2"
 ```
 """

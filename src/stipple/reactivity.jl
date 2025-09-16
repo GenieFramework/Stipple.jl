@@ -603,6 +603,8 @@ end
 
 macro type(modelname, storage)
   M = if modelname isa DataType
+    # this was necessary for nested macros or mixins, not sure whether this is still the case
+    # in this snippet, it is required: `@app MyApp @in x = 1; :(Stipple.@type $MyApp LittleDict()) |> eval`
     parent = parentmodule(modelname)
     modelname = modelname.name.name
     parent
