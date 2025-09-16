@@ -603,8 +603,9 @@ end
 
 macro type(modelname, storage)
   M = if modelname isa DataType
+    parent = parentmodule(modelname)
     modelname = modelname.name.name
-    parentmodule(modelname)
+    parent
   else
     __module__
   end
