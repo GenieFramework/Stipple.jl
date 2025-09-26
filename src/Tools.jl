@@ -205,7 +205,7 @@ macro stipple_precompile(setup, workload)
                 precompile_post(location::String, args...; kwargs...) = precompile_request(:POST, location, args...; kwargs...)
 
                 Stipple.Logging.with_logger(Stipple.Logging.SimpleLogger(stdout, Stipple.Logging.Error)) do
-                    Stipple.up(port)
+                    Stipple.up(host = "127.0.0.1", port = port, wsport = port)
 
                     $workload
 
@@ -321,3 +321,13 @@ end
 
 debug(model::ReactiveModel, field::Symbol; listener::Int = 0) = debug(getfield(model, field); listener)
 debug(model::ReactiveModel, field::Symbol, value; listener::Int = 0) = debug(getfield(model, field), value; listener)
+
+# add method to get JS asset path for a ReactiveModel type
+function Genie.Assets.asset_path(::Type{App}) where App <: ReactiveModel
+    Genie.Assets.asset_path(Stipple.assets_config, :js; file = vm(App))
+end
+
+# utility function to get content from local server
+function hget(s::AbstractString = "/")
+    try HTTP.get("http://localhost:$(Genie.config.server_port)/" * strip(s, '/'), retry = false).body |> String catch; nothing end
+end
