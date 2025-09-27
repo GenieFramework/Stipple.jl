@@ -752,17 +752,18 @@ function gb_compat_deps(::Type{M}) where M <: ReactiveModel
   Genie.Assets.add_fileroute(remote_assets_config, "vue.js"; basedir)
   Genie.Assets.add_fileroute(remote_assets_config, "vue_filters.js"; basedir)
   Genie.Router.route(Genie.Assets.asset_route(remote_assets_config, :js, file = vm(M))) do
-    Stipple.Elements.vue2_integration(M) |> Genie.Renderer.Js.js
+    Genie.Renderer.Js.js(Stipple.Elements.vue2_integration(M); context = parentmodule(M)) 
   end
   ENV["GB_ROUTES"] = true
 end
 
 function stipple_deps(::Type{M}, vue_app_name, debounce, throttle, core_theme, endpoint, transport)::Function where {M<:ReactiveModel}
   () -> begin
+    context = parentmodule(M)
     if ! Genie.Assets.external_assets(assets_config)
       if ! Genie.Router.isroute(Symbol(routename(M)))
-        Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file = endpoint), named = Symbol(routename(M))) do
-          Stipple.Elements.vue_integration(M; vue_app_name, debounce, throttle, core_theme, transport) |> Genie.Renderer.Js.js
+        Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file = endpoint), named = Symbol(routename(M))) do 
+          Genie.Renderer.Js.js(Stipple.Elements.vue_integration(M; vue_app_name, debounce, throttle, core_theme, transport); context)
         end
       end
     end
@@ -774,7 +775,7 @@ function stipple_deps(::Type{M}, vue_app_name, debounce, throttle, core_theme, e
         Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file = vue_app_name), defer = true)
       else
         Genie.Renderer.Html.script([
-          (Stipple.Elements.vue_integration(M; vue_app_name, debounce, throttle, core_theme, transport) |> Genie.Renderer.Js.js).body |> String
+          Genie.Renderer.Js.js(Stipple.Elements.vue_integration(M; vue_app_name, debounce, throttle, core_theme, transport); context).body |> String
         ])
       end
     ]
