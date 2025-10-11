@@ -197,12 +197,12 @@ macro stipple_precompile(setup, workload)
                 # for compatibility with older versions
                 precompile_requests |= tryparse(Bool, get(ENV, "STIPPLE_PRECOMPILE_GET", "true"))
 
-                function precompile_request(method, location, args...; kwargs...)
-                    precompile_requests && HTTP.request(method, "http://localhost:$port/$(lstrip(location, '/'))", args...; kwargs...)
+                function precompile_request(method, location, args...; retry = false, kwargs...)
+                    precompile_requests && HTTP.request(method, "http://localhost:$port/$(lstrip(location, '/'))", args...; retry, kwargs...)
                 end
 
-                precompile_get(location::String, args...; kwargs...) = precompile_request(:GET, location, args...; kwargs...)
-                precompile_post(location::String, args...; kwargs...) = precompile_request(:POST, location, args...; kwargs...)
+                precompile_get(location::String, args...; retry = false, kwargs...) = precompile_request(:GET, location, args...; retry, kwargs...)
+                precompile_post(location::String, args...; retry = false, kwargs...) = precompile_request(:POST, location, args...; retry, kwargs...)
 
                 Stipple.Logging.with_logger(Stipple.Logging.SimpleLogger(stdout, Stipple.Logging.Error)) do
                     Stipple.up(host = "127.0.0.1", port = port, wsport = port)
@@ -327,7 +327,209 @@ function Genie.Assets.asset_path(::Type{App}) where App <: ReactiveModel
     Genie.Assets.asset_path(Stipple.assets_config, :js; file = vm(App))
 end
 
+macro timeout(seconds, expr_to_run, expr_when_fails=nothing)
+  quote
+    timer = Channel{Timer}(1)
+    tsk = @task begin
+      x = $(esc(expr_to_run))
+      close(take!(timer))
+      x
+    end
+    schedule(tsk)
+
+    put!(timer, Timer($(esc(seconds))) do timer
+      istaskdone(tsk) || schedule(tsk, InterruptException(); error=true)
+    end)
+
+    try
+      fetch(tsk)
+    catch _
+      $(esc(expr_when_fails))
+    end
+  end
+end
+
 # utility function to get content from local server
-function hget(s::AbstractString = "/")
-    try HTTP.get("http://localhost:$(Genie.config.server_port)/" * strip(s, '/'), retry = false).body |> String catch; nothing end
+function hget(target::AbstractString = "/";
+    host::String = "http://localhost",
+    port::Int = Genie.config.server_port
+)
+    startswith(host, "http") || (host = "http://$host")
+    try Genie.HTTPUtils.HTTP.get("$host:$port/" * strip(target, '/'), retry = false).body |> String catch e; println("$e"[1:30]); nothing end
+end
+
+function get_channel_from_html(s::String; error::Bool = false)
+    m = match(r"\(\) => window.create[^']+'([^']+)'", s)
+    if m === nothing
+        error && Base.error("No channel found in HTML, please specify one manually.")
+        return nothing
+    end
+    String(m.captures[1])
+end
+
+function get_channel_from_html(::Nothing; error::Bool = false)
+    default_channel = Genie.config.webchannels_default_route
+    error && Base.error("No channel found in HTML, please specify one manually.")
+    @warn "No channel found, using default channel '$default_channel'"
+    default_channel
+end
+
+function _ws_client(messages = String[], payloads::Array{<:AbstractDict} = fill(Dict());
+    verbose::Bool = true,
+    host::String = "localhost",
+    port::Int = Genie.config.server_port,
+    target::String = "/",
+    channel::String = get_channel_from_html(hget(target; host, port), error = true),
+    async = false,
+    timeout::Union{Period, Real} = 5,
+    close_on_unsubscribe::Bool = true,
+    close_on_error::Bool = true,
+    maximum_async_duration::Union{Period, Real} = Hour(1)
+)
+    HTTP = Genie.HTTPUtils.HTTP
+    channel == nothing && return nothing
+
+    timeout isa Real || (timeout = Dates.toms(timeout) / 1000)
+    pushfirst!(messages, "subscribe")
+    # if not async then add unsubscribe message at the end
+    async || push!(messages, "unsubscribe")
+    if payloads isa Vector
+        pushfirst!(payloads, Dict())
+        push!(payloads, Dict())
+    end
+
+    websockets = Channel{HTTP.WebSocket}(1)
+    ws_client = @async HTTP.WebSockets.open("ws://$host:$port") do ws
+        put!(websockets, ws)
+        messages = Dict.("channel" => channel, "message" .=> messages, "payload" .=> payloads)
+        for msg in messages
+            HTTP.WebSockets.send(ws, json(msg))
+        end
+
+        for msg in ws
+            verbose && println("Received: $msg")
+            if close_on_unsubscribe && msg == "Unsubscription: OK" || close_on_error && contains(msg, "ERROR")
+                sleep(0.1)
+                close(ws)
+                break
+            end
+        end
+    end
+    
+    if async
+        ws = if timeout > 0
+            @timeout timeout take!(websockets) nothing
+        else
+            take!(websockets)
+        end::Union{Nothing, HTTP.WebSocket}
+        ws === nothing && return nothing
+        # make sure no idle tasks are left hanging around
+        Genie.Util.isprecompiling || Timer(maximum_async_duration) do timer
+            ws.writeclosed && return
+            println("Maximum async duration reached, closing WebSocket connection.")
+            close(ws)
+        end
+        Genie.WebChannels.ChannelClient(ws, String[channel])
+    else
+        if timeout > 0
+            @timeout timeout wait(ws_client) nothing
+        else
+            wait(ws_client)
+        end
+        nothing
+    end
+end
+
+
+"""
+    ws_client_send(messages = String[], payloads::Array{<:AbstractDict} = fill(Dict());
+    verbose::Bool = true,
+    host::String = "localhost",
+    port::Int = Genie.config.server_port,
+    target::String = "/",
+    channel = get_channel_from_html(hget(target; host, port), error = true),
+    timeout::Union{Period, Real} = 5,
+    close_on_unsubscribe::Bool = true,
+    close_on_error::Bool = true,
+)
+
+Opens a WebSocket connection to the local Genie server
+subscribes to a channel, sends a series of messages with optional payloads,
+unsubscribes and then closes the connection.
+
+There's also an async version `ws_client!` that returns the WebSocket connection
+immediately after sending initial messages and waits for incoming messages.
+"""
+function ws_client_send(messages = String[], payloads::Array{<:AbstractDict} = fill(Dict());
+    verbose::Bool = true,
+    host::String = "localhost",
+    port::Int = Genie.config.server_port,
+    target::String = "/",
+    channel = get_channel_from_html(hget(target; host, port), error = true),
+    timeout::Union{Period, Real} = 5,
+    close_on_unsubscribe::Bool = true,
+    close_on_error::Bool = true,
+)
+    _ws_client(messages, payloads;
+        async = false,
+        verbose, host, port, channel, timeout,
+        close_on_unsubscribe, close_on_error
+    )
+end
+
+"""
+    ws_client!(messages = String[], payloads::Array{<:AbstractDict} = fill(Dict());
+    verbose::Bool = true,
+    host::String = "localhost",
+    port::Int = Genie.config.server_port,
+    target::String = "/",
+    channel = get_channel_from_html(hget(target; host, port), error = true),
+    timeout::Union{Period, Real} = 5,
+    close_on_unsubscribe::Bool = true,
+    close_on_error::Bool = true,
+    maximum_async_duration::Union{Period, Real} = Hour(1)
+)
+
+Opens a WebSocket connection to the local Genie server,
+subscribes to a channel, sends a series of messages with optional payloads,
+and keeps the connection open to receive incoming messages.
+The WebSocket will be closed when an "unsubscribe" message is received
+or when an error message is received (if `close_on_error` is true)
+
+There's also a synchronous version `ws_client_send` that waits for all messages to be processed
+before unsubscribing and closing the connection.
+"""
+function ws_client!(messages = String[], payloads::Array{<:AbstractDict} = fill(Dict());
+    verbose::Bool = true,
+    host::String = "localhost",
+    port::Int = Genie.config.server_port,
+    target::String = "/",
+    channel = get_channel_from_html(hget(target; host, port), error = true),
+    timeout::Union{Period, Real} = 5,
+    close_on_unsubscribe::Bool = true,
+    close_on_error::Bool = true,
+    maximum_async_duration::Union{Period, Real} = Hour(1)
+)
+    _ws_client(messages, payloads;
+        async = true,
+        verbose, host, port, channel, timeout,
+        close_on_unsubscribe, close_on_error, maximum_async_duration
+    )
+end
+
+"""
+    ws_client_send(client::Genie.WebChannels.ChannelClient, message::String, payload::Dict = Dict())
+
+Send a message with optional payload to a WebSocket client connected to the local Genie server.
+
+### Example
+
+```julia
+client = ws_client!()
+ws_client_send(client, "unsubscribe")
+"""
+function ws_client_send(client::Genie.WebChannels.ChannelClient, message::String, payload::Dict = Dict())
+    isempty(client.channels) && return false
+    Genie.WebChannels.message_unsafe(client.client, json(Dict(:channel => client.channels[1], :message => message, :payload => payload)))
+    return true
 end

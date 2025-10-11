@@ -1520,7 +1520,8 @@ using Stipple.ReactiveTools
     model = Stipple.ReactiveTools.@init PrecompileApp
     page(model, ui) |> html
   end
-  precompile_get("/")
+  precompile_get("/", retry = false)
+  ws_client_send(timeout = 60)
   deps_routes(core_theme = true)
   precompile_get(Genie.Assets.asset_path(assets_config, :js, file = "stipplecore"))
 end
