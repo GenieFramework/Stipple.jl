@@ -1198,6 +1198,12 @@ functionality has been introduced to prevent Revise from generating new names pa
 as mixins. Otherwise apps with app-mixins are not precompilable.
 """
 function mygensym(sym::Symbol, context = @__MODULE__)
+  # julia 1.12 supports redefinition of types, so we can always return the identical symbol
+  # moreover, without this check `Genie.loadapp()` fails for julia 1.12
+  @static if VERSION >= v"1.12-"
+    return  Symbol(sym, :_, 1)
+  end
+
   i = 1
   while isdefined(context, Symbol(sym, :_, i))
     i += 1
