@@ -118,7 +118,7 @@ Stipple.render(z::Complex) = Dict(:mathjs => "Complex", :re => z.re, :im => z.im
 function Stipple.jsrender(z::Union{Complex, R{<:Complex}}, args...)
     JSONText("math.complex('\$(replace(strip(repr(Observables.to_value(z)), '"'), 'm' => ""))')")
 end
-Stipple.stipple_parse(::Complex, z::Dict{String, Any}) = float(z["re"]) + z["im"]
+Stipple.stipple_parse(::Complex, z::AbstractDict{String, Any}) = float(z["re"]) + z["im"]
 ```
 """
 jsrender(x, args...) = render(x, args...)
