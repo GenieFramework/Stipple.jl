@@ -1,6 +1,6 @@
 # wrapper around Base.parse to prevent type piracy
 function stipple_parse(::Type{T}, value) where T
-  if isstructtype(T) && value isa Dict
+  if isstructtype(T) && value isa AbstractDict
     ff = [String(f) for f in fieldnames(T)]
     kk = String.(keys(value))
     # if all fieldnames are present, generate the type directly from the fields

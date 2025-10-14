@@ -9,8 +9,7 @@ JSFunction(s1::Symbol, s2::Symbol, body::Union{AbstractString, JSONText} = "") =
 JSFunction(s1::Symbol, s2::Symbol, s3::Symbol, body::Union{AbstractString, JSONText} = "") = JSFunction(join([s1, s2, s3], ", "), "$body")
 JSFunction(s1::Symbol, s2::Symbol, s3::Symbol, s4::Symbol, body::Union{AbstractString, JSONText} = "") = JSFunction(join([s1, s2, s3, s4], ", "), "$body")
 
-StructTypes.StructType(::Type{JSFunction}) = StructTypes.CustomStruct()
-StructTypes.lower(jsfunc::JSFunction) = Dict(:jsfunction => OrderedDict(:arguments => jsfunc.arguments, :body => jsfunc.body))
+JSON.lower(jsfunc::JSFunction) = Dict(:jsfunction => OrderedDict(:arguments => jsfunc.arguments, :body => jsfunc.body))
 
 function Stipple.render(jsfunc::JSFunction)
   opts(jsfunction = opts(arguments = jsfunc.arguments; body = jsfunc.body))
