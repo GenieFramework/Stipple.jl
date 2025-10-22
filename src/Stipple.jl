@@ -910,38 +910,13 @@ const THEMES_FOLDER = "themes"
 Registers the `routes` for all the required JavaScript dependencies (scripts).
 """
 function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool = true) :: Nothing
+  add_fileroute = Genie.Assets.add_fileroute
+  basedir = @project_path
+
   if ! Genie.Assets.external_assets(assets_config)
-    if core_theme
-      Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, file="stipplecore")) do
-        Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", file="stipplecore")),
-          :css) |> Genie.Renderer.respond
-      end
-    end
-
-    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-light")) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-light")),
-        :css) |> Genie.Renderer.respond
-    end
-
-    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-dark")) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-dark")),
-        :css) |> Genie.Renderer.respond
-    end
-
-    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-light")) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-light")),
-        :css) |> Genie.Renderer.respond
-    end
-
-    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-dark")) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-dark")),
-        :css) |> Genie.Renderer.respond
-    end
+    core_theme && add_fileroute(Stipple.assets_config, "stipplecore.css"; basedir)
+    add_fileroute(Stipple.assets_config, "theme-default-light.css"; path = THEMES_FOLDER, basedir)
+    add_fileroute(Stipple.assets_config, "theme-default-dark.css"; path = THEMES_FOLDER, basedir)
 
     if is_channels_webtransport()
       Genie.Assets.channels_route(Genie.Assets.jsliteral(channel))
@@ -949,19 +924,18 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
       Genie.Assets.webthreads_route(Genie.Assets.jsliteral(channel))
     end
 
-    Genie.Assets.add_fileroute(assets_config, "underscore-min.js"; basedir = normpath(joinpath(@__DIR__, "..")))
-
-    VUEJS = Genie.Configuration.isprod() ? "vue.global.prod.js" : "vue.global.js"
-    Genie.Assets.add_fileroute(assets_config, VUEJS; basedir = normpath(joinpath(@__DIR__, "..")))
-    Genie.Assets.add_fileroute(assets_config, "stipplecore.js"; basedir = normpath(joinpath(@__DIR__, "..")))
-    Genie.Assets.add_fileroute(assets_config, "vue_filters.js"; basedir = normpath(joinpath(@__DIR__, "..")))
-    Genie.Assets.add_fileroute(assets_config, "mixins.js"; basedir = normpath(joinpath(@__DIR__, "..")))
+    add_fileroute(assets_config, "underscore-min.js"; basedir)
+    add_fileroute(assets_config, "vue.global.js"; basedir)
+    add_fileroute(assets_config, "vue.global.prod.js"; basedir)
+    add_fileroute(assets_config, "stipplecore.js"; basedir)
+    add_fileroute(assets_config, "vue_filters.js"; basedir)
+    add_fileroute(assets_config, "mixins.js"; basedir)
 
     if Genie.config.webchannels_keepalive_frequency > 0 && is_channels_webtransport()
-      Genie.Assets.add_fileroute(assets_config, "keepalive.js"; basedir = normpath(joinpath(@__DIR__, "..")))
+      add_fileroute(assets_config, "keepalive.js"; basedir)
     end
 
-    Genie.Assets.add_fileroute(assets_config, "vue2compat.js"; basedir = normpath(joinpath(@__DIR__, "..")))
+    add_fileroute(assets_config, "vue2compat.js"; basedir)
   end
 
   nothing
