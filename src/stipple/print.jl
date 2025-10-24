@@ -1,5 +1,4 @@
 function print_object(io, obj::T, compact = false; omit = [:handlers__, :observerfunctions__]) where T <: ReactiveModel
-    # currently no different printing for compact = true ...
     fields = [p for p in propertynames(obj)]
     omit !== nothing && setdiff!(fields, omit)
     internal_or_auto = true
@@ -8,7 +7,10 @@ function print_object(io, obj::T, compact = false; omit = [:handlers__, :observe
     if app == "Main_ReactiveModel" && parentmodule(T) != Main
         app = String(nameof(parentmodule(T)))
     end
+
     println(io, "Instance of '$app'")
+    compact && return
+
     for fieldname in fields
         field = getproperty(obj, fieldname)
         fieldmode = isprivate(fieldname, obj) ? "private" : isreadonly(fieldname, obj) ? "out" : "in"
@@ -35,8 +37,11 @@ function print_object(io, obj::T, compact = false; omit = [:handlers__, :observe
         end
         displaysize = get(io, :displaysize, (1, 80))
         limit = get(io, :limit, true)
+        val = Observables.to_value(field)
+        # always display sessions and ReactiveModels as compact to avoid stack overflow due to circular reference
+        compact = val isa ReactiveModel || typeof(val).name.name == :Session # GenieSession is not necessarily defined
         ioc = IOContext(IOBuffer(), :compact => compact, :limit => limit, :displaysize => displaysize)
-        show(ioc, "text/plain", Observables.to_value(field))
+        show(ioc, "text/plain", val)
         println(io, "    $fieldname ($fieldtype): ", String(take!(ioc.io)))
     end
 end
