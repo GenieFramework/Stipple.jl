@@ -327,28 +327,6 @@ function Genie.Assets.asset_path(::Type{App}) where App <: ReactiveModel
     Genie.Assets.asset_path(Stipple.assets_config, :js; file = vm(App))
 end
 
-macro timeout(seconds, expr_to_run, expr_when_fails=nothing)
-  quote
-    timer = Channel{Timer}(1)
-    tsk = @task begin
-      x = $(esc(expr_to_run))
-      close(take!(timer))
-      x
-    end
-    schedule(tsk)
-
-    put!(timer, Timer($(esc(seconds))) do timer
-      istaskdone(tsk) || schedule(tsk, InterruptException(); error=true)
-    end)
-
-    try
-      fetch(tsk)
-    catch _
-      $(esc(expr_when_fails))
-    end
-  end
-end
-
 # utility function to get content from local server
 function hget(target::AbstractString = "/";
     host::String = "http://localhost",

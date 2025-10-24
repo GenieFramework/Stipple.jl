@@ -107,6 +107,7 @@ export setchannel, getchannel
 # compatibility with Observables 0.3
 isempty(methods(notify, Observables)) && (Base.notify(observable::AbstractObservable) = Observables.notify!(observable))
 
+include("TimeOut.jl")
 include("ParsingTools.jl")
 include("NamedTuples.jl")
 include("stipple/reactivity.jl")
@@ -118,6 +119,7 @@ include("stipple/converters.jl")
 include("stipple/print.jl")
 
 using .NamedTuples
+using .TimeOut
 
 export JSONParser, JSONText, json, @json, jsfunction, @jsfunction_str, JSFunction
 
@@ -290,7 +292,7 @@ function setmode! end
 function deletemode! end
 function init_storage end
 
-include("Tools.jl")
+include("stipple/tools.jl")
 include("ReactiveTools.jl")
 export @stipple_precompile
 
