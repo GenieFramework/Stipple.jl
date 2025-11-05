@@ -155,8 +155,8 @@ end
 """
 abstract type ReactiveModel end
 
-struct Mixin
-  mixin::Union{Expr, Symbol, QuoteNode}
+struct MixinExpr
+  M::Union{Expr, Symbol, QuoteNode}
   prefix::String
   postfix::String
 end
@@ -437,7 +437,7 @@ function parse_mixin_params(params)
 end
 
 macro mixin(expr...)
-  Mixin(parse_mixin_params(collect(expr))...)
+  MixinExpr(parse_mixin_params(collect(expr))...)
 end
 
 function add_brackets!(expr, varnames)
@@ -475,70 +475,73 @@ macro var_storage(expr, handler = nothing)
   let_block = Expr(:block, :(_ = 0))
   required_evals!.(expr.args, RefValue(required_vars), RefValue(all_vars))
   add_brackets!.(expr.args, RefValue(required_vars))
+  mixins = Mixin[]
   for e in expr.args
-      if e isa LineNumberNode
-        source = e
-        continue
+    if e isa LineNumberNode
+      source = e
+      continue
+    end
+    mode = :PUBLIC
+    reactive = true
+    if e isa Expr && e.head == :(=)
+      #check whether flags are set
+      if e.args[end] isa Expr && e.args[end].head == :tuple
+        flags = e.args[end].args[2:end]
+        if length(flags) > 0 && flags[1] ∈ [:PUBLIC, :READONLY, :PRIVATE, :JSFUNCTION, :NON_REACTIVE]
+          newmode = intersect(setdiff(flags, [:NON_REACTIVE]), [:READONLY, :PRIVATE, :JSFUNCTION])
+          length(newmode) > 0 && (mode = newmode[end])
+          reactive = :NON_REACTIVE ∉ flags
+          e.args[end] = e.args[end].args[1]
+        end
       end
-      mode = :PUBLIC
-      reactive = true
-      if e isa Expr && e.head == :(=)
-        #check whether flags are set
-        if e.args[end] isa Expr && e.args[end].head == :tuple
-          flags = e.args[end].args[2:end]
-          if length(flags) > 0 && flags[1] ∈ [:PUBLIC, :READONLY, :PRIVATE, :JSFUNCTION, :NON_REACTIVE]
-            newmode = intersect(setdiff(flags, [:NON_REACTIVE]), [:READONLY, :PRIVATE, :JSFUNCTION])
-            length(newmode) > 0 && (mode = newmode[end])
-            reactive = :NON_REACTIVE ∉ flags
-            e.args[end] = e.args[end].args[1]
-          end
-        end
-        var, ex = parse_expression!(e, reactive ? mode : nothing, source, m, let_block, required_vars)
-        # prevent overwriting of control fields
-        var ∈ [INTERNALFIELDS..., AUTOFIELDS...] && continue
-        if reactive == false
-            Stipple.setmode!(storage[:modes__], Core.eval(Stipple, mode), var)
-        end
+      var, ex = parse_expression!(e, reactive ? mode : nothing, source, m, let_block, required_vars)
+      # prevent overwriting of control fields
+      var ∈ [INTERNALFIELDS..., AUTOFIELDS...] && continue
+      if reactive == false
+          Stipple.setmode!(storage[:modes__], Core.eval(Stipple, mode), var)
+      end
 
-        storage[var] = ex
-      else
-        if e isa Mixin
-          mixin, prefix, postfix = e.mixin, e.prefix, e.postfix
-          mixin_storage = Stipple.var_to_storage(@eval(m, $mixin), prefix, postfix; mixin_name = mixin)
+      storage[var] = ex
+    else
+      if e isa MixinExpr
+        M_expr, prefix, postfix = e.M, e.prefix, e.postfix
+        M = @eval(m, $M_expr)
+        push!(mixins, Mixin(M, prefix, postfix))
+        mixin_storage = Stipple.var_to_storage(M, prefix, postfix; mixin_name = M_expr)
 
-          pre_length = lastindex(prefix)
-          post_length = lastindex(postfix)
-      
-          handlers_expr_name = Symbol(mixin, :var"!_handlers_expr")
-          handlers_expr = if pre_length + post_length > 0 && isdefined(m, handlers_expr_name)
-            varnames = setdiff(collect(keys(mixin_storage)), Stipple.AUTOFIELDS, Stipple.INTERNALFIELDS)
-            oldvarnames = [Symbol("$var"[1 + pre_length:end-post_length]) for var in varnames]
-            # make a deepcopy of the handlers_expr, because we modify it by prefix and postfix
-            handlers_expr = deepcopy(@eval(m, $handlers_expr_name))
-            for h in handlers_expr
-              h isa Expr || continue
-              postwalk!(h) do x
-                if x isa Symbol && x ∈ oldvarnames
-                  Symbol(prefix, x, postfix)
-                elseif x isa QuoteNode && x.value isa Symbol && x.value ∈ oldvarnames
-                  QuoteNode(Symbol(prefix, x.value, postfix))
-                else
-                  x
-                end
+        pre_length = lastindex(prefix)
+        post_length = lastindex(postfix)
+    
+        handlers_expr_name = Symbol(M_expr, :var"!_handlers_expr")
+        handlers_expr = if pre_length + post_length > 0 && isdefined(m, handlers_expr_name)
+          varnames = setdiff(collect(keys(mixin_storage)), Stipple.AUTOFIELDS, Stipple.INTERNALFIELDS)
+          oldvarnames = [Symbol("$var"[1 + pre_length:end-post_length]) for var in varnames]
+          # make a deepcopy of the handlers_expr, because we modify it by prefix and postfix
+          handlers_expr = deepcopy(@eval(m, $handlers_expr_name))
+          for h in handlers_expr
+            h isa Expr || continue
+            postwalk!(h) do x
+              if x isa Symbol && x ∈ oldvarnames
+                Symbol(prefix, x, postfix)
+              elseif x isa QuoteNode && x.value isa Symbol && x.value ∈ oldvarnames
+                QuoteNode(Symbol(prefix, x.value, postfix))
+              else
+                x
               end
             end
-            vcat([prefix, postfix], handlers_expr)
-          else
-            nothing
           end
-          merge!(storage, merge_storage(storage, mixin_storage; context = m, handlers_expr))
+          vcat([prefix, postfix], handlers_expr)
+        else
+          nothing
         end
-        :modes__, e
+        merge!(storage, merge_storage(storage, mixin_storage; context = m, handlers_expr))
       end
-
+      :modes__, e
     end
+  end
 
-    esc(:($storage))
+  storage[:mixins__] = Expr(:ref, Stipple.Mixin, mixins...)
+  esc(:($storage))
 end
 
 Stipple.Genie.Router.delete!(M::Type{<:ReactiveModel}) = Stipple.Genie.Router.delete!(Symbol(Stipple.routename(M)))
@@ -599,14 +602,29 @@ function restore_constructor(::Type{T}) where T<:ReactiveModel
 end
 
 macro type(modelname, storage)
-  modelname isa DataType && (modelname = modelname.name.name)
+  M = if modelname isa DataType
+    # this was necessary for nested macros or mixins, not sure whether this is still the case
+    # in this snippet, it is required: `@app MyApp @in x = 1; :(Stipple.@type $MyApp LittleDict()) |> eval`
+    parent = parentmodule(modelname)
+    modelname = modelname.name.name
+    parent
+  else
+    __module__
+  end
+
   modelconst = Symbol(modelname, '!')
 
   output = quote end
-  output.args = @eval __module__ collect(values($storage))
-  output_qn = QuoteNode(output)
+  storage = @eval __module__ $storage
 
-  quote
+  mixins = if haskey(storage, :mixins__)
+    __module__.eval(pop!(storage, :mixins__))
+  else
+    Mixin[]
+  end
+  output.args = collect(values(storage))
+
+  ex = quote
     abstract type $modelname <: Stipple.ReactiveModel end
 
     Stipple.@kwredef mutable struct $modelconst <: $modelname
@@ -634,7 +652,16 @@ macro type(modelname, storage)
     Stipple.Genie.Router.delete!(Symbol(Stipple.routename($modelname)))
 
     $modelname
-  end |> esc
+  end
+  
+  if isempty(mixins)
+    if isdefined(M, modelname)
+      insert!(ex.args, 3, :(Base.delete_method.(methods(Stipple.mixins, (Type{<:$modelname},), $M))))
+    end
+  else
+    insert!(ex.args, 3, :(Stipple.mixins(::Type{<:$modelname}) = $mixins))
+  end
+  ex |> esc
 end
 
 """
@@ -651,13 +678,14 @@ end
 """
 macro vars(modelname, expr)
   quote
-    Stipple.@type($modelname, values(Stipple.@var_storage($expr)))
+    Stipple.@type($modelname, Stipple.@var_storage($expr))
   end |> esc
 end
 
 macro define_mixin(mixin_name, expr)
   storage = @eval(__module__, Stipple.@var_storage($expr))
   delete!.(RefValue(storage),  [:channel__, Stipple.AUTOFIELDS...])
+  mixins = pop!(storage, :mixins__)
 
   quote
       Base.@kwdef struct $mixin_name
