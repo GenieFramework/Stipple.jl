@@ -78,7 +78,7 @@ function replace_jsfunction(v::Vector)
 end
 
 function replace_jsfunction(js::JSONText)
-    jsfunc = parse_jsfunction(js.s)
+    jsfunc = parse_jsfunction(json(js))
     isnothing(jsfunc) ? js : JSONText(json(opts(jsfunction=jsfunc)))
 end
 
@@ -146,5 +146,5 @@ notify(model, js"plot.data")
 ```
 """
 function Base.notify(model::ReactiveModel, field::JSONText)
-  run(model, "this.$(field.s).__ob__.dep.notify()")
+  run(model, "this.$(json(field)).__ob__.dep.notify()")
 end

@@ -1,9 +1,9 @@
 import Genie.JSONParser: JSONParser, json
 
-Base.string(js::JSONText) = js.s
-Base.:(*)(js::JSONText, x) = js.s * x
-Base.:(*)(x, js::JSONText) = x * js.s
-Base.:(*)(js1::JSONText, js2::JSONText) = JSONText(js1.s * js2.s)
+Base.string(js::JSONText) = json(js)
+Base.:(*)(js::JSONText, x) = json(js) * x
+Base.:(*)(x, js::JSONText) = x * json(js)
+Base.:(*)(js1::JSONText, js2::JSONText) = JSONText(json(js1) * json(js2))
 
 """
     @js_str -> JSONText
