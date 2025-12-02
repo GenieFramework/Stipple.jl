@@ -485,17 +485,6 @@ end
     @test el == "<div v-show=\"fruit == 'apple'\" class=\"row\">My fruit is a(n) '{{ fruit }}'</div>"
 end
 
-@testset "Compatibility of JSONText between JSON3 and JSON" begin
-    using JSON
-    using Stipple
-    jt1 = JSON.JSONText("json text 1")
-    jt2 = Stipple.JSONText("json text 2")
-    @test JSON.json(jt1) == "json text 1"
-    @test Stipple.json(jt1) == "json text 1"
-    @test JSON.json(jt2) == "json text 2"
-    @test Stipple.json(jt2) == "json text 2"
-end
-
 @testset "Javascript expressions: JSExpr" begin
     # note, you cannot compare a JSExpr by `==` directly as `==` is overloaded for JSExpr
     je1 = @jsexpr(:x+1)
@@ -627,7 +616,7 @@ end
     end
 
     t2 = T2(1, T1(2, 3))
-    t2_dict = JSON3.read(Stipple.json(t2), Dict)
+    t2_dict = JSON.parse(Stipple.json(t2), dicttype = Dict{String, Any})
 
     Base.@kwdef struct T3
         c::Int = 1

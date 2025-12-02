@@ -97,8 +97,7 @@ import Genie.Router.download
 @reexport @using_except Genie.Renderers.Html: mark, div, time, view, render, Headers, menu
 export render, htmldiv, js_attr, render_component
 
-@reexport using JSON3
-@reexport using StructTypes
+@reexport using JSON
 @reexport using Parameters
 @reexport using OrderedCollections
 
@@ -121,7 +120,7 @@ include("stipple/print.jl")
 using .NamedTuples
 using .TimeOut
 
-export JSONParser, JSONText, json, @json, jsfunction, @jsfunction_str, JSFunction
+export JSONParser, JSONText, json, jsfunction, @jsfunction_str, JSFunction
 
 const config = Genie.config
 const channel_js_name = "'not_assigned'"
@@ -139,6 +138,7 @@ const PURGE_CHECK_DELAY = RefValue(60)
 const DEBOUNCE = LittleDict{Type{<:ReactiveModel}, LittleDict{Symbol, Any}}()
 const THROTTLE = LittleDict{Type{<:ReactiveModel}, LittleDict{Symbol, Any}}()
 
+JSON.JSONText(js::Symbol) = JSONText(String(js))
 """
     debounce(M::Type{<:ReactiveModel}, fieldnames::Union{Symbol, Vector{Symbol}}, debounce::Union{Int, Nothing} = nothing)
 
@@ -317,10 +317,6 @@ function __init__()
 
     @require DataFrames  = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0" begin
       include(joinpath(@__DIR__, "..", "ext", "StippleDataFramesExt.jl"))
-    end
-
-    @require JSON  = "682c06a0-de6a-54ab-a142-c8b1cf79cde6" begin
-      include(joinpath(@__DIR__, "..", "ext", "StippleJSONExt.jl"))
     end
   end
 end
@@ -849,7 +845,8 @@ function _push!(vals::Pair{Symbol,T}, channel::String;
                 except::Union{Nothing,UInt,Vector{UInt}} = nothing,
                 restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T}
   try
-    webtransport().broadcast(channel, json(Dict("key" => vals[1], "value" => Stipple.render(vals[2], vals[1]))); except, restrict)
+    d = json(Dict("key" => vals[1], "value" => Stipple.render(vals[2], vals[1])))
+    webtransport().broadcast(channel, d; except, restrict)
   catch ex
     @debug ex
     false
