@@ -616,7 +616,7 @@ end
     end
 
     t2 = T2(1, T1(2, 3))
-    t2_dict = JSON.parse(Stipple.json(t2), Dict)
+    t2_dict = JSON.parse(Stipple.json(t2), dicttype = Dict{String, Any})
 
     Base.@kwdef struct T3
         c::Int = 1
