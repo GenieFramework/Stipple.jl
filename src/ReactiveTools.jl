@@ -1340,7 +1340,7 @@ function __init()
       ```
       Checking the result can be done in the following way
       ```
-      julia> render(MyApp())[:$($f_str)].s |> println
+      julia> json(render(MyApp())[:$($f_str)]) |> println
       {
           "greet":function(name) {console.log('Hello ' + name)},
           "bye":function() {console.log('Bye!')}

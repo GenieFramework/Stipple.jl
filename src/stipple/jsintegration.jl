@@ -55,7 +55,7 @@ function replace_jsfunction!(d::Dict)
         if isa(v, Dict) || isa(v, Array)
             replace_jsfunction!(v)
         elseif isa(v, JSONText)
-            jsfunc = parse_jsfunction(v.s)
+            jsfunc = parse_jsfunction(json(v))
             isnothing(jsfunc) || ( d[k] = opts(jsfunction=jsfunc) )
         end
     end

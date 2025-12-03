@@ -51,7 +51,7 @@ function join_js(xx::Union{Tuple, AbstractArray}, delim = ""; skip_empty = true,
       s = json(Dict(k => v isa AbstractString ? JSONText(string(v)) : v for (k, v) in (x isa Pair ? [x] : x)))[2:end - 1]
       print(io2, s)
     elseif x isa JSONText
-      print(io2, x.s)
+      print(io2, json(x))
     else
       js_print(io2, x)
     end
