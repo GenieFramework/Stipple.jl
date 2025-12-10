@@ -139,6 +139,10 @@ const DEBOUNCE = LittleDict{Type{<:ReactiveModel}, LittleDict{Symbol, Any}}()
 const THROTTLE = LittleDict{Type{<:ReactiveModel}, LittleDict{Symbol, Any}}()
 
 JSON.JSONText(js::Symbol) = JSONText(String(js))
+# add a (pirating) definition for JSONText(::JSONText)
+# prevent redefining in case, that this definition is already set elsewhere
+length(methods(JSON.JSONText, (JSONText,))) < 2 && (JSON.JSONText(js::JSONText) = js)
+
 """
     debounce(M::Type{<:ReactiveModel}, fieldnames::Union{Symbol, Vector{Symbol}}, debounce::Union{Int, Nothing} = nothing)
 
