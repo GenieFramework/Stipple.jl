@@ -992,3 +992,28 @@ function unsynchronize!(o::AbstractObservable, o_sync::Union{AbstractObservable,
     end
   end
 end
+
+const DEBUG_MODELS = OrderedDict{String, ReactiveModel}()
+const DEBUG_MODEL_MAX_LENGTH = Ref(10)
+const DEBUG_MODEL_TIMEOUT = RefValue{Period}(Second(60))
+
+
+"""
+    store_debug_model(model::ReactiveModel)
+
+Store a ReactiveModel instance for debugging if the parameter :debug is set and 
+remove it from storage after a timeout defined by DEBUG_MODEL_TIMEOUT.
+"""
+function store_debug_model(model::ReactiveModel)
+  debug_id = params(:debug, nothing)
+  debug_id === nothing && return
+  delete!(DEBUG_MODELS, debug_id)
+  DEBUG_MODELS[debug_id] = model
+  length(DEBUG_MODELS) > DEBUG_MODEL_MAX_LENGTH[] && popfirst!(DEBUG_MODELS)
+  DEBUG_MODEL_TIMEOUT[] > Second(0) && Timer(t -> delete!(DEBUG_MODELS, debug_id), DEBUG_MODEL_TIMEOUT[])
+  return nothing
+end
+
+function debug_model(id::String)
+  get(DEBUG_MODELS, id, nothing)
+end
