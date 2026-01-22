@@ -752,7 +752,7 @@ function init_model(M::Type{<:ReactiveModel}, args...; kwargs...)
     model |> h
   end
 
-  # store model if parameter 'debug' is set to a valid uuid
+  # store model if parameter 'debug_id' is set to a valid uuid
   Stipple.store_debug_model(model)
 
   # Update the model in all pages where it has been set as instance of an app.

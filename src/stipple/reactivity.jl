@@ -1001,19 +1001,48 @@ const DEBUG_MODEL_TIMEOUT = RefValue{Period}(Second(60))
 """
     store_debug_model(model::ReactiveModel)
 
-Store a ReactiveModel instance for debugging if the parameter :debug is set and 
-remove it from storage after a timeout defined by DEBUG_MODEL_TIMEOUT.
+Store a ReactiveModel instance for debugging if the parameter :debug_id is set and 
+remove it from storage after a timeout defined by DEBUG_MODEL_TIMEOUT. The timeout can be modified by 
+adding a parameter :debug_timeout, which defines the timeout in Seconds. Floating point values are allowed.
+If a model has been stored it can be retrieved by using `debug_model(id::String; timeout)`.
 """
 function store_debug_model(model::ReactiveModel)
-  debug_id = params(:debug, nothing)
+  debug_id = params(:debug_id, nothing)
   debug_id === nothing && return
   delete!(DEBUG_MODELS, debug_id)
   DEBUG_MODELS[debug_id] = model
   length(DEBUG_MODELS) > DEBUG_MODEL_MAX_LENGTH[] && popfirst!(DEBUG_MODELS)
-  DEBUG_MODEL_TIMEOUT[] > Second(0) && Timer(t -> delete!(DEBUG_MODELS, debug_id), DEBUG_MODEL_TIMEOUT[])
+  timeout = tryparse(Float64, params(:debug_timeout, ""))
+  timeout = if timeout === nothing
+    DEBUG_MODEL_TIMEOUT[]
+  else
+    Millisecond(round(1000 * timeout))
+  end
+  timeout > Second(0) && Timer(t -> delete!(DEBUG_MODELS, debug_id), timeout)
   return nothing
 end
 
-function debug_model(id::String)
-  get(DEBUG_MODELS, id, nothing)
+"""
+    debug_model(id::String)
+
+Retrieve the model corresponding to the debug id 'id'. If timeout > 0 is specified wait for a model to be stored.
+In order to store a model, call the desired page with a query parameter 'debug_id' and optionally specify a timeout (in s)
+after which the model will be deleted from the storage to prevent misuse and to allow for garbage collection.
+
+### Example
+url = URI("http://localhost:8000/?debug_id=window_1&debug_timeout=10")
+using Electron
+win = Window(url, options => Dict("sandbox" => true))
+model = Stipple.debug_model("window_1"; timeout = 10)
+# start testing/debugging
+"""
+function debug_model(id::String; timeout::Union{Real, Period} = Second(0))
+  timeout isa Real && (timeout = Millisecond(round(1000 * timeout)))
+  model = get(DEBUG_MODELS, id, nothing)
+  t0 = Dates.now()
+  while model === nothing && now() - timeout < t0
+    sleep(0.2)
+    model = get(DEBUG_MODELS, id, nothing)
+  end
+  return model
 end
