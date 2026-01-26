@@ -1018,7 +1018,11 @@ function store_debug_model(model::ReactiveModel)
   else
     Millisecond(round(1000 * timeout))
   end
-  timeout > Second(0) && Timer(t -> delete!(DEBUG_MODELS, debug_id), timeout)
+  timeout > Second(0) && Timer(timeout) do _
+    stored_model = pop!(DEBUG_MODELS, debug_id, nothing)
+    # if the model we removed had been replaced, put it back
+    stored_model !== nothing && stored_model !== model && push!(DEBUG_MODELS, debug_id => stored_model)
+  end
   return nothing
 end
 
