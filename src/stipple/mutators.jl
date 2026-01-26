@@ -116,8 +116,8 @@ function update!(model::M, field::Symbol, newval::T1, oldval::T2)::M where {T1, 
     if ischanged
       f.r_mode == PRIVATE || f.no_backend_watcher || notify(f, ≠(1))
     else
-      # we changed filtering of watchers to priorities, so no need to differentiate here
-      setindex_withoutwatchers!(f, newval, 1)
+      # prevent updating the clients which are defined with a priority of 1
+      model[field, ≠(1)] = newval
     end
   else
     setfield!(model, field, newval)

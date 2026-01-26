@@ -155,6 +155,31 @@ end
 """
 abstract type ReactiveModel end
 
+Base.getindex(model::ReactiveModel, fieldname::Symbol) = getfield(model, fieldname)
+
+function Base.setindex!(model::ReactiveModel, value, fieldname::Symbol)
+    field = getfield(model, fieldname)
+    if field isa Reactive
+      getfield(field, :o).val = value
+    else
+      field = value
+    end
+end
+function Base.setindex!(model::ReactiveModel, value, field::Symbol, priorities)
+    setindex!(model, value, field)
+    notify(model[field], priorities)
+    value
+end
+
+function Base.setproperty!(model::ReactiveModel, fieldname::Symbol, value)
+    field = getfield(model, fieldname)
+    if field isa Reactive
+        field[] = value
+    else
+        setfield!(model, field, value)
+    end
+end
+
 struct Mixin
   mixin::Union{Expr, Symbol, QuoteNode}
   prefix::String

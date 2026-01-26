@@ -12,7 +12,7 @@ function print_object(io, obj::T, compact = false; omit = [:handlers__, :observe
     compact && return
 
     for fieldname in fields
-        field = getproperty(obj, fieldname)
+        field = obj isa ReactiveModel ? getfield(obj, fieldname) : getproperty(obj, fieldname)
         fieldmode = isprivate(fieldname, obj) ? "private" : isreadonly(fieldname, obj) ? "out" : "in"
         fieldtype = if field isa Reactive
             if fieldname in AUTOFIELDS

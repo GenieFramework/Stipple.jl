@@ -368,7 +368,7 @@ function update!(model::M, field::Any, newval::T, oldval::T)::M where {T,M<:Reac
 
   model
 end
-````
+```
 """
 function update! end
 
@@ -792,7 +792,7 @@ Configures the reactive handlers for the reactive properties of the model. Calle
 """
 function setup(model::M, channel = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
   for f in fieldnames(M)
-    field = getproperty(model, f)
+    field = getfield(model, f)
 
     isa(field, Reactive) || continue
 

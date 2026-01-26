@@ -922,18 +922,18 @@ unmask(expr, vars = Symbol[]) = transform(expr, vars, x -> startswith(string(x),
 
 function fieldnames_to_fields(expr, vars)
   postwalk(expr) do x
-    x isa Symbol && x ∈ vars ? :(__model__.$x) : x
+    x isa Symbol && x ∈ vars ? (qn = QuoteNode(x); :(__model__[$qn])) : x
   end
 end
 
 function fieldnames_to_fields(expr, vars, replace_vars)
   postwalk(expr) do x
     if x isa Symbol
-      x ∈ replace_vars && return :(__model__.$x)
+      x ∈ replace_vars && return (qn = QuoteNode(x); :(__model__[$qn]))
     elseif x isa Expr
       if x.head == Symbol("=")
         x.args[1] = postwalk(x.args[1]) do y
-          y ∈ vars ? :(__model__.$y) : y
+          y ∈ vars ? (qn = QuoteNode(y); :(__model__[$qn])) : y
         end
       end
     end
@@ -943,18 +943,18 @@ end
 
 function fieldnames_to_fieldcontent(expr, vars)
   postwalk(expr) do x
-    x isa Symbol && x ∈ vars ? :(__model__.$x[]) : x
+    x isa Symbol && x ∈ vars ? (qn = QuoteNode(x); :(__model__[$qn][])) : x
   end
 end
 
 function fieldnames_to_fieldcontent(expr, vars, replace_vars)
   postwalk(expr) do x
     if x isa Symbol
-      x ∈ replace_vars && return :(__model__.$x[])
+      x ∈ replace_vars && return (qn = QuoteNode(x); :(__model__[$qn][]))
     elseif x isa Expr
       if x.head == Symbol("=")
         x.args[1] = postwalk(x.args[1]) do y
-          y ∈ vars ? :(__model__.$y[]) : y
+          y ∈ vars ? (qn = QuoteNode(y); :(__model__[$qn][])) : y
         end
       end
     end

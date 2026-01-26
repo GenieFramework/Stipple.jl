@@ -115,6 +115,7 @@ function Base.run(model::ReactiveModel, jscode::String; context = :model, kwargs
 
   nothing
 end
+Base.run(model::ReactiveModel, jscode::JSONText; context = :model, kwargs...) = Base.run(model, json(jscode); context, kwargs...)
 
 function isconnected(model, message::AbstractString = "")
     push!(model, :js_model => jsfunction("console.log('$message')"); channel = getchannel(model))
@@ -133,7 +134,7 @@ Note:
 - Table indices are 1-based because they rely on the hidden "__id" columns, which is one-based
 """
 function Base.setindex!(model::ReactiveModel, val, index::AbstractString)
-  run(model, "this.$index = $(strip(json(render(val)), '"'))")
+  run(model, "GENIEMODEL['$index'] = $(strip(json(render(val)), '"'))")
 end
 
 """
