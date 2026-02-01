@@ -1019,27 +1019,30 @@ function unsynchronize!(o::AbstractObservable, o_sync::Union{AbstractObservable,
 end
 
 const DEBUG_MODELS = OrderedDict{String, ReactiveModel}()
-const DEBUG_MODEL_MAX_LENGTH = Ref(10)
-const DEBUG_MODEL_TIMEOUT = RefValue{Period}(Second(60))
-
+const DEBUG_MODELS_MAX_LENGTH = Ref(10)
+const DEBUG_MODELS_TIMEOUT = RefValue{Period}(Second(60))
+const DEBUG_MODELS_ENABLED = RefValue{Union{Nothing, Bool}}(nothing)
 
 """
     store_debug_model(model::ReactiveModel)
 
 Store a ReactiveModel instance for debugging if the parameter :debug_id is set and 
-remove it from storage after a timeout defined by DEBUG_MODEL_TIMEOUT. The timeout can be modified by 
+remove it from storage after a timeout defined by DEBUG_MODELS_TIMEOUT. The timeout can be modified by 
 adding a parameter :debug_timeout, which defines the timeout in Seconds. Floating point values are allowed.
 If a model has been stored it can be retrieved by using `debug_model(id::String; timeout)`.
 """
 function store_debug_model(model::ReactiveModel)
+  if DEBUG_MODELS_ENABLED[] === nothing && Genie.isprod() || DEBUG_MODELS_ENABLED[] === false
+    return nothing
+  end
   debug_id = params(:debug_id, nothing)
   debug_id === nothing && return
   delete!(DEBUG_MODELS, debug_id)
   DEBUG_MODELS[debug_id] = model
-  length(DEBUG_MODELS) > DEBUG_MODEL_MAX_LENGTH[] && popfirst!(DEBUG_MODELS)
+  length(DEBUG_MODELS) > DEBUG_MODELS_MAX_LENGTH[] && popfirst!(DEBUG_MODELS)
   timeout = tryparse(Float64, params(:debug_timeout, ""))
   timeout = if timeout === nothing
-    DEBUG_MODEL_TIMEOUT[]
+    DEBUG_MODELS_TIMEOUT[]
   else
     Millisecond(round(1000 * timeout))
   end
