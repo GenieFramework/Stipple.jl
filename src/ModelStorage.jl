@@ -95,12 +95,34 @@ function init_from_storage( t::Type{M};
     field = getfield(model, f)
 
     if field isa Reactive
+      eltype_mismatch = false
       # restore fields only if a stored model exists, if the field is not part of the internal fields and is not write protected
       if isnothing(stored_model) || f ∈ [Stipple.INTERNALFIELDS..., Stipple.AUTOFIELDS...] ||
           Stipple.isprivate(f, model) || ! hasproperty(stored_model, f) || ! hasproperty(model, f)
       else
-        # restore field value from stored model
-        field[!] = getfield(stored_model, f)[]
+        if eltype(field) != eltype(getfield(stored_model, f))
+          eltype_mismatch = true
+        end
+        try
+          # restore field value from stored model
+          field[!] = getfield(stored_model, f)[]
+        catch e
+          # if failure was due to eltype mismatch, 
+          if eltype(field) != eltype(getfield(stored_model, f))
+            @info("""
+            Type mismatch when restoring field '$f'.
+                Expected '$(eltype(getfield(stored_model, f)))' found '$(eltype(field))'.
+                Skipping restoration of this field.
+            """)
+          else
+            @warn "Error during restoration of field '$f': $e"
+          end
+        end
+      end
+
+      if !eltype_mismatch
+        # store the new model if an eltype mismatch was encountered
+        GenieSession.set!(model_id(M), model)
       end
 
       # register reactive handlers to automatically save model on session when model changes
