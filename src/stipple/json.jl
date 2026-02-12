@@ -10,8 +10,21 @@ Base.:(*)(js1::JSONText, js2::JSONText) = JSONText(json(js1) * json(js2))
 
 Construct a JSONText, such as `js"button=false"`, without interpolation and unescaping
 (except for quotation marks `"`` which still has to be escaped). Avoiding escaping `"`` can be done by
-`js\"\"\"alert("Hello World")\"\"\"`.
+```
+js\"\"\"alert("Hello World")\"\"\"
+# JSONText("alert(\"Hello World\")")
+```
+Interpolation and escaping is supported via the `i` flag, such as
+```
+js\"\"\"alert("1 + 2 == \$(1 + 2)")\"\"\"i
+# JSONText("alert(\"1 + 2 == 3\")")
+```
 """
-macro js_str(expr)
-  :( JSONText($(esc(expr))) )
+macro js_str(s)
+  :( JSONText($(esc(s))) )
+end
+
+macro js_str(s, flags)
+    flags == "i" || @warn "Only 'i' flag currently supported (string interpolation)."
+    'i' in flags ? esc(Meta.parse("JSONText(\"$(escape_string(s))\")")) : :( JSONText($(esc(s))) )
 end
