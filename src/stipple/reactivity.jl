@@ -167,7 +167,7 @@ function Base.setindex!(model::ReactiveModel, value, fieldname::Symbol)
 end
 function Base.setindex!(model::ReactiveModel, value, field::Symbol, priorities)
     setindex!(model, value, field)
-    notify(model[field], priorities)
+    model[field] isa Reactive && notify(model[field], priorities)
     value
 end
 
@@ -751,10 +751,10 @@ notify(observable, >(0))
 notify(observable, ≠(1))
 ```
 """
-function Base.notify(@nospecialize(observable::AbstractObservable), priority::Union{Int, Function})
+function Base.notify(@nospecialize(observable::AbstractObservable), priority::Union{Int, Function, Nothing})
   val = observable[]
   for (p, f) in Observables.listeners(observable)::Vector{Pair{Int, Any}}
-      (priority isa Int ? p == priority : priority(p)) || continue
+      priority === nothing || (priority isa Int ? p == priority : priority(p)) || continue
       result = Base.invokelatest(f, val)
       if result isa Consume && result.x
           # stop calling callbacks if event got consumed

@@ -1571,13 +1571,93 @@ macro add_client_data(expr)
   end)
 end
 
+function Base.notify(model::ReactiveModel, field::Symbol, priorities = nothing)
+  if priorities === nothing
+    notify(getfield(model, field))
+  else
+    notify(getfield(model, field), priorities)
+  end
+end
+
+"""
+  ## Syntax 1 - Usage in handler functions (`@onchange`, `@onbutton`, `@handler``)
+  @notify args...
+  call `notify()` on the `__model__` variable in handler functions)
+  ### Example
+  ```
+  @onchange x begin
+    @notify "This message will appear in the UI"
+    # trigger the handlers of field `:y``
+    @notify :y
+  end
+  ```
+  
+  ### Syntax 2 - Notification in normal functions
+  @notify model.x, args...
+  ### Example
+  ```
+  @notify model.x
+
+  If the first expression contains a dot or [] syntax, call `notify(model, :x, args...)
+
+  ### Syntax 3 - etting and notification
+
+
+"""
 macro notify(args...)
   for arg in args
     arg isa Expr && arg.head == :(=) && (arg.head = :kw)
   end
 
-  quote
-    Base.notify(__model__, $(args...))
+  if args[1] isa Expr && args[1].head ∈ (:., :ref)
+    a = args[1]
+    while a.args[1] isa Expr && a.args[1].head ∈ (:., :ref)
+      a = a.args[1]
+    end
+    model, field = a.args[1:2]
+    quote
+      Base.notify($model, $field, $(args[2:end]...))
+    end
+  elseif args[1] isa Expr && args[1].head == :kw
+    args[1].head = :(=)
+    a = args[1].args[1]
+    level = 1
+    while a.args[1] isa Expr && a.args[1].head ∈ (:., :ref)
+      level += 1
+      a = a.args[1]
+    end
+    model, field = a.args[1:2]
+    ex = quote
+      $(args[1])
+    end
+    if level == 1
+      # for direct fields use syntax `model[:field, priorities] = ...` syntax
+      # switch to setindex! syntax
+      a.head = :ref
+      # append priorities
+      priorities = length(args) == 1 ? :nothing : args[2]
+      push!(args[1].args[1].args, priorities)
+    else
+      # add extra statements for notification
+      M = try
+        @eval(__module__, typeof($model))
+      catch
+        ReactiveModel
+      end
+      @show M.name.name
+      if !(M <: ReactiveModel)
+        fieldname = QuoteNode(Symbol(split(string(args[1].args[1]), '.', limit = 2)[2]))
+        args[1].args[1].args = [model, fieldname]
+        args[1].args[1].head = :.
+      end
+      push!(ex.args, :(Base.notify($model, $field, $(args[2:end]...))))
+      push!(ex.args, :($(args[1].args[2])))
+    end
+    ex
+  else
+    quote
+      Base.notify(__model__, $(args...))
+    end
   end |> esc
 end
 
