@@ -8,13 +8,12 @@ Base.:(*)(js1::JSONText, js2::JSONText) = JSONText(json(js1) * json(js2))
 """
     @js_str -> JSONText
 
-Construct a JSONText, such as `js"button=false"`, without interpolation and unescaping
-(except for quotation marks `"`` which still has to be escaped). Avoiding escaping `"`` can be done by
+Construct a JSONText, such as `js"button=false"`, without String interpolation
 ```
 js\"\"\"alert("Hello World")\"\"\"
 # JSONText("alert(\"Hello World\")")
 ```
-Interpolation and escaping is supported via the `i` flag, such as
+String nterpolation is supported via the `i` flag, e.g.
 ```
 js\"\"\"alert("1 + 2 == \$(1 + 2)")\"\"\"i
 # JSONText("alert(\"1 + 2 == 3\")")
