@@ -73,6 +73,14 @@ const watcherMixin = {
           'oldval': null,
           'sesstoken': document.querySelector("meta[name='sesstoken']")?.getAttribute('content')
       }})
+    },
+    pushJSResult: function (val) {
+      this.WebChannel.sendMessageTo(this.channel_, 'watchers', {'payload': {
+          'field': '__js_result__',
+          'newval': val,
+          'oldval': null,
+          'sesstoken': document.querySelector("meta[name='sesstoken']")?.getAttribute('content')
+      }})
     }
   }
 }

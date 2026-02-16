@@ -644,6 +644,22 @@ function init(t::Type{M};
 
       field = Symbol(payload["field"])
 
+      # check if this is a message from a JS function call (`read(model, jscode)`)
+      if field == :__js_result__
+        id = get(payload["newval"], "id", nothing)
+        val = get(payload["newval"], "val", nothing)
+        js_channel = pop!(JS_RESULTS, id, nothing)
+        err = get(payload["newval"], "err", nothing)
+        if err !== nothing
+          @error "Error in JS function: $err"
+        end
+        if js_channel !== nothing
+          isopen(js_channel) && put!(js_channel, val)
+          close(js_channel)
+        end
+        return ok_response
+      end
+
       #check if field exists
       hasfield(CM, field) || return ok_response
 

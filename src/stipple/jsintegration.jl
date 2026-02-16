@@ -1,3 +1,6 @@
+using UUIDs
+const JS_RESULTS = Dict{String, Channel}()
+
 struct JSFunction
   arguments::String
   body::String
@@ -115,7 +118,60 @@ function Base.run(model::ReactiveModel, jscode::String; context = :model, kwargs
 
   nothing
 end
-Base.run(model::ReactiveModel, jscode::JSONText; context = :model, kwargs...) = Base.run(model, json(jscode); context, kwargs...)
+function Base.run(model::ReactiveModel, jscode::JSONText; context = :model, kwargs...)
+    Base.run(model, json(jscode); context, kwargs...)
+end
+
+"""
+    Base.read(model::ReactiveModel, jscode::String; context = :model, timeout = 1, kwargs...)
+
+Execute js code in the frontend and wait for a result. `context` can be `:model`, `:app`.
+The result is returned as a Julia object, or `nothing` if there was an error or timeout.
+"""
+function Base.read(model::ReactiveModel, jscode::String; context = :model, timeout = 1, kwargs...)
+  uuid = string(uuid4())
+  commands = rsplit(jsfunction(String(strip(jscode))).body, collect(";\n"), limit = 2)
+  lastcommand = strip(last(commands))
+  startswith(lastcommand, "return ") || (lastcommand = "return $lastcommand")
+  commands[end] = lastcommand
+  command = join(commands, ";\n")
+  code = js"""
+    var success = true
+    var err = null
+    var x = null
+    try {
+      x = (function() {\n$command\n})();
+    } catch (error) {
+      err = error instanceof Error ? error.message : String(error);
+      console.error('Error executing js code: ', error);
+      success = false
+    }
+    const id = '$uuid';
+    console.log('id: ', id, ', x: ', x);
+    const val = {id: id, val: x, err: err}
+    GENIEMODEL.pushJSResult(val);
+  """i
+  JS_RESULTS[uuid] = js_channel = Channel(1)
+  Timer(timeout) do _
+    if isopen(js_channel) && !isready(js_channel)
+      put!(js_channel, nothing)
+      @info "JS read timeout"
+    end
+    close(js_channel)
+    pop!(JS_RESULTS, uuid, nothing)
+  end
+  success = run(model, code; context = :model, kwargs...)
+  if !success
+    @info "Failed to execute js code on client"
+    put!(js_channel, nothing)
+  end
+  result = take!(js_channel)
+  close(js_channel)
+  return result
+end
+function Base.read(model::ReactiveModel, jscode::JSONText; context = :model, timeout = 1, kwargs...)
+    Base.read(model, json(jscode); context, timeout, kwargs...)
+end
 
 function isconnected(model, message::AbstractString = "")
     push!(model, :js_model => jsfunction("console.log('$message')"); channel = getchannel(model))
@@ -134,7 +190,8 @@ Note:
 - Table indices are 1-based because they rely on the hidden "__id" columns, which is one-based
 """
 function Base.setindex!(model::ReactiveModel, val, index::AbstractString)
-  run(model, "GENIEMODEL['$index'] = $(strip(json(render(val)), '"'))")
+  val = strip(json(render(val)), '"')
+  run(model, js"""(window?.GENIEMODEL) ? (GENIEMODEL.$index = $val) : null"""i)
 end
 
 """
