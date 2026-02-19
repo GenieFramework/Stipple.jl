@@ -8,7 +8,7 @@ import Genie
 import Stipple: deletemode!, parse_expression!, parse_expression, init_storage, striplines, striplines!, postwalk!, add_brackets!, required_evals!, parse_mixin_params
 
 #definition of handlers/events
-export @onchange, @onbutton, @event, @notify
+export @onchange, @onbutton, @event, @notify, @set, @get, @silent, @js_get, @js_set
 
 # definition of dependencies
 export @deps, @clear_deps
@@ -902,6 +902,8 @@ function transform(expr, vars::Vector{Symbol}, test_fn::Function, replace_fn::Fu
             # handle Reactive vars correctly and call notify after the update in case of set routines
             @capture(x.args[1], __model__.fieldname_[]) && (x.args[1] = :(__model__.$fieldname))
         elseif x.head == :macrocall && x.args[1] ∈ (Symbol("@push"), Symbol("@push!"), Symbol("@run"))
+          # we don't export the macros `@push`, `@run` and `@push!`, as these might
+          # collide with user definitions or other packages, and rather convert them here
           head = x.args[1] == Symbol("@push") ? :push! : Symbol(String(x.args[1])[2:end])
           args = filter(x -> !isa(x, LineNumberNode), x.args[2:end])
           has_params = length(args) > 0 && args[1] isa Expr && args[1].head == :parameters
@@ -1572,11 +1574,141 @@ macro add_client_data(expr)
 end
 
 function Base.notify(model::ReactiveModel, field::Symbol, priorities = nothing)
-  if priorities === nothing
-    notify(getfield(model, field))
-  else
     notify(getfield(model, field), priorities)
+end
+
+function app_type(M::Module, expr)
+  expr == :__model__ && return :ReactiveModel
+  try
+    M = @eval(M, typeof($expr))
+    module_name = M <: ReactiveModel ? :ReactiveModel : M.name.name
+    module_name in (:App, :Window) ? module_name : :undefined
+  catch e
+    :undefined
   end
+end
+
+function convert_index_to_js(expr; maxlevel = 1000, context::Union{Module, Nothing} = nothing)
+  a = expr = deepcopy(expr)
+  level = 1
+  ss = String[]
+  aa = []
+  head = :.
+  val = nothing
+  while a isa Expr && a.head ∈ (:., :ref) && level < maxlevel
+    push!(aa, a)
+    a = a.args[1]
+    level += 1
+  end
+  reverse!(aa)
+  index = aa[1].args[2]
+  index isa QuoteNode && (index = index.value)
+  push!(ss, "['$index']")
+  for a in aa[2:end]
+    head = a.head
+    # Stipple renders matrices in vectors of columns, therefore, indices are flipped
+    for val in a.args[end:-1:2]
+      val isa QuoteNode && (val = val.value)
+      if val isa Int
+        push!(ss, ".juliaGet($val)")
+      else
+        push!(ss, head == :. ? "['$val']" : "[$val]")
+      end
+    end
+  end
+
+  join(ss)
+end
+
+function find_app(M::Module, expr)
+  a = expr
+  vars = []
+  a isa Expr || error("Expected an expression but got '$expr'")
+  level = 1
+  while a.args[1] isa Expr && a.args[1].head ∈ (:., :ref)
+    level += 1
+    if a.args[1].head == :.
+      var_fallback = a.args[1]
+    end
+    index = a.args[end]
+    push!(vars, a)
+    a = a.args[1]
+  end
+  push!(vars, a)
+  push!(vars, a.args[1])
+  reverse!(vars)
+  index = 1
+  module_name = :undefined
+  for (i, v) in enumerate(vars)
+    module_name = app_type(M, v)
+    if module_name != :undefined
+      index = i
+      break
+    end
+  end
+  
+  # if app is an App or undefined, then check, whether it is indexed by __model__ or __window__ and return that instead
+  if module_name in (:App, :undefined)
+    if index < length(vars)
+      v_new = vars[index + 1]
+      varname = v_new.args[end]
+      if varname == :(:__model__)
+        index += 1
+        module_name = :ReactiveModel
+      elseif varname == :(:__window__)
+        index += 1
+        module_name = :Window
+      end
+    end
+  end
+  maxlevel = level - index + 2
+  index >= length(vars) && error("No fieldname detected")
+  fieldname = vars[index + 1].args[2]
+  fieldname isa QuoteNode && (fieldname = fieldname.value)
+  js_index = convert_index_to_js(expr; maxlevel)
+  return vars[index], module_name, fieldname, js_index, maxlevel - 1
+end
+
+function window_expr(args, model, js_index)
+  args = deepcopy(args)
+  args[1].args[1].args = [model, js_index]
+  args[1].args[1].head = :ref
+  args[1]
+end
+
+function model_expr(args, model, field, level, priorities)
+  args = deepcopy(args)
+  # level 2 is automatically notified, but if priorities are set, we need to 
+  # suppress the notification by referencing the field with `[]``
+  ex = if level == 2 && priorities !== nothing
+    subfield = args[1].args[1].args[end]
+    subfield isa QuoteNode && (subfield = subfield.value)
+    head = args[1].args[1].head
+
+    if head == :.
+      :($model.$field[].$subfield = $(args[1].args[2]))
+    else
+      :($model.$field[][$subfield] = $(args[1].args[2]))
+    end
+  else
+    args[1]
+  end
+  silent = priorities === NO_NOTIFY || endswith(string(priorities), "NO_NOTIFY")
+  if (level > 2 || level == 2 && priorities !== nothing) && !silent
+    quote
+      # add the original assignment
+      $(ex)
+      Base.notify($model, $(QuoteNode(field)), $priorities)
+      # return the value to be assigned
+      $(args[1].args[2])
+    end
+  else
+    args[1]
+  end
+end
+
+macro silent(arg)
+  :(Stipple.ReactiveTools.@set $arg $(Stipple.ReactiveTools.NO_NOTIFY)) |> esc
 end
 
 """
@@ -1587,21 +1719,10 @@ end
   ```
   @onchange x begin
     @notify "This message will appear in the UI"
-    # trigger the handlers of field `:y``
-    @notify :y
+    # trigger the handlers of fields `:y` and `:z`
+    @notify :y :z
   end
   ```
-  
-  ### Syntax 2 - Notification in normal functions
-  @notify model.x, args...
-  ### Example
-  ```
-  @notify model.x
-
-  If the first expression contains a dot or [] syntax, call `notify(model, :x, args...)
-
-  ### Syntax 3 - etting and notification
-
 
 """
 macro notify(args...)
@@ -1609,56 +1730,157 @@ macro notify(args...)
     arg isa Expr && arg.head == :(=) && (arg.head = :kw)
   end
 
-  if args[1] isa Expr && args[1].head ∈ (:., :ref)
-    a = args[1]
-    while a.args[1] isa Expr && a.args[1].head ∈ (:., :ref)
-      a = a.args[1]
+  :(Base.notify(__model__, $(args...))) |> esc
+end
+
+# macros `@run`and `@push` currently not in use, we handle them in `transform()` instead
+macro run(args...)
+  for arg in args
+    arg isa Expr && arg.head == :(=) && (arg.head = :kw)
+  end
+
+  :(Base.run(__model__, $(args...))) |> esc
+end
+
+macro push(args...)
+  args = Any[args...]
+  # also accept Symbols or replaced symbols for convenience
+  for (i, arg) in enumerate(args)
+    if arg isa Symbol
+      args[i] = QuoteNode(arg)
+    elseif arg isa Expr && arg.head == :ref && (arg.args[1].args[1] == :__model__)
+      args[i] = arg.args[1].args[2]
     end
-    model, field = a.args[1:2]
-    quote
-      Base.notify($model, $field, $(args[2:end]...))
-    end
-  elseif args[1] isa Expr && args[1].head == :kw
-    args[1].head = :(=)
-    a = args[1].args[1]
-    level = 1
-    while a.args[1] isa Expr && a.args[1].head ∈ (:., :ref)
-      level += 1
-      a = a.args[1]
-    end
-    model, field = a.args[1:2]
-    ex = quote
-      $(args[1])
-    end
-    if level == 1
-      # for direct fields use syntax `model[:field, priorities] = ...` syntax
-      # switch to setindex! syntax
-      a.head = :ref
-      # append priorities
-      priorities = length(args) == 1 ? :nothing : args[2]
-      push!(args[1].args[1].args, priorities)
-    else
-      # add extra statements for notification
-      M = try
-        @eval(__module__, typeof($model))
-      catch
-        ReactiveModel
-      end
-      @show M.name.name
-      if !(M <: ReactiveModel)
-        fieldname = QuoteNode(Symbol(split(string(args[1].args[1]), '.', limit = 2)[2]))
-        args[1].args[1].args = [model, fieldname]
-        args[1].args[1].head = :.
-      end
-      push!(ex.args, :(Base.notify($model, $field, $(args[2:end]...))))
-      push!(ex.args, :($(args[1].args[2])))
-    end
-    ex
+  end
+
+  :(Base.push!(__model__, $(args...))) |> esc
+end
+
+const NO_NOTIFY = _ -> false
+
+macro set(arg, priorities = nothing, force_js = false)
+  if force_js isa Expr
+    force_js = force_js.head == :(=) && force_js.args[1] == :force_js && force_js.args[2]
+  end
+
+  args = [arg, priorities]
+  a = args[1].args[1]
+  model, M, field, js_index, level = find_app(__module__, a)
+  m = model
+  while a isa Expr && a.args[1] isa Expr && a.args[1].head ∈ (:., :ref)
+    a = a.args[1]
+  end
+  priorities = length(args) == 1 ? :nothing : args[2]
+  if level == 1
+    # for direct fields use syntax `model[:field, priorities] = ...` syntax
+    # switch to setindex! syntax, which handles notification
+    push!(args[1].args[1].args, priorities)
+    :($model[$(QuoteNode(field)), $priorities] = $(args[1].args[2])) |> esc
   else
-    quote
-      Base.notify(__model__, $(args...))
+    # add extra statements for notification
+    # M = app_type(__module__, model)
+    if M == :Window
+      window_expr(args, model, js_index) |> esc
+    elseif M == :ReactiveModel
+      model_expr(args, model, field, level, priorities) |> esc
+    elseif M == :App
+      ex1 = window_expr(args, :($model.__window__), js_index)
+      # a refers to the array in args that contains the model as a.args[1],
+      # so we need the original args to rename it
+      a.args[1] = :($(a.args[1]).__model__)
+      ex2 = model_expr(args, :($model.__model__), field, level, priorities)
+      :($model.__model__ === nothing ? $ex1 : $ex2) |> esc
+    else
+      ex1 = window_expr(args, model, js_index)
+      ex1b = window_expr(args, :($model.__window__), js_index)
+
+      ex2 = model_expr(deepcopy(args), model, field, level, priorities)
+
+      a.args[1] = :($(a.args[1]).__model__)
+      ex2b = model_expr(args, :($model.__model__), field, level, priorities)
+
+      window_qn = QuoteNode(:Window)
+      :(if $model isa App
+          $model.__model__ === nothing ? $ex1b : $ex2b
+        elseif typeof($model).name.name == $window_qn # as we don't Electron in Stipple, we check for the name
+          $ex1
+        elseif $model isa ReactiveModel
+          $ex2
+        else
+          error("App type not supported")
+        end
+      ) |> esc
     end
-  end |> esc
+  end
+end
+
+macro js_get(arg)
+  :(@get $arg true) |> esc
+end
+
+macro js_set(arg, priorities, force_js)
+  :(@set $arg true) |> esc
+end
+
+macro get(arg, force_js = false)
+  if force_js isa Expr
+    force_js = force_js.head == :(=) && force_js.args[1] == :force_js && force_js.args[2]
+  end
+
+  args = [Expr(:block, arg)]
+  a = args[1].args[1]
+  model, M, field, js_index, level = find_app(__module__, a)
+  
+  while a isa Expr && a.args[1] isa Expr && a.args[1].head ∈ (:., :ref)
+    a = a.args[1]
+  end
+  if level > 0
+    # add extra statements for notification
+    # M = app_type(__module__, model)
+    if M == :Window || M == :ReactiveModel && force_js
+      :($model[$js_index]) |> esc
+    elseif M == :ReactiveModel
+      args[1] |> esc
+    elseif M == :App
+      ex1 = :($model[$js_index])
+
+      ex2 = args[1]
+      if force_js
+        ex1 |> esc
+      else
+        :($model.__model__ === nothing ? $ex1 : $ex2) |> esc
+      end
+    else
+      ex1 = :($model[$js_index])
+      ex1b = :($model.__window__[$js_index])
+
+      ex2 = args[1]
+      window_qn = QuoteNode(:Window)
+      if force_js
+          :(if $model isa App
+            ex1b |> esc
+          elseif typeof($model).name.name == $window_qn # as we don't Electron in Stipple, we check for the name
+            $ex1
+          elseif $model isa ReactiveModel
+            $ex2
+          else
+            error("App type not supported")
+          end
+        ) |> esc
+      else
+        :(if $model isa App
+            $model.__model__ === nothing ? $ex1b : $ex2
+          elseif typeof($model).name.name == $window_qn # as we don't Electron in Stipple, we check for the name
+            $ex1
+          elseif $model isa ReactiveModel
+            $ex2
+          else
+            error("App type not supported")
+          end
+        ) |> esc
+      end
+    end
+  end
 end
 
 """
