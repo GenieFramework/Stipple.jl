@@ -1,3 +1,44 @@
+// add prototype functions to allow for julia-based indexing:
+// Array methods
+Object.defineProperty(Array.prototype, 'juliaGet', {
+  value: function(index) {
+    return this[index - 1];
+  },
+  enumerable: false,
+  writable: true,
+  configurable: true
+});
+
+Object.defineProperty(Array.prototype, 'juliaSet', {
+  value: function(index, value) {
+    this[index - 1] = value;
+    return this;
+  },
+  enumerable: false,
+  writable: true,
+  configurable: true
+});
+
+// Object methods
+Object.defineProperty(Object.prototype, 'juliaGet', {
+  value: function(key) {
+    return this[key];
+  },
+  enumerable: false,
+  writable: true,
+  configurable: true
+});
+
+Object.defineProperty(Object.prototype, 'juliaSet', {
+  value: function(key, value) {
+    this[key] = value;
+    return this;
+  },
+  enumerable: false,
+  writable: true,
+  configurable: true
+});
+
 const watcherMixin = {
   methods: {
     // Acknowledgement: copied watchIgnorable from VueUse
