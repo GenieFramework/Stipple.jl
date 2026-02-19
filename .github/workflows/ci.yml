@@ -4,7 +4,7 @@ on:
   - pull_request
 jobs:
   test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.os }}
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }}
     continue-on-error: ${{ matrix.version == 'nightly' || matrix.version == 'pre'  }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -19,17 +19,22 @@ jobs:
           - ubuntu-latest
           - macOS-latest
           - windows-latest
+        arch:
+          - ''
         exclude:
           - os: macos-latest # Apple Silicon
             version: '1.6'
+            arch: ''
         include:
-          - os: macos-13 # Intel
+          - os: macos-latest # Intel
             version: '1.6'
+            arch: 'x64'
     steps:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@latest
         with:
           version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
       - uses: julia-actions/julia-buildpkg@latest
       - uses: julia-actions/julia-runtest@latest
       - name: Handle optional failures and continue without failing the workflow
