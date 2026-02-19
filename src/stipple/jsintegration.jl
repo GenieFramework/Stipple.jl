@@ -147,7 +147,6 @@ function Base.read(model::ReactiveModel, jscode::String; context = :model, timeo
       success = false
     }
     const id = '$uuid';
-    console.log('id: ', id, ', x: ', x);
     const val = {id: id, val: x, err: err}
     GENIEMODEL.pushJSResult(val);
   """i
@@ -169,6 +168,7 @@ function Base.read(model::ReactiveModel, jscode::String; context = :model, timeo
   close(js_channel)
   return result
 end
+
 function Base.read(model::ReactiveModel, jscode::JSONText; context = :model, timeout = 1, kwargs...)
     Base.read(model, json(jscode); context, timeout, kwargs...)
 end
@@ -178,7 +178,7 @@ function isconnected(model, message::AbstractString = "")
 end
 
 """
-  function Base.setindex!(model::ReactiveModel, val, index::AbstractString)
+  function Base.setindex!(model::ReactiveModel, val, index::Union{AbstractString, JSONText})
 
 Set model fields or subfields on the client.
 ```
@@ -189,9 +189,34 @@ Note:
 - Array indices are zero-based because the code is executed on the client side
 - Table indices are 1-based because they rely on the hidden "__id" columns, which is one-based
 """
-function Base.setindex!(model::ReactiveModel, val, index::AbstractString)
-  val = strip(json(render(val)), '"')
-  run(model, js"""(window?.GENIEMODEL) ? (GENIEMODEL.$index = $val) : null"""i)
+function Base.setindex!(model::ReactiveModel, val, index::Union{AbstractString, JSONText})
+  index isa JSONText && (index = json(index))
+  startswith(index, '[') || (index = ".$index")
+  js_value = json(render(val))
+  code = if endswith(index, r"juliaGet\(\d+\)")
+    index = replace(index, r"juliaGet\((\d+)\)$" => s"juliaSet(\1")
+    "GENIEMODEL$index, $js_value)"
+  else
+    # setField always triggers the push to the backend and supports multilevel indexing
+    """GENIEMODEL.setField("$index", $js_value)"""
+  end
+  run(model, js"""(window?.GENIEMODEL) ? ($code) : null"""i)
+end
+
+"""
+  function Base.getindex(model::ReactiveModel, index::Union{AbstractString, JSONText})
+
+Read model fields or subfields on the client.
+```
+model["plot.data[0].selectedpoints"]
+```
+Note:
+- Array indices are zero-based because the code is executed on the client side
+- Table indices are 1-based because they rely on the hidden "__id" columns, which is one-based
+"""
+function Base.getindex(model::ReactiveModel, index::Union{AbstractString, JSONText})
+  index isa JSONText && (index = json(index))
+  read(model, js"""GENIEMODEL?.$index"""i)
 end
 
 """
