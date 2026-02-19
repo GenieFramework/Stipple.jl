@@ -86,19 +86,67 @@ const watcherMixin = {
         }
       }
     },
+    setFieldRaw: function (path, value) {
+      // convert path to keys (e.g. "a[0].b" -> ["a", 0, "b"])
+      const pathRegex = /([^.[\]]+)|\[(?:'([^']*)'|"([^"]*)"|([^\]]*))\]/g;
+      const keys = [];
+      let match;
 
-    updateField: function (field, newVal) {
-      if (field=='js_app') { newVal(); return }
+      while ((match = pathRegex.exec(path)) !== null) {
+        let key = match[1] || match[2] || match[3] || match[4];
+
+        // if match[4] is a hit, check wether it is a number and parse it to a decimal number
+        if (match[4] && /^\d+$/.test(match[4])) {
+          key = parseInt(match[4], 10);
+        }
+        
+        keys.push(key);
+      }
+      // travel down the tree
+      let current = this; 
+
+      for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+
+        // prevent prototype pollution
+        if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+          throw new Error("Alert: Illegal field name '" + key + "'");
+        }
+        // if at the end of the tree, set the value
+        if (i === keys.length - 1) {
+          current[key] = value;
+          return current[key]
+        } else {
+          // otherwise travel down
+          current = current[key] || {};
+        }
+      }
+    },
+    setField: function (index, value) {
+      // set a field's value and always triggers a push to the backend
+      // accepts multilevel indexing
+      // update the field without trigger
+      this.updateField(index, value)
+      firstindex = index.match(/(?:^[\["'.]*)([^.\'"\[]+)/)?.[1]
+      firstindex = firstindex || index
+      // explicitly push to the backend
+      this.push(firstindex)
+    },
+    updateField: function (index, newVal) {
+      if (index=='js_app') { newVal(); return }
 
       try {
-        if (this['_ignore_' + field]) {
-          this['_ignore_' + field](()=>{this[field] = newVal});
+        // make sure we know the first index
+        firstindex = index.match(/(?:^[\["'.]*)([^.\'"\[]+)/)?.[1]
+        firstindex = firstindex || index
+        if (this['_ignore_' + firstindex]) {
+          this['_ignore_' + firstindex](() => this.setFieldRaw(index, newVal));
         } else {
-          this[field] = newVal
+          this.setFieldRaw(index, newVal)
         }
-        if (field=='js_model' && typeof(this[field])=='function') { 
-          this[field]()
-          this[field] = null
+        if (index=='js_model' && typeof(this[index])=='function') { 
+          this[index]()
+          this[index] = null
         }
       } catch(ex) {
         if (Genie.Settings.env == 'dev') {
