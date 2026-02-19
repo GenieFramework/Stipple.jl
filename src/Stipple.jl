@@ -901,9 +901,22 @@ end
 function Base.push!(app::M, field::Symbol;
                   channel::String = getchannel(app),
                   except::Union{Nothing,UInt,Vector{UInt}} = nothing,
-                  restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {M<:ReactiveModel}
-  isprivate(field, app) && return false
+                  restrict::Union{Nothing,UInt,Vector{UInt}} = nothing
+)::Bool where {M<:ReactiveModel}
+  (!hasproperty(app, field) || isprivate(field, app)) && return false
   push!(app, field => getproperty(app, field); channel, except, restrict)
+end
+
+function Base.push!(app::M, field::Symbol, field2::Symbol, fields::Symbol...;
+                  channel::String = getchannel(app),
+                  except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                  restrict::Union{Nothing,UInt,Vector{UInt}} = nothing
+)::Bool where {M<:ReactiveModel}
+  result = true
+  for field in [field, field2, fields...]
+    push!(app, field; channel, except, restrict) || (result = false)
+  end
+  result
 end
 
 @specialize
