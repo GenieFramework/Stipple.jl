@@ -20,11 +20,11 @@ jobs:
           - macOS-latest
           - windows-latest
         exclude:
-          - github-runner: macos-latest # Apple Silicon
-            julia-version: '1.6'
+          - os: macos-latest # Apple Silicon
+            version: '1.6'
         include:
-          - github-runner: macos-13 # Intel
-            julia-version: '1.6'
+          - os: macos-13 # Intel
+            version: '1.6'
     steps:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@latest
