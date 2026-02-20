@@ -1040,13 +1040,11 @@ function store_debug_model(model::ReactiveModel)
   delete!(DEBUG_MODELS, debug_id)
   DEBUG_MODELS[debug_id] = model
   length(DEBUG_MODELS) > DEBUG_MODELS_MAX_LENGTH[] && popfirst!(DEBUG_MODELS)
+  
+  # use Float64 as timeout to guarantee compatibility with Julia 1.6
   timeout = tryparse(Float64, params(:debug_timeout, ""))
-  timeout = if timeout === nothing
-    DEBUG_MODELS_TIMEOUT[]
-  else
-    Millisecond(round(1000 * timeout))
-  end
-  timeout > Second(0) && Timer(timeout) do _
+  timeout === nothing && (timeout = Dates.toms(DEBUG_MODELS_TIMEOUT[]) / 1000)
+  timeout > 0 && Timer(timeout) do _
     stored_model = pop!(DEBUG_MODELS, debug_id, nothing)
     # if the model we removed had been replaced, put it back
     stored_model !== nothing && stored_model !== model && push!(DEBUG_MODELS, debug_id => stored_model)
