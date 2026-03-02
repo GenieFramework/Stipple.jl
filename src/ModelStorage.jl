@@ -97,7 +97,7 @@ function init_from_storage( t::Type{M};
     if field isa Reactive
       eltype_mismatch = false
       # restore fields only if a stored model exists, if the field is not part of the internal fields and is not write protected
-      if isnothing(stored_model) || f ∈ [Stipple.INTERNALFIELDS..., Stipple.AUTOFIELDS...] ||
+      if isnothing(stored_model) || f ∈ Stipple.INTERNALFIELDS || f ∈ Stipple.AUTOFIELDS ||
           Stipple.isprivate(f, model) || ! hasproperty(stored_model, f) || ! hasproperty(model, f)
       else
         if eltype(field) != eltype(getfield(stored_model, f))
@@ -126,7 +126,7 @@ function init_from_storage( t::Type{M};
       end
 
       # register reactive handlers to automatically save model on session when model changes
-      if f ∉ [Stipple.AUTOFIELDS...]
+      if f ∉ Stipple.AUTOFIELDS
         on(field) do _
           GenieSession.set!(model_id(M), model)
         end
