@@ -234,8 +234,11 @@ end
 
 function var_to_storage(T, prefix = "", postfix = ""; mode = READONLY, mixin_name = nothing)
   M, m = if T isa DataType
-    T <: ReactiveModel && (T = get_concrete_type(T))
-    T, T()
+    # typeof(t) instead of T is necessary to also cover cases, where a constructor of an abstract type is defined
+    # this is the case for abstract ReactiveModel types, but maybe the case for
+    # mixins defined in extensions, e.g. PBPlotWithEvents from StipplePlotlyPlotlyBaseExt
+    t = T()
+    typeof(t), t
   else
     typeof(T), T
   end
