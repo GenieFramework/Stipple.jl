@@ -105,7 +105,7 @@ plugins() = plugins(ReactiveModel)
 Generates a valid JavaScript object name to be used as the name of the Vue app -- and its respective HTML container.
 """
 function root(::Type{M})::String where {M<:ReactiveModel}
-  Stipple.routename(M)
+  Stipple.routename(Stipple.get_abstract_type(M))
 end
 
 root(::M) where M<:ReactiveModel = root(M)

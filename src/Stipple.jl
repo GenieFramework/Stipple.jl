@@ -1044,7 +1044,8 @@ function deps!(m::Any, M::Module)
 end
 
 function deps!(M::Type{<:ReactiveModel}, f::Function; extra_deps = true)
-  key = extra_deps ? Symbol("_$(vm(M))_$(nameof(f))") : M
+  AM = get_abstract_type(M)
+  key = extra_deps ? Symbol("_$(vm(AM))_$(nameof(f))") : AM
   DEPS[key] = f isa Function ? f : f.deps
 end
 
