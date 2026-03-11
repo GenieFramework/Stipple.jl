@@ -525,7 +525,7 @@ macro var_storage(expr, handler = nothing)
         # prevent overwriting of control fields
         var ∈ [INTERNALFIELDS..., AUTOFIELDS...] && continue
         if reactive == false
-            Stipple.setmode!(storage[:modes__], Core.eval(Stipple, mode), var)
+            Stipple.setmode!(storage[:modes__], getfield(Stipple, mode), var)
         end
 
         storage[var] = ex
