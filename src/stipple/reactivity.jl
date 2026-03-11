@@ -176,7 +176,7 @@ function Base.setproperty!(model::ReactiveModel, fieldname::Symbol, value)
     if field isa Reactive
         field[] = value
     else
-        setfield!(model, field, value)
+        setfield!(model, fieldname, value)
     end
 end
 
