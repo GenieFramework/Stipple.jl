@@ -62,20 +62,26 @@ julia> layout([
 "<link href=\"https://fonts.googleapis.com/css?family=Material+Icons\" rel=\"stylesheet\" /><link href=\"https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,400;0,700;0,900;1,400&display=swap\" rel=\"stylesheet\" /><link href=\"/css/stipple/stipplecore.css\" rel=\"stylesheet\" /><link href=\"/css/stipple/quasar.min.css\" rel=\"stylesheet\" /><span v-text='greeting'>Hello</span><script src=\"/js/channels.js?v=1.17.1\"></script><script src=\"/js/underscore-min.js\"></script><script src=\"/js/vue.global.prod.js\"></script><script src=\"/js/quasar.umd.prod.js\"></script>\n<script src=\"/js/apexcharts.min.js\"></script><script src=\"/js/vue-apexcharts.min.js\"></script><script src=\"/js/stipplecore.js\" defer></script><script src=\"/js/vue_filters.js\" defer></script>"
 ```
 """
-function layout(output::Union{S,Vector}, m::Union{M, Vector{M}};
+function layout(output::Union{<:AbstractString, Vector}, m::Union{M, Vector{M}};
                 partial::Bool = false, title::String = "", class::String = "", style::String = "", head_content::Union{AbstractString, Vector{<:AbstractString}} = "",
                 channel::String = Stipple.channel_js_name,
                 core_theme::Bool = true,
-                sess_token::Bool = true)::ParsedHTMLString where {M<:ReactiveModel, S<:AbstractString}
+                sess_token::Bool = true,
+                include_themes::Bool = true,
+                include_deps::Bool = true
+)::ParsedHTMLString where {M<:ReactiveModel}
+  # in latest DEFAULT_LAYOUT the themes go in the <head> section, so `@page` calls layout with include_themes = false
+  # n order to provide backward compatibility with older layouts we default this to `true``
+  output isa String || (output = join(output, '\n'))
+  mm = m isa Vector ? m : [m]
 
-  isa(output, Vector) && (output = join(output, '\n'))
-  m isa Vector || (m = [m])
-
-  content = [
-    output
-    theme(; core_theme)
-    Stipple.deps.(m)...
-  ]
+  content = String[output]
+  # append themes in body only if partial = true and include_themes = true for backward compatibility
+  # the new DEFAULT_LAYOUT calls page() and hence layout() with include_themes = false
+  include_themes && partial && append!(content, theme(; core_theme))
+  include_deps && for m in mm
+    append!(content, Stipple.deps(m))
+  end
 
   make_unique!(content, contains(r"src=|href="i))
 
@@ -85,7 +91,7 @@ function layout(output::Union{S,Vector}, m::Union{M, Vector{M}};
   if !contains(head_content, "<meta name=\"sesstoken\"") && sess_token
     head_content *= Stipple.sesstoken()
   end
-  head_content = "<style>[v-cloak] {display: none}</style>" * head_content
+  head_content = string("\n    <style>[v-cloak] {display: none}</style>\n    ", head_content, include_themes ? join(theme(; core_theme), "\n    ") : "")
   Genie.Renderer.Html.doc(
     Genie.Renderer.Html.html([
       Genie.Renderer.Html.head([
@@ -122,7 +128,10 @@ function page(model::Union{M, Vector{M}}, args...;
               core_theme::Bool = true,
               sess_token::Bool = true,
               v__cloak::Bool = true,
-              kwargs...)::ParsedHTMLString where {M<:Stipple.ReactiveModel, S<:AbstractString,T<:AbstractString}
+              include_themes::Bool = true,
+              include_deps::Bool = true,
+              kwargs...
+)::ParsedHTMLString where {M<:Stipple.ReactiveModel, S<:AbstractString,T<:AbstractString}
   uis = if !isempty(args)
     args[1] isa Vector && model isa Vector ? args[1] : [args[1]]
   else
@@ -143,7 +152,7 @@ function page(model::Union{M, Vector{M}}, args...;
       pagetemplate([Genie.Renderer.Html.div(id = rootselector(m), ui, args[2:end]...; class = class, v__cloak, kwargs...) for (m, ui) in zip(model, uis)]...)
       join(append)
     ], model;
-    partial, title, style, head_content, channel, core_theme, sess_token)
+    partial, title, style, head_content, channel, core_theme, sess_token, include_themes, include_deps)
 end
 
 const app = page
