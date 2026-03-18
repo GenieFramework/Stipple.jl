@@ -26,8 +26,9 @@ function keepalive(WebChannel) {
 
 function keepaliveTimer(WebChannel, startDelay = Genie.Settings.webchannels_keepalive_frequency) {
   clearInterval(WebChannel.keepalive_interval);
-  setTimeout(() => {
+  clearTimeout(WebChannel._keepaliveTimeout);
+  WebChannel._keepaliveTimeout = setTimeout(() => {
     keepalive(WebChannel);
     WebChannel.keepalive_interval = setInterval(() => keepalive(WebChannel), Genie.Settings.webchannels_keepalive_frequency);
-  }, startDelay)
+  }, startDelay);
 }
