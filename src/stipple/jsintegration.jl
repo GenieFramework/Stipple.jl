@@ -1,3 +1,6 @@
+using UUIDs
+const JS_RESULTS = Dict{String, Channel}()
+
 struct JSFunction
   arguments::String
   body::String
@@ -9,8 +12,7 @@ JSFunction(s1::Symbol, s2::Symbol, body::Union{AbstractString, JSONText} = "") =
 JSFunction(s1::Symbol, s2::Symbol, s3::Symbol, body::Union{AbstractString, JSONText} = "") = JSFunction(join([s1, s2, s3], ", "), "$body")
 JSFunction(s1::Symbol, s2::Symbol, s3::Symbol, s4::Symbol, body::Union{AbstractString, JSONText} = "") = JSFunction(join([s1, s2, s3, s4], ", "), "$body")
 
-StructTypes.StructType(::Type{JSFunction}) = StructTypes.CustomStruct()
-StructTypes.lower(jsfunc::JSFunction) = Dict(:jsfunction => OrderedDict(:arguments => jsfunc.arguments, :body => jsfunc.body))
+JSON.lower(jsfunc::JSFunction) = Dict(:jsfunction => OrderedDict(:arguments => jsfunc.arguments, :body => jsfunc.body))
 
 function Stipple.render(jsfunc::JSFunction)
   opts(jsfunction = opts(arguments = jsfunc.arguments; body = jsfunc.body))
@@ -56,7 +58,7 @@ function replace_jsfunction!(d::Dict)
         if isa(v, Dict) || isa(v, Array)
             replace_jsfunction!(v)
         elseif isa(v, JSONText)
-            jsfunc = parse_jsfunction(v.s)
+            jsfunc = parse_jsfunction(json(v))
             isnothing(jsfunc) || ( d[k] = opts(jsfunction=jsfunc) )
         end
     end
@@ -79,7 +81,7 @@ function replace_jsfunction(v::Vector)
 end
 
 function replace_jsfunction(js::JSONText)
-    jsfunc = parse_jsfunction(js.s)
+    jsfunc = parse_jsfunction(json(js))
     isnothing(jsfunc) ? js : JSONText(json(opts(jsfunction=jsfunc)))
 end
 
@@ -116,13 +118,67 @@ function Base.run(model::ReactiveModel, jscode::String; context = :model, kwargs
 
   nothing
 end
+function Base.run(model::ReactiveModel, jscode::JSONText; context = :model, kwargs...)
+    Base.run(model, json(jscode); context, kwargs...)
+end
+
+"""
+    Base.read(model::ReactiveModel, jscode::String; context = :model, timeout = 1, kwargs...)
+
+Execute js code in the frontend and wait for a result. `context` can be `:model`, `:app`.
+The result is returned as a Julia object, or `nothing` if there was an error or timeout.
+"""
+function Base.read(model::ReactiveModel, jscode::String; context = :model, timeout = 1, kwargs...)
+  uuid = string(uuid4())
+  commands = rsplit(jsfunction(String(strip(jscode))).body, collect(";\n"), limit = 2)
+  lastcommand = strip(last(commands))
+  startswith(lastcommand, "return ") || (lastcommand = "return $lastcommand")
+  commands[end] = lastcommand
+  command = join(commands, ";\n")
+  code = js"""
+    var success = true
+    var err = null
+    var x = null
+    try {
+      x = (function() {\n$command\n})();
+    } catch (error) {
+      err = error instanceof Error ? error.message : String(error);
+      console.error('Error executing js code: ', error);
+      success = false
+    }
+    const id = '$uuid';
+    const val = {id: id, val: x, err: err}
+    GENIEMODEL.pushJSResult(val);
+  """i
+  JS_RESULTS[uuid] = js_channel = Channel(1)
+  Timer(timeout) do _
+    if isopen(js_channel) && !isready(js_channel)
+      put!(js_channel, nothing)
+      @info "JS read timeout"
+    end
+    close(js_channel)
+    pop!(JS_RESULTS, uuid, nothing)
+  end
+  success = run(model, code; context = :model, kwargs...)
+  if !success
+    @info "Failed to execute js code on client"
+    put!(js_channel, nothing)
+  end
+  result = take!(js_channel)
+  close(js_channel)
+  return result
+end
+
+function Base.read(model::ReactiveModel, jscode::JSONText; context = :model, timeout = 1, kwargs...)
+    Base.read(model, json(jscode); context, timeout, kwargs...)
+end
 
 function isconnected(model, message::AbstractString = "")
     push!(model, :js_model => jsfunction("console.log('$message')"); channel = getchannel(model))
 end
 
 """
-  function Base.setindex!(model::ReactiveModel, val, index::AbstractString)
+  function Base.setindex!(model::ReactiveModel, val, index::Union{AbstractString, JSONText})
 
 Set model fields or subfields on the client.
 ```
@@ -133,8 +189,34 @@ Note:
 - Array indices are zero-based because the code is executed on the client side
 - Table indices are 1-based because they rely on the hidden "__id" columns, which is one-based
 """
-function Base.setindex!(model::ReactiveModel, val, index::AbstractString)
-  run(model, "this.$index = $(strip(json(render(val)), '"'))")
+function Base.setindex!(model::ReactiveModel, val, index::Union{AbstractString, JSONText})
+  index isa JSONText && (index = json(index))
+  startswith(index, '[') || (index = ".$index")
+  js_value = json(render(val))
+  code = if endswith(index, r"juliaGet\(\d+\)")
+    index = replace(index, r"juliaGet\((\d+)\)$" => s"juliaSet(\1")
+    "GENIEMODEL$index, $js_value)"
+  else
+    # setField always triggers the push to the backend and supports multilevel indexing
+    """GENIEMODEL.setField("$index", $js_value)"""
+  end
+  run(model, js"""(window?.GENIEMODEL) ? ($code) : null"""i)
+end
+
+"""
+  function Base.getindex(model::ReactiveModel, index::Union{AbstractString, JSONText})
+
+Read model fields or subfields on the client.
+```
+model["plot.data[0].selectedpoints"]
+```
+Note:
+- Array indices are zero-based because the code is executed on the client side
+- Table indices are 1-based because they rely on the hidden "__id" columns, which is one-based
+"""
+function Base.getindex(model::ReactiveModel, index::Union{AbstractString, JSONText})
+  index isa JSONText && (index = json(index))
+  read(model, js"""GENIEMODEL?.$index"""i)
 end
 
 """
@@ -147,5 +229,5 @@ notify(model, js"plot.data")
 ```
 """
 function Base.notify(model::ReactiveModel, field::JSONText)
-  run(model, "this.$(field.s).__ob__.dep.notify()")
+  run(model, "this.$(json(field)).__ob__.dep.notify()")
 end

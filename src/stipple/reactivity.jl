@@ -155,6 +155,31 @@ end
 """
 abstract type ReactiveModel end
 
+Base.getindex(model::ReactiveModel, fieldname::Symbol) = getfield(model, fieldname)
+
+function Base.setindex!(model::ReactiveModel, value, fieldname::Symbol)
+    field = getfield(model, fieldname)
+    if field isa Reactive
+      getfield(field, :o).val = value
+    else
+      field = value
+    end
+end
+function Base.setindex!(model::ReactiveModel, value, field::Symbol, priorities)
+    setindex!(model, value, field)
+    model[field] isa Reactive && notify(model[field], priorities)
+    value
+end
+
+function Base.setproperty!(model::ReactiveModel, fieldname::Symbol, value)
+    field = getfield(model, fieldname)
+    if field isa Reactive
+        field[] = value
+    else
+        setfield!(model, fieldname, value)
+    end
+end
+
 struct MixinExpr
   M::Union{Expr, Symbol, QuoteNode}
   prefix::String
@@ -209,8 +234,11 @@ end
 
 function var_to_storage(T, prefix = "", postfix = ""; mode = READONLY, mixin_name = nothing)
   M, m = if T isa DataType
-    T <: ReactiveModel && (T = get_concrete_type(T))
-    T, T()
+    # typeof(t) instead of T is necessary to also cover cases, where a constructor of an abstract type is defined
+    # this is the case for abstract ReactiveModel types, but maybe the case for
+    # mixins defined in extensions, e.g. PBPlotWithEvents from StipplePlotlyPlotlyBaseExt
+    t = T()
+    typeof(t), t
   else
     typeof(T), T
   end
@@ -498,7 +526,7 @@ macro var_storage(expr, handler = nothing)
       # prevent overwriting of control fields
       var ∈ [INTERNALFIELDS..., AUTOFIELDS...] && continue
       if reactive == false
-          Stipple.setmode!(storage[:modes__], Core.eval(Stipple, mode), var)
+          Stipple.setmode!(storage[:modes__], getfield(Stipple, mode), var)
       end
 
       storage[var] = ex
@@ -754,10 +782,10 @@ notify(observable, >(0))
 notify(observable, ≠(1))
 ```
 """
-function Base.notify(@nospecialize(observable::AbstractObservable), priority::Union{Int, Function})
+function Base.notify(@nospecialize(observable::AbstractObservable), priority::Union{Int, Function, Nothing})
   val = observable[]
   for (p, f) in Observables.listeners(observable)::Vector{Pair{Int, Any}}
-      (priority isa Int ? p == priority : priority(p)) || continue
+      priority === nothing || (priority isa Int ? p == priority : priority(p)) || continue
       result = Base.invokelatest(f, val)
       if result isa Consume && result.x
           # stop calling callbacks if event got consumed
@@ -1019,4 +1047,63 @@ function unsynchronize!(o::AbstractObservable, o_sync::Union{AbstractObservable,
       off(o1, cb)
     end
   end
+end
+
+const DEBUG_MODELS = OrderedDict{String, ReactiveModel}()
+const DEBUG_MODELS_MAX_LENGTH = Ref(10)
+const DEBUG_MODELS_TIMEOUT = RefValue{Period}(Second(60))
+const DEBUG_MODELS_ENABLED = RefValue{Union{Nothing, Bool}}(nothing)
+
+"""
+    store_debug_model(model::ReactiveModel)
+
+Store a ReactiveModel instance for debugging if the parameter :debug_id is set and 
+remove it from storage after a timeout defined by DEBUG_MODELS_TIMEOUT. The timeout can be modified by 
+adding a parameter :debug_timeout, which defines the timeout in Seconds. Floating point values are allowed.
+If a model has been stored it can be retrieved by using `debug_model(id::String; timeout)`.
+"""
+function store_debug_model(model::ReactiveModel)
+  if DEBUG_MODELS_ENABLED[] === nothing && Genie.isprod() || DEBUG_MODELS_ENABLED[] === false
+    return nothing
+  end
+  debug_id = params(:debug_id, nothing)
+  debug_id === nothing && return
+  delete!(DEBUG_MODELS, debug_id)
+  DEBUG_MODELS[debug_id] = model
+  length(DEBUG_MODELS) > DEBUG_MODELS_MAX_LENGTH[] && popfirst!(DEBUG_MODELS)
+  
+  # use Float64 as timeout to guarantee compatibility with Julia 1.6
+  timeout = tryparse(Float64, params(:debug_timeout, ""))
+  timeout === nothing && (timeout = Dates.toms(DEBUG_MODELS_TIMEOUT[]) / 1000)
+  timeout > 0 && Timer(timeout) do _
+    stored_model = pop!(DEBUG_MODELS, debug_id, nothing)
+    # if the model we removed had been replaced, put it back
+    stored_model !== nothing && stored_model !== model && push!(DEBUG_MODELS, debug_id => stored_model)
+  end
+  return nothing
+end
+
+"""
+    debug_model(id::String)
+
+Retrieve the model corresponding to the debug id 'id'. If timeout > 0 is specified wait for a model to be stored.
+In order to store a model, call the desired page with a query parameter 'debug_id' and optionally specify a timeout (in s)
+after which the model will be deleted from the storage to prevent misuse and to allow for garbage collection.
+
+### Example
+url = URI("http://localhost:8000/?debug_id=window_1&debug_timeout=10")
+using Electron
+win = Window(url, options => Dict("sandbox" => true))
+model = Stipple.debug_model("window_1"; timeout = 10)
+# start testing/debugging
+"""
+function debug_model(id::String; timeout::Union{Real, Period} = Second(0))
+  timeout isa Real && (timeout = Millisecond(round(1000 * timeout)))
+  model = get(DEBUG_MODELS, id, nothing)
+  t0 = Dates.now()
+  while model === nothing && now() - timeout < t0
+    sleep(0.2)
+    model = get(DEBUG_MODELS, id, nothing)
+  end
+  return model
 end

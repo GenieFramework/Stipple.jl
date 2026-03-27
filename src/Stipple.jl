@@ -97,8 +97,7 @@ import Genie.Router.download
 @reexport @using_except Genie.Renderers.Html: mark, div, time, view, render, Headers, menu
 export render, htmldiv, js_attr, render_component
 
-@reexport using JSON3
-@reexport using StructTypes
+@reexport using JSON
 @reexport using Parameters
 @reexport using OrderedCollections
 
@@ -107,6 +106,7 @@ export setchannel, getchannel
 # compatibility with Observables 0.3
 isempty(methods(notify, Observables)) && (Base.notify(observable::AbstractObservable) = Observables.notify!(observable))
 
+include("TimeOut.jl")
 include("ParsingTools.jl")
 include("NamedTuples.jl")
 include("stipple/reactivity.jl")
@@ -118,8 +118,9 @@ include("stipple/converters.jl")
 include("stipple/print.jl")
 
 using .NamedTuples
+using .TimeOut
 
-export JSONParser, JSONText, json, @json, jsfunction, @jsfunction_str, JSFunction
+export JSONParser, JSONText, json, jsfunction, @jsfunction_str, JSFunction
 
 const config = Genie.config
 const channel_js_name = "'not_assigned'"
@@ -136,6 +137,11 @@ const PURGE_CHECK_DELAY = RefValue(60)
 
 const DEBOUNCE = LittleDict{Type{<:ReactiveModel}, LittleDict{Symbol, Any}}()
 const THROTTLE = LittleDict{Type{<:ReactiveModel}, LittleDict{Symbol, Any}}()
+
+# introduce DummyType to reduce the risk of method overwriting in case that the methods will be defined by JSON in the future
+abstract type DummyType end
+JSON.JSONText(js::Union{DummyType, Symbol}) = JSONText(String(js))
+JSON.JSONText(js::Union{DummyType, JSONText}) = js
 
 """
     debounce(M::Type{<:ReactiveModel}, fieldnames::Union{Symbol, Vector{Symbol}}, debounce::Union{Int, Nothing} = nothing)
@@ -290,7 +296,7 @@ function setmode! end
 function deletemode! end
 function init_storage end
 
-include("Tools.jl")
+include("stipple/tools.jl")
 include("ReactiveTools.jl")
 export @stipple_precompile
 
@@ -315,10 +321,6 @@ function __init__()
 
     @require DataFrames  = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0" begin
       include(joinpath(@__DIR__, "..", "ext", "StippleDataFramesExt.jl"))
-    end
-
-    @require JSON  = "682c06a0-de6a-54ab-a142-c8b1cf79cde6" begin
-      include(joinpath(@__DIR__, "..", "ext", "StippleJSONExt.jl"))
     end
   end
 end
@@ -366,7 +368,7 @@ function update!(model::M, field::Any, newval::T, oldval::T)::M where {T,M<:Reac
 
   model
 end
-````
+```
 """
 function update! end
 
@@ -642,6 +644,22 @@ function init(t::Type{M};
 
       field = Symbol(payload["field"])
 
+      # check if this is a message from a JS function call (`read(model, jscode)`)
+      if field == :__js_result__
+        id = get(payload["newval"], "id", nothing)
+        val = get(payload["newval"], "val", nothing)
+        js_channel = pop!(JS_RESULTS, id, nothing)
+        err = get(payload["newval"], "err", nothing)
+        if err !== nothing
+          @error "Error in JS function: $err"
+        end
+        if js_channel !== nothing
+          isopen(js_channel) && put!(js_channel, val)
+          close(js_channel)
+        end
+        return ok_response
+      end
+
       #check if field exists
       hasfield(CM, field) || return ok_response
 
@@ -752,17 +770,18 @@ function gb_compat_deps(::Type{M}) where M <: ReactiveModel
   Genie.Assets.add_fileroute(remote_assets_config, "vue.js"; basedir)
   Genie.Assets.add_fileroute(remote_assets_config, "vue_filters.js"; basedir)
   Genie.Router.route(Genie.Assets.asset_route(remote_assets_config, :js, file = vm(M))) do
-    Stipple.Elements.vue2_integration(M) |> Genie.Renderer.Js.js
+    Genie.Renderer.Js.js(Stipple.Elements.vue2_integration(M); context = parentmodule(M)) 
   end
   ENV["GB_ROUTES"] = true
 end
 
 function stipple_deps(::Type{M}, vue_app_name, debounce, throttle, core_theme, endpoint, transport)::Function where {M<:ReactiveModel}
   () -> begin
+    context = parentmodule(M)
     if ! Genie.Assets.external_assets(assets_config)
       if ! Genie.Router.isroute(Symbol(routename(M)))
-        Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file = endpoint), named = Symbol(routename(M))) do
-          Stipple.Elements.vue_integration(M; vue_app_name, debounce, throttle, core_theme, transport) |> Genie.Renderer.Js.js
+        Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file = endpoint), named = Symbol(routename(M))) do 
+          Genie.Renderer.Js.js(Stipple.Elements.vue_integration(M; vue_app_name, debounce, throttle, core_theme, transport); context)
         end
       end
     end
@@ -774,7 +793,7 @@ function stipple_deps(::Type{M}, vue_app_name, debounce, throttle, core_theme, e
         Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file = vue_app_name), defer = true)
       else
         Genie.Renderer.Html.script([
-          (Stipple.Elements.vue_integration(M; vue_app_name, debounce, throttle, core_theme, transport) |> Genie.Renderer.Js.js).body |> String
+          Genie.Renderer.Js.js(Stipple.Elements.vue_integration(M; vue_app_name, debounce, throttle, core_theme, transport); context).body |> String
         ])
       end
     ]
@@ -789,7 +808,7 @@ Configures the reactive handlers for the reactive properties of the model. Calle
 """
 function setup(model::M, channel = Genie.config.webchannels_default_route)::M where {M<:ReactiveModel}
   for f in fieldnames(M)
-    field = getproperty(model, f)
+    field = getfield(model, f)
 
     isa(field, Reactive) || continue
 
@@ -846,7 +865,8 @@ function _push!(vals::Pair{Symbol,T}, channel::String;
                 except::Union{Nothing,UInt,Vector{UInt}} = nothing,
                 restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T}
   try
-    webtransport().broadcast(channel, json(Dict("key" => vals[1], "value" => Stipple.render(vals[2], vals[1]))); except, restrict)
+    d = json(Dict("key" => vals[1], "value" => Stipple.render(vals[2], vals[1])))
+    webtransport().broadcast(channel, d; except, restrict)
   catch ex
     @debug ex
     false
@@ -881,9 +901,22 @@ end
 function Base.push!(app::M, field::Symbol;
                   channel::String = getchannel(app),
                   except::Union{Nothing,UInt,Vector{UInt}} = nothing,
-                  restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {M<:ReactiveModel}
-  isprivate(field, app) && return false
+                  restrict::Union{Nothing,UInt,Vector{UInt}} = nothing
+)::Bool where {M<:ReactiveModel}
+  (!hasproperty(app, field) || isprivate(field, app)) && return false
   push!(app, field => getproperty(app, field); channel, except, restrict)
+end
+
+function Base.push!(app::M, field::Symbol, field2::Symbol, fields::Symbol...;
+                  channel::String = getchannel(app),
+                  except::Union{Nothing,UInt,Vector{UInt}} = nothing,
+                  restrict::Union{Nothing,UInt,Vector{UInt}} = nothing
+)::Bool where {M<:ReactiveModel}
+  result = true
+  for field in [field, field2, fields...]
+    push!(app, field; channel, except, restrict) || (result = false)
+  end
+  result
 end
 
 @specialize
@@ -909,38 +942,13 @@ const THEMES_FOLDER = "themes"
 Registers the `routes` for all the required JavaScript dependencies (scripts).
 """
 function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool = true) :: Nothing
+  add_fileroute = Genie.Assets.add_fileroute
+  basedir = @project_path
+
   if ! Genie.Assets.external_assets(assets_config)
-    if core_theme
-      Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, file="stipplecore")) do
-        Genie.Renderer.WebRenderable(
-          Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", file="stipplecore")),
-          :css) |> Genie.Renderer.respond
-      end
-    end
-
-    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-light")) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-light")),
-        :css) |> Genie.Renderer.respond
-    end
-
-    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-dark")) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-dark")),
-        :css) |> Genie.Renderer.respond
-    end
-
-    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-light")) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-light")),
-        :css) |> Genie.Renderer.respond
-    end
-
-    Genie.Router.route(Genie.Assets.asset_route(Stipple.assets_config, :css, path=THEMES_FOLDER, file="theme-default-dark")) do
-      Genie.Renderer.WebRenderable(
-        Genie.Assets.embedded(Genie.Assets.asset_file(cwd=dirname(@__DIR__), type="css", path=THEMES_FOLDER, file="theme-default-dark")),
-        :css) |> Genie.Renderer.respond
-    end
+    core_theme && add_fileroute(Stipple.assets_config, "stipplecore.css"; basedir)
+    add_fileroute(Stipple.assets_config, "theme-default-light.css"; path = THEMES_FOLDER, basedir)
+    add_fileroute(Stipple.assets_config, "theme-default-dark.css"; path = THEMES_FOLDER, basedir)
 
     if is_channels_webtransport()
       Genie.Assets.channels_route(Genie.Assets.jsliteral(channel))
@@ -948,19 +956,18 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
       Genie.Assets.webthreads_route(Genie.Assets.jsliteral(channel))
     end
 
-    Genie.Assets.add_fileroute(assets_config, "underscore-min.js"; basedir = normpath(joinpath(@__DIR__, "..")))
-
-    VUEJS = Genie.Configuration.isprod() ? "vue.global.prod.js" : "vue.global.js"
-    Genie.Assets.add_fileroute(assets_config, VUEJS; basedir = normpath(joinpath(@__DIR__, "..")))
-    Genie.Assets.add_fileroute(assets_config, "stipplecore.js"; basedir = normpath(joinpath(@__DIR__, "..")))
-    Genie.Assets.add_fileroute(assets_config, "vue_filters.js"; basedir = normpath(joinpath(@__DIR__, "..")))
-    Genie.Assets.add_fileroute(assets_config, "mixins.js"; basedir = normpath(joinpath(@__DIR__, "..")))
+    add_fileroute(assets_config, "underscore-min.js"; basedir)
+    add_fileroute(assets_config, "vue.global.js"; basedir)
+    add_fileroute(assets_config, "vue.global.prod.js"; basedir)
+    add_fileroute(assets_config, "stipplecore.js"; basedir)
+    add_fileroute(assets_config, "vue_filters.js"; basedir)
+    add_fileroute(assets_config, "mixins.js"; basedir)
 
     if Genie.config.webchannels_keepalive_frequency > 0 && is_channels_webtransport()
-      Genie.Assets.add_fileroute(assets_config, "keepalive.js"; basedir = normpath(joinpath(@__DIR__, "..")))
+      add_fileroute(assets_config, "keepalive.js"; basedir)
     end
 
-    Genie.Assets.add_fileroute(assets_config, "vue2compat.js"; basedir = normpath(joinpath(@__DIR__, "..")))
+    add_fileroute(assets_config, "vue2compat.js"; basedir)
   end
 
   nothing
@@ -1037,7 +1044,8 @@ function deps!(m::Any, M::Module)
 end
 
 function deps!(M::Type{<:ReactiveModel}, f::Function; extra_deps = true)
-  key = extra_deps ? Symbol("_$(vm(M))_$(nameof(f))") : M
+  AM = get_abstract_type(M)
+  key = extra_deps ? Symbol("_$(vm(AM))_$(nameof(f))") : AM
   DEPS[key] = f isa Function ? f : f.deps
 end
 
@@ -1197,6 +1205,12 @@ functionality has been introduced to prevent Revise from generating new names pa
 as mixins. Otherwise apps with app-mixins are not precompilable.
 """
 function mygensym(sym::Symbol, context = @__MODULE__)
+  # julia 1.12 supports redefinition of types, so we can always return the identical symbol
+  # moreover, without this check `Genie.loadapp()` fails for julia 1.12
+  @static if VERSION >= v"1.12-"
+    return  Symbol(sym, :_, 1)
+  end
+
   i = 1
   while isdefined(context, Symbol(sym, :_, i))
     i += 1
@@ -1513,7 +1527,8 @@ using Stipple.ReactiveTools
     model = Stipple.ReactiveTools.@init PrecompileApp
     page(model, ui) |> html
   end
-  precompile_get("/")
+  precompile_get("/", retry = false)
+  ws_client_send(timeout = 60)
   deps_routes(core_theme = true)
   precompile_get(Genie.Assets.asset_path(assets_config, :js, file = "stipplecore"))
 end

@@ -1,5 +1,5 @@
 module ModelStorage
-using JSON3
+using JSON
 using Stipple
 import Stipple: INTERNALFIELDS, AUTOFIELDS, Reactive
 
@@ -29,7 +29,7 @@ function model_values(model::M; fields::Vector{Symbol} = Symbol[], exclude::Vect
   field_dict = Dict(field => getfield(model, field)[] for field in field_list 
                   if field ∉ excluded_fields && getfield(model, field) isa Stipple.Reactive)
 
-  json ? JSON3.write(field_dict) : field_dict
+  json ? Stipple.json(field_dict) : field_dict
 end
 
 """
@@ -43,11 +43,12 @@ Loads values into the fields of a ReactiveModel. Accepts either a Dict of field-
     values_dict = Dict(:i => 20, :s => "world", :x => 5)
     Stipple.ModelStorage.load_model_values!(model, values_dict)
 """
-function load_model_values!(model::M, values::Dict{Symbol, Any}) where M
+function load_model_values!(model::M, values::AbstractDict{T, Any}) where {M, T <: Union{String, Symbol}}
   model_field_list = fieldnames(M)
   excluded_fields = DEFAULT_EXCLUDE
 
   for (field, value) in values
+    field = Symbol(field)
     if field ∉ excluded_fields && field ∈ model_field_list
       model_field = getfield(model, field)
 
@@ -61,7 +62,7 @@ function load_model_values!(model::M, values::Dict{Symbol, Any}) where M
 end
 
 function load_model_values!(model::M, values::String) where M
-  load_model_values!(model, Dict(JSON3.read(values)))
+  load_model_values!(model, JSON.parse(values))
 end
 
 module Sessions
@@ -94,16 +95,38 @@ function init_from_storage( t::Type{M};
     field = getfield(model, f)
 
     if field isa Reactive
+      eltype_mismatch = false
       # restore fields only if a stored model exists, if the field is not part of the internal fields and is not write protected
-      if isnothing(stored_model) || f ∈ [Stipple.INTERNALFIELDS..., Stipple.AUTOFIELDS...] ||
+      if isnothing(stored_model) || f ∈ Stipple.INTERNALFIELDS || f ∈ Stipple.AUTOFIELDS ||
           Stipple.isprivate(f, model) || ! hasproperty(stored_model, f) || ! hasproperty(model, f)
       else
-        # restore field value from stored model
-        field[!] = getfield(stored_model, f)[]
+        if eltype(field) != eltype(getfield(stored_model, f))
+          eltype_mismatch = true
+        end
+        try
+          # restore field value from stored model
+          field[!] = getfield(stored_model, f)[]
+        catch e
+          # if failure was due to eltype mismatch, 
+          if eltype(field) != eltype(getfield(stored_model, f))
+            @info("""
+            Type mismatch when restoring field '$f'.
+                Expected '$(eltype(getfield(stored_model, f)))' found '$(eltype(field))'.
+                Skipping restoration of this field.
+            """)
+          else
+            @warn "Error during restoration of field '$f': $e"
+          end
+        end
+      end
+
+      if !eltype_mismatch
+        # store the new model if an eltype mismatch was encountered
+        GenieSession.set!(model_id(M), model)
       end
 
       # register reactive handlers to automatically save model on session when model changes
-      if f ∉ [Stipple.AUTOFIELDS...]
+      if f ∉ Stipple.AUTOFIELDS
         on(field) do _
           GenieSession.set!(model_id(M), model)
         end

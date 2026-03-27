@@ -90,7 +90,7 @@ function collect_js(xx::Union{Tuple, AbstractArray}, delim = "";
       s = json(Dict(key_replacement(k) => v isa AbstractString ? JSONText(string(v)) : v for (k, v) in (x isa Pair ? [x] : x)))[2:end - 1]
       print(io2, s)
     elseif x isa JSONText
-      print(io2, x.s)
+      print(io2, json(x))
     else
       js_print(io2, x)
     end
@@ -153,7 +153,7 @@ Stipple.render(z::Complex) = Dict(:mathjs => "Complex", :re => z.re, :im => z.im
 function Stipple.jsrender(z::Union{Complex, R{<:Complex}}, args...)
     JSONText("math.complex('\$(replace(strip(repr(Observables.to_value(z)), '"'), 'm' => ""))')")
 end
-Stipple.stipple_parse(::Complex, z::Dict{String, Any}) = float(z["re"]) + z["im"]
+Stipple.stipple_parse(::Complex, z::AbstractDict{String, Any}) = float(z["re"]) + z["im"]
 ```
 """
 jsrender(x, args...) = render(x, args...)

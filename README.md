@@ -79,7 +79,7 @@ The Stipple ecosystem also includes:
 - add `throttle` in analogy to `debounce`
 - `@handler` macro to define app handlers outside of `@app`
 - handler merging in mixins
-- accept Inf and NaN in floats (full support with next release of JSON3)
+- accept Inf and NaN in floats
 - routehandlers `pre` / `post` for `@page` 
 - precompilation by `@stipple_precompile`
 ### Fixes / Improvements

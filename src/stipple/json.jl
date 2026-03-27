@@ -1,42 +1,33 @@
-const JSONParser = JSON3
+import Genie.JSONParser: JSONParser, json
 
-# for inf values no reviver is necessary, but
-stipple_inf_mapping(x) = x == Inf ? "1e1000" : x == -Inf ? "-1e1000" : "\"__nan__\""
-json(args; inf_mapping::Function = stipple_inf_mapping, kwargs...) = JSON3.write(args; inf_mapping, kwargs...)
-
-struct JSONText
-  s::String
-end
-
-JSONText(sym::Symbol) = JSONText(String(sym))
-JSONText(js::JSONText) = js
-
-Base.string(js::JSONText) = js.s
-Base.:(*)(js::JSONText, x) = js.s * x
-Base.:(*)(x, js::JSONText) = x * js.s
-Base.:(*)(js1::JSONText, js2::JSONText) = JSONText(js1.s * js2.s)
-
-@inline StructTypes.StructType(::Type{JSONText}) = JSON3.RawType()
-@inline StructTypes.construct(::Type{JSONText}, x::JSON3.RawValue) = JSONText(string(x))
-@inline JSON3.rawbytes(x::JSONText) = codeunits(x.s)
-
-macro json(expr)
-  expr.args[1].args[1] = :(StructTypes.$(expr.args[1].args[1]))
-  T = expr.args[1].args[2].args[2]
-
-  quote
-    $(esc(:(StructTypes.StructType(::Type{($T)}) = StructTypes.CustomStruct())))
-    $(esc(expr))
-  end
-end
+Base.string(js::JSONText) = json(js)
+Base.:(*)(js::JSONText, x) = json(js) * x
+Base.:(*)(x, js::JSONText) = x * json(js)
+Base.:(*)(js1::JSONText, js2::JSONText) = JSONText(json(js1) * json(js2))
 
 """
     @js_str -> JSONText
 
-Construct a JSONText, such as `js"button=false"`, without interpolation and unescaping
-(except for quotation marks `"`` which still has to be escaped). Avoiding escaping `"`` can be done by
-`js\"\"\"alert("Hello World")\"\"\"`.
+Construct a JSONText, such as `js"button=false"`, without String interpolation
+```
+js\"\"\"alert("Hello World")\"\"\"
+# JSONText("alert(\"Hello World\")")
+```
+String nterpolation is supported via the `i` flag, e.g.
+```
+js\"\"\"alert("1 + 2 == \$(1 + 2)")\"\"\"i
+# JSONText("alert(\"1 + 2 == 3\")")
+```
 """
-macro js_str(expr)
-  :( JSONText($(esc(expr))) )
+macro js_str(s)
+  :( JSONText($(esc(s))) )
+end
+
+macro js_str(s, flags)
+  flags == "i" || @warn "Only 'i' flag currently supported (string interpolation)."
+  if 'i' in flags
+    :( JSONText($(esc(Meta.parse("\"$s\"")))) )
+  else
+    :( JSONText($(esc(s))) )
+  end
 end

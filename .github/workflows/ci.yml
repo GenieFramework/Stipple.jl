@@ -20,13 +20,21 @@ jobs:
           - macOS-latest
           - windows-latest
         arch:
-          - x64
+          - ''
+        exclude:
+          - os: macos-latest # Apple Silicon
+            version: '1.6'
+            arch: ''
+        include:
+          - os: macos-latest # Intel
+            version: '1.6'
+            arch: 'x64'
     steps:
       - uses: actions/checkout@v2
       - uses: julia-actions/setup-julia@latest
         with:
           version: ${{ matrix.version }}
-          arch: ${{ matrix.arch }}
+          arch: ${{ (matrix.arch == '') && runner.arch || matrix.arch }}
       - uses: julia-actions/julia-buildpkg@latest
       - uses: julia-actions/julia-runtest@latest
       - name: Handle optional failures and continue without failing the workflow

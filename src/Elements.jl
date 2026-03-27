@@ -105,7 +105,7 @@ plugins() = plugins(ReactiveModel)
 Generates a valid JavaScript object name to be used as the name of the Vue app -- and its respective HTML container.
 """
 function root(::Type{M})::String where {M<:ReactiveModel}
-  Stipple.routename(M)
+  Stipple.routename(Stipple.get_abstract_type(M))
 end
 
 root(::M) where M<:ReactiveModel = root(M)
@@ -376,11 +376,9 @@ end
 JSExpr(s::Symbol) = JSExpr(String(s))
 JSExpr(je::JSExpr) = je
 
-@inline StructTypes.StructType(::Type{JSExpr}) = JSON3.RawType()
-@inline StructTypes.construct(::Type{JSExpr}, x::JSON3.RawValue) = JSExpr(string(x))
-@inline function JSON3.rawbytes(x::JSExpr)
+function JSON.lower(x::JSExpr)
   s = js_quote_replace(x.s)
-  startswith(s, "(") && endswith(s, ")") ?  codeunits(s)[2:end-1] : codeunits(s)
+  JSONText(startswith(s, "(") && endswith(s, ")") ?  s[2:end-1] : s)
 end
 
 function vars_to_jsexpr(expr; imported::Bool = true)
