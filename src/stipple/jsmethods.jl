@@ -1,3 +1,21 @@
+function deprecation_warning(f, M)
+  n_tot = length(methods(f))
+  n_datatype = length(methods(f, (DataType,)))
+  n_deprecated = n_tot - n_datatype
+  if n_deprecated > 1
+    # if more than the fallback method is defined, we assume that the user has defined a method for their model and thus we throw a warning and call that method
+    macroname = Symbol("@", string(f)[4:end])
+    CM = get_abstract_type(M)
+    @warn """
+    You are using the old way of defining `$f()` for your app, which will be discontinued in the future.
+    Please define `$f(::Type{<:$CM})` instead of `$f(::$CM)`.
+    The Reactive API `$macroname js\"\"\"<js code>\"\"\"` will continue to work as before.
+    """
+    return f(M())
+  end
+  ""
+end
+
 """
     function js_methods(::Type{<:T}) where {T<:ReactiveModel}
 
@@ -32,7 +50,7 @@ js_bye() = :bye => "function() {console.log('Bye!')}"
 js_methods(::Type{<:MyDashboard}) = [js_greet, js_bye]
 ```
 """
-js_methods(::DataType) = ""
+js_methods(M::DataType) = deprecation_warning($f, M)
 js_methods(::T) where T = js_methods(T)
 
 # deprecated, now part of the model
@@ -71,7 +89,7 @@ js_computed(app::MyDashboard) = \"\"\"
 \"\"\"
 ```
 """
-js_computed(::DataType) = ""
+js_computed(M::DataType) =  deprecation_warning($f, M)
 js_computed(::T) where T = js_computed(T)
 
 const jscomputed = js_computed
@@ -103,7 +121,7 @@ js_watch(::Type{<:MyDashboard}) = \"\"\"
 \"\"\"
 ```
 """
-js_watch(::DataType) = ""
+js_watch(M::DataType) =  deprecation_warning($f, M)
 js_watch(::T) where T = js_watch(T)
 
 const jswatch = js_watch
@@ -193,7 +211,7 @@ for (f, field) in (
     $($f)(::MyDashboard) = [startcamera, stopcamera]
     ```
     """
-    $f(::DataType)::String = ""
+    $f(M::DataType)::String = deprecation_warning($f, M)
     $f(::T) where T = $f(T)
   end)
 end
