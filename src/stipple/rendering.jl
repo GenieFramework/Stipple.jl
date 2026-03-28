@@ -2,6 +2,11 @@ struct Mixin
   M::DataType
   prefix::String
   postfix::String
+
+  # allow for M being an instance of a DataType to support assigning an instance of a mixin instead of a mixin type
+  function Mixin(M, prefix, postfix)
+    new(M isa DataType ? M : typeof(M), string(prefix), string(postfix))
+  end
 end
 
 """
@@ -208,7 +213,7 @@ function js_mixin(m::Mixin, js_f, delim)
   return xx
 end
 
-function render_js_options!(::Union{M, Type{M}}, vue::OrderedDict{Symbol, Any} = OrderedDict{Symbol, Any}(); mixin = false, indent = 4) where {M<:ReactiveModel}
+function render_js_options!(::Union{M, Type{M}}, vue::OrderedDict{Symbol, Any} = OrderedDict{Symbol, Any}(); component_mode::Bool = false, mixin = false, indent = 4) where {M<:ReactiveModel}
   indent isa Integer && (indent = repeat(" ", indent))
   pre = isempty(indent) ? strip : s -> replace(strip(s), "\n" => "\n$indent")
   sep1 = ",\n\n$indent"
@@ -239,10 +244,10 @@ function render_js_options!(::Union{M, Type{M}}, vue::OrderedDict{Symbol, Any} =
       push!(xx, js_mixin(m, f, sep2))
     end
 
-    if field == :created
+    if field == :created && ! component_mode
       created_auto = Stipple.js_created_auto(M)
       isempty(created_auto) || push!(xx, created_auto)
-    elseif field == :mounted && ! mixin
+    elseif field == :mounted && ! component_mode && ! mixin
       mounted_auto = """setTimeout(() => {
           this.WebChannel.unsubscriptionHandlers.push(() => this.handle_event({}, 'finalize'))
           console.log('Unsubscription handler installed')
@@ -285,7 +290,7 @@ function Stipple.render(app::M; component_mode::Bool = false)::Dict{Symbol,Any} 
   component_mode || push!(vue, :mixins => JSONText.(MIXINS[]))
   isempty(data_dict) || push!(vue, :data => JSONText("() => ($data)"))
 
-  render_js_options!(app, vue)
+  render_js_options!(app, vue; component_mode)
 
   vue
 end
