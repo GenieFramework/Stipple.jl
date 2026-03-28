@@ -15,7 +15,7 @@ export root, elem, vm, @if, @else, @elseif, @for, @text, @bind, @data, @on, @cli
 # deprecated exports
 export @iif, @els, @elsiif, @recur
 
-export @jsexpr, JSExpr, js_quote_replace, ∥, ∧
+export @jsexpr, JSExpr, js_quote_replace, ∥, ∧, jse_str
 
 export stylesheet, kw_to_str
 export add_plugins, remove_plugins
@@ -480,6 +480,10 @@ macro jsexpr(expr)
   imported = isdefined(__module__, :∥) && isdefined(__module__, :∧)
   ex = vars_to_jsexpr(expr; imported) |> esc
   :(JSExpr($ex))
+end
+
+macro jse_str(expr)
+  JSExpr(expr)
 end
 
 """

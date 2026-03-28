@@ -1,5 +1,23 @@
+function deprecation_warning(f, M)
+  n_tot = length(methods(f))
+  n_datatype = length(methods(f, (DataType,)))
+  n_deprecated = n_tot - n_datatype
+  if n_deprecated > 1
+    # if more than the fallback method is defined, we assume that the user has defined a method for their model and thus we throw a warning and call that method
+    macroname = Symbol("@", string(f)[4:end])
+    CM = get_abstract_type(M)
+    @warn """
+    You are using the old way of defining `$f()` for your app, which will be discontinued in the future.
+    Please define `$f(::Type{<:$CM})` instead of `$f(::$CM)`.
+    The Reactive API `$macroname js\"\"\"<js code>\"\"\"` will continue to work as before.
+    """
+    return f(M())
+  end
+  ""
+end
+
 """
-    function js_methods(app::T) where {T<:ReactiveModel}
+    function js_methods(::Type{<:T}) where {T<:ReactiveModel}
 
 Defines js functions for the `methods` section of the vue element.
 Expected result types of the function are
@@ -12,7 +30,7 @@ Expected result types of the function are
 ### Example 1
 
 ```julia
-js_methods(::MyDashboard) = \"\"\"
+js_methods(::Type{<:MyDashboard}) = \"\"\"
   mysquare: function (x) {
     return x^2
   }
@@ -23,18 +41,17 @@ js_methods(::MyDashboard) = \"\"\"
 ```
 ### Example 2
 ```
-js_methods(::MyDashboard) = Dict(:f => "function(x) { console.log('x: ' + x) })
+js_methods(::Type{<:MyDashboard}) = Dict(:f => "function(x) { console.log('x: ' + x) })
 ```
 ### Example 3
 ```
 js_greet() = :greet => "function(name) {console.log('Hello ' + name)}"
 js_bye() = :bye => "function() {console.log('Bye!')}"
-js_methods(::MyDashboard) = [js_greet, js_bye]
+js_methods(::Type{<:MyDashboard}) = [js_greet, js_bye]
 ```
 """
-function js_methods(app::T)::String where {T<:ReactiveModel}
-  ""
-end
+js_methods(M::DataType) = deprecation_warning(js_methods, M)
+js_methods(::T) where T = js_methods(T)
 
 # deprecated, now part of the model
 function js_methods_events()::String
@@ -51,7 +68,7 @@ function js_methods_events()::String
 end
 
 """
-    function js_computed(app::T) where {T<:ReactiveModel}
+    function js_computed(::Type{<:T}) where {T<:ReactiveModel}
 
 Defines js functions for the `computed` section of the vue element.
 These properties are updated every time on of the inner parameters changes its value.
@@ -72,14 +89,13 @@ js_computed(app::MyDashboard) = \"\"\"
 \"\"\"
 ```
 """
-function js_computed(app::T)::String where {T<:ReactiveModel}
-  ""
-end
+js_computed(M::DataType) =  deprecation_warning(js_computed, M)
+js_computed(::T) where T = js_computed(T)
 
 const jscomputed = js_computed
 
 """
-    function js_watch(app::T) where {T<:ReactiveModel}
+    function js_watch(::Type{<:T}) where {T<:ReactiveModel}
 
 Defines js functions for the `watch` section of the vue element.
 These functions are called every time the respective property changes.
@@ -95,7 +111,7 @@ Expected result types of the function are
 Updates the `fullName` every time `firstName` or `lastName` changes.
 
 ```julia
-js_watch(app::MyDashboard) = \"\"\"
+js_watch(::Type{<:MyDashboard}) = \"\"\"
   firstName: function (val) {
     this.fullName = val + ' ' + this.lastName
   },
@@ -105,9 +121,8 @@ js_watch(app::MyDashboard) = \"\"\"
 \"\"\"
 ```
 """
-function js_watch(m::T)::String where {T<:ReactiveModel}
-  ""
-end
+js_watch(M::DataType) =  deprecation_warning(js_watch, M)
+js_watch(::T) where T = js_watch(T)
 
 const jswatch = js_watch
 
@@ -125,7 +140,7 @@ const jstemplate = js_template
 
 
 """
-    function client_data(app::T)::String where {T<:ReactiveModel}
+    function client_data(::Type{<:MyApp})::String
 
 Defines additional data that will only be visible by the browser.
 
@@ -135,13 +150,21 @@ In order to use the data you most probably also want to define [`js_methods`](@r
 
 ```julia
 import Stipple.client_data
-client_data(m::Example) = client_data(client_name = js"null", client_age = js"null", accept = false)
+client_data(::Type{<:Example}) = client_data(client_name = js"null", client_age = js"null", accept = false)
 ```
-will define the additional fields `client_name`, `client_age` and `accept` for the model `Example`. These should, of course, not overlap with existing fields of your model.
+will define the additional fields `client_name`, `client_age` and `accept` for models of type `Example`.
+These definitions should, of course, not overlap with existing fields of your model.
+### Note
+Previously we defined the client_data function differently. This will continue to work,
+but the new way might have some advantages in the future for mixins. Here is the old way:
+```julia
+client_data(::Example) = client_data(client_name = js"null", client_age = js"null", accept = false)
+```
 """
-client_data(app::T) where T <: ReactiveModel = Dict{String, Any}()
+client_data(::Type{<:ReactiveModel}) = Dict{String, Any}()
+client_data(::T) where T = client_data(T)
 
-client_data(;kwargs...) = Dict{String, Any}([String(k) => v for (k, v) in kwargs]...)
+client_data(; kwargs...) = Dict{String, Any}([String(k) => v for (k, v) in kwargs]...)
 
 for (f, field) in (
   (:js_before_create, :beforeCreate), (:js_created, :created), (:js_before_mount, :beforeMount), (:js_mounted, :mounted),
@@ -151,7 +174,7 @@ for (f, field) in (
   field_str = string(field)
   Core.eval(@__MODULE__, quote
     """
-        function $($f)(app::T)::Union{Function, String, Vector} where {T<:ReactiveModel}
+        function $($f)(::Type{<:T})::Union{Function, String, Vector} where {T<:ReactiveModel}
 
     Defines js statements for the `$($field_str)` section of the vue element.
 
@@ -163,7 +186,7 @@ for (f, field) in (
     ### Example 1
 
     ```julia
-    $($f)(app::MyDashboard) = \"\"\"
+    $($f)(::Type{<:MyDashboard}) = \"\"\"
         if (this.cameraon) { startcamera() }
     \"\"\"
     ```
@@ -174,17 +197,22 @@ for (f, field) in (
     startcamera() = "if (this.cameraon) { startcamera() }"
     stopcamera() = "if (this.cameraon) { stopcamera() }"
 
-    $($f)(app::MyDashboard) = [startcamera, stopcamera]
+    $($f)(::Type{<:MyDashboard}) = [startcamera, stopcamera]
     ```
     Checking the result can be done in the following way
     ```
     julia> render(MyApp())[:$($field_str)]
     JSONText("function(){\n    if (this.cameraon) { startcamera() }\n\n    if (this.cameraon) { stopcamera() }\n}")
     ```
+    ### Note
+    Previously we defined the function differently. This will continue to work,
+    but the new way might have some advantages in the future for mixins. Here is the old way:
+    ```julia
+    $($f)(::MyDashboard) = [startcamera, stopcamera]
+    ```
     """
-    function $f(app::T)::String where {T<:ReactiveModel}
-      ""
-    end
+    $f(M::DataType)::String = deprecation_warning($f, M)
+    $f(::T) where T = $f(T)
   end)
 end
 
@@ -266,13 +294,11 @@ function js_initscript(initscript::String)
   """
 end
 
-function js_created_auto(x)
-""
-end
+js_created_auto(::DataType) = ""
+js_created_auto(::T) where T = js_created_auto(T)
 
-function js_watch_auto(x)
-""
-end
+js_watch_auto(::DataType) = ""
+js_watch_auto(::T) where T = js_watch_auto(T)
 
 # methods to be used directly as arguments to js_methods
 
