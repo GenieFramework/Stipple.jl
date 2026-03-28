@@ -50,7 +50,7 @@ js_bye() = :bye => "function() {console.log('Bye!')}"
 js_methods(::Type{<:MyDashboard}) = [js_greet, js_bye]
 ```
 """
-js_methods(M::DataType) = deprecation_warning($f, M)
+js_methods(M::DataType) = deprecation_warning(js_methods, M)
 js_methods(::T) where T = js_methods(T)
 
 # deprecated, now part of the model
@@ -89,7 +89,7 @@ js_computed(app::MyDashboard) = \"\"\"
 \"\"\"
 ```
 """
-js_computed(M::DataType) =  deprecation_warning($f, M)
+js_computed(M::DataType) =  deprecation_warning(js_computed, M)
 js_computed(::T) where T = js_computed(T)
 
 const jscomputed = js_computed
@@ -121,7 +121,7 @@ js_watch(::Type{<:MyDashboard}) = \"\"\"
 \"\"\"
 ```
 """
-js_watch(M::DataType) =  deprecation_warning($f, M)
+js_watch(M::DataType) =  deprecation_warning(js_watch, M)
 js_watch(::T) where T = js_watch(T)
 
 const jswatch = js_watch
