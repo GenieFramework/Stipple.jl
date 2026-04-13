@@ -1,11 +1,14 @@
 function deprecation_warning(f, M)
-  n_tot = length(methods(f))
-  n_datatype = length(methods(f, (DataType,)))
-  n_deprecated = n_tot - n_datatype
-  if n_deprecated > 1
-    # if more than the fallback method is defined, we assume that the user has defined a method for their model and thus we throw a warning and call that method
+  # check for existence of a deprecated definition
+  # if present, call it, otherwise return ""
+  
+  n = length(methods(f, (M,), Stipple))
+  # if only the fallback syntax is defined, `methods()` will find it, so n == 1
+  # if the deprecated syntax is used, no method will be found in Stipple
+  is_deprecated_syntax = n == 0
+  if is_deprecated_syntax
     macroname = Symbol("@", string(f)[4:end])
-    CM = get_abstract_type(M)
+    CM = M <: ReactiveModel ? get_abstract_type(M) : M
     @warn """
     You are using the old way of defining `$f()` for your app, which will be discontinued in the future.
     Please define `$f(::Type{<:$CM})` instead of `$f(::$CM)`.
