@@ -490,9 +490,10 @@ function setmode!(model::ReactiveModel, mode::Int, fieldnames::Symbol...)
 end
 
 function setmode!(dict::AbstractDict, mode, fieldnames::Symbol...)
+  mode isa Symbol && (mode = getfield(Stipple, mode))
   for fieldname in fieldnames
     fieldname ∈ Stipple.INTERNALFIELDS && continue
-    mode == PUBLIC || mode == :PUBLIC ? delete!(dict, fieldname) : dict[fieldname] = Core.eval(Stipple, mode)
+    mode == PUBLIC ? delete!(dict, fieldname) : dict[fieldname] = mode
   end
   dict
 end
@@ -518,7 +519,7 @@ function init_storage(handler::Union{Nothing, Symbol, Expr} = nothing)
 end
 
 function get_concrete_type(::Type{M})::Type{<:ReactiveModel} where M <: Stipple.ReactiveModel
-  isabstracttype(M) ? Core.eval(Base.parentmodule(M), Symbol(Base.nameof(M), "!")) : M
+  isabstracttype(M) ? getfield(Base.parentmodule(M), Symbol(Base.nameof(M), "!")) : M
 end
 
 function get_abstract_type(::Type{M})::Type{<:ReactiveModel} where M <: Stipple.ReactiveModel
