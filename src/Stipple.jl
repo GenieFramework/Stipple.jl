@@ -44,7 +44,7 @@ using statement while excluding certain names
 
 ### Example
 ```
-using Parent.MyModule: x, y
+@using_except Parent.MyModule: x, y
 ```
 will import all names from Parent.MyModule except `x` and `y`. Currently suports only a single module.
 """
