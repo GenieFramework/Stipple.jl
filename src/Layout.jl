@@ -279,7 +279,8 @@ function flexgrid_kwargs(; class = "", class! = nothing, symbol_class::Bool = tr
     kwargs[:class!] = if class isa Symbol || class isa String
       string(kwargs[:class])
     else
-      js_attr(class)
+      #js_attr(class)
+      Symbol(replace(replace(json(render(class)), "''''''" => raw"\'"), '"' => '''))
     end
     delete!(kwargs, :class)
   end
@@ -489,11 +490,11 @@ julia> row(span("Hello"))
 ```
 """
 function row(args...;
-  col::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  xs::Union{Int,AbstractString,Symbol,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,Nothing} = -1, md::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  lg::Union{Int,AbstractString,Symbol,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,Nothing} = -1,
-  gutter::Union{AbstractString,Symbol,Nothing} = nothing, xgutter::Union{AbstractString,Symbol,Nothing} = nothing, ygutter::Union{AbstractString,Symbol,Nothing} = nothing,
-  class::Union{AbstractString,Symbol,AbstractDict,Vector} = "", size::Union{Int,AbstractString,Symbol,Nothing} = -1, kwargs...)
+  col::Union{Int,AbstractString,Symbol,JSONText,Nothing} = -1,
+  xs::Union{Int,AbstractString,Symbol,JSONText,Nothing} = -1, sm::Union{Int,AbstractString,Symbol,JSONText,Nothing} = -1, md::Union{Int,AbstractString,Symbol,JSONText,Nothing} = -1,
+  lg::Union{Int,AbstractString,Symbol,JSONText,Nothing} = -1, xl::Union{Int,AbstractString,Symbol,JSONText,Nothing} = -1,
+  gutter::Union{AbstractString,Symbol,JSONText,Nothing} = nothing, xgutter::Union{AbstractString,Symbol,JSONText,Nothing} = nothing, ygutter::Union{AbstractString,Symbol,JSONText,Nothing} = nothing,
+  class::Union{AbstractString,Symbol,JSONText,AbstractDict,Vector} = "", size::Union{Int,AbstractString,Symbol,JSONText,Nothing} = -1, kwargs...)
 
   # for backward compatibility with `size` kwarg
   col == -1 && size != -1 && (col = size)

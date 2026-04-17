@@ -321,6 +321,26 @@ function Stipple.render(o::Reactive{T}, fieldname::Union{Symbol,Nothing} = nothi
   Stipple.render(o[], fieldname)
 end
 
+function mask_quote(@nospecialize x)
+  if x isa JSONText
+    j = JSON.json(x)
+    if occursin(''', j)
+      j = replace(j, ''' => 'ˈ')
+      x = JSONText(j)
+    end
+  elseif x isa AbstractDict
+    x = OrderedDict(k => mask_quote(v) for (k,v) in x)
+  elseif x isa AbstractVector
+    mask_quote.(x)
+  else
+    x
+  end
+end
+
+function unmask_quote(x::String)
+  replace(x, 'ˈ' => ''')
+end
+
 """
     js_attr(x)
 
@@ -336,10 +356,17 @@ quasar(
 )
 
 # "<q-btn-toggle v-model=\\"btn_value\\" :options=\\"[{'value':false,'label':'Off'}, {'value':true,'label':'On'}]\\"></q-btn-toggle>"
+
+Note: Meanwhile `js_attr` is automatically called on Julia expressions in most of the
+functions defined in Stipple and StippleUI, making its use only necessary when calling functions
+defined in Genie.Renderer.Html, i.e. all standard HTML elements, e.g. `a()`, `input()`, ...
 ```
 """
 function js_attr(x)
-  Symbol(replace(replace(json(render(x)), "'" => raw"\'"), '"' => '''))
+  x = mask_quote(x)
+  x = replace(replace(json(render(x)), "'" => raw"\'"), '"' => ''')
+  x = unmask_quote(x)
+  Symbol(x)
 end
 
 Stipple.render(X::Matrix) = [X[:, i] for i in 1:size(X, 2)]
