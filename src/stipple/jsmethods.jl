@@ -129,15 +129,13 @@ js_watch(::T) where T = js_watch(T)
 
 const jswatch = js_watch
 
-function js_props(m::T)::String where {T<:ReactiveModel}
-  ""
-end
+js_props(M::DataType) =  deprecation_warning(js_props, M)
+js_props(::T) where T = js_props(T)
 
 const jsprops = js_props
 
-function js_template(m::T)::String where {T<:ReactiveModel}
-  ""
-end
+js_template(M::DataType) =  deprecation_warning(js_template, M)
+js_template(::T) where T = js_template(T)
 
 const jstemplate = js_template
 

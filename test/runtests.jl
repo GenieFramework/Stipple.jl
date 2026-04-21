@@ -180,6 +180,50 @@ end
     @test model.s3[] == "20"
 end
 
+@testset "Reactive API with mixins and handlers" begin
+    @eval @app VueCopyButton begin
+        @out copied = false
+    end
+    
+    @eval @methods VueCopyButton [
+        :handleCopy => js"""function () {
+            const text = typeof this.text === 'function' ? this.text() : this.text;
+            Quasar.copyToClipboard(text).then(() => {
+                this.copied = true;
+                setTimeout(() => {
+                this.copied = false;
+                }, 700);
+            });
+        }
+        """
+    ]
+    
+    @eval @props VueCopyButton Stipple.opts(
+        text = Stipple.opts(
+            type = [js"String", js"Function"],
+            required = true
+        )
+    )
+    
+    @eval @template VueCopyButton button(
+        icon = R"this.copied ? 'check' : 'content_copy'",
+        aria__label = R"this.copied ? 'Copied!' : 'Copy to clipboard'",
+        flat = true, size = "sm",
+        @click("this.handleCopy")
+    )
+    
+    # defining a simple app with a copy button
+    @eval @app MyApp begin
+        @in text = "Copy this text"
+    end
+
+    @eval @components MyApp VueCopyButton
+
+    component_str = json(Stipple.COMPONENTS[MyApp][:VueCopyButton])
+    @test contains(component_str, repr("props"))
+    @test contains(component_str, "<button icon=")
+end
+
 module App1
 
 using Stipple, Stipple.ReactiveTools

@@ -219,7 +219,7 @@ function render_js_options!(::Union{M, Type{M}}, vue::OrderedDict{Symbol, Any} =
   sep1 = ",\n\n$indent"
   sep2 = "\n\n$indent"
 
-  for (f, field) in ((js_methods, :methods), (js_computed, :computed), (js_watch, :watch))
+  for (f, field) in ((js_methods, :methods), (js_computed, :computed), (js_watch, :watch), (js_props, :props), (js_template, :template))
     xx = Any[f(M)]
     for m in mixins(M)
       push!(xx, js_mixin(m, f, sep1))

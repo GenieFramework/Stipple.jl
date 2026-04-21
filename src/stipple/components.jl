@@ -12,8 +12,9 @@ This is usually needed for registering components provided by Stipple plugins.
 Stipple.register_components(HelloPie, StippleCharts.COMPONENTS)
 ```
 """
-function register_components(model::Type{M}, keysvals::Union{AbstractVector, AbstractDict}; legacy::Bool = false) where {M<:ReactiveModel}
-  haskey(COMPONENTS, model) || (COMPONENTS[model] = LittleDict())
+function register_components(::Type{M}, keysvals::Union{AbstractVector, AbstractDict}; legacy::Bool = false) where {M<:ReactiveModel}
+  AM = get_abstract_type(M)
+  haskey(COMPONENTS, AM) || (COMPONENTS[AM] = LittleDict())
   for kv in keysvals
     (k, v) = if kv isa Pair
       kv
@@ -23,29 +24,32 @@ function register_components(model::Type{M}, keysvals::Union{AbstractVector, Abs
       kv, kv
     end
     legacy && (v = "window.vueLegacy.components['$v']")
-    delete!(COMPONENTS[model], k)
-    push!(COMPONENTS[model], k => v)
+    delete!(COMPONENTS[AM], k)
+    push!(COMPONENTS[AM], k => v)
   end
   COMPONENTS
 end
 
-register_components(model::Type{<:ReactiveModel}, args...; legacy::Bool = false) = register_components(model, collect(args); legacy)
+function register_components(::Type{M}, args...; legacy::Bool = false) where M <: ReactiveModel
+    register_components(M, collect(args); legacy)
+end
 
 register_global_components(args...; legacy::Bool = false) = register_components(ReactiveModel, args...; legacy)
 
 """
-    function components(m::Type{M})::String where {M<:ReactiveModel}
+    function components(::Type{M})::String where {M<:ReactiveModel}
     function components(app::M)::String where {M<:ReactiveModel}
 
 JSON representation of the Vue.js components registered for the `ReactiveModel` `M`.
 """
-function components(m::Type{M})::String where {M<:ReactiveModel}
-  haskey(COMPONENTS, m) || return ""
+function components(::Type{M})::String where {M<:ReactiveModel}
+  CM = get_abstract_type(M)
+  haskey(COMPONENTS, CM) || return ""
 
   # change to LittleDict as the order of components can be essential
-  json(LittleDict(k => JSONText(v) for (k, v) in COMPONENTS[m]))[2:end - 1]
+  json(LittleDict(k => JSONText(v) for (k, v) in COMPONENTS[CM]))[2:end - 1]
 end
 
 function components(app::M)::String where {M<:ReactiveModel}
-  components(get_abstract_type(M))
+  components(M)
 end
