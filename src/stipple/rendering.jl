@@ -231,7 +231,13 @@ function render_js_options!(::Union{M, Type{M}}, vue::OrderedDict{Symbol, Any} =
     end
 
     js = join_js(xx, sep1; pre, unique = true)
-    isempty(js) || push!(vue, field => JSONText("{\n    $js\n}"))
+    if !isempty(js)
+      if field != :template
+        push!(vue, field => JSONText("{\n    $js\n}"))
+      else
+        push!(vue, field => JSONText("`$js`"))
+      end
+    end    
   end
 
   for (f, field) in (
