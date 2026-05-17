@@ -868,3 +868,11 @@ end
     model[:x] = 15
     @test model.x[] == 15
 end
+
+@testset "js_str macro with and without interpolation" begin
+    who = "World"
+    @test json(js"console.log('Hello World')") == "console.log('Hello World')"
+    @test json(js"""console.log("Hello $who")""") == raw"""console.log("Hello $who")"""
+    @test json(js"console.log('Hello $who')"i) == "console.log('Hello World')"
+    @test json(js"""console.log("Hello $who")"""i) == """console.log("Hello World")"""
+end
