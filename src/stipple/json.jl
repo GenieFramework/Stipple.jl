@@ -26,7 +26,7 @@ end
 macro js_str(s, flags)
   flags == "i" || @warn "Only 'i' flag currently supported (string interpolation)."
   if 'i' in flags
-    :( JSONText($(esc(Meta.parse("\"$s\"")))) )
+    :( JSONText($(esc(Meta.parse("\"\"\"$s\"\"\"")))) )
   else
     :( JSONText($(esc(s))) )
   end
