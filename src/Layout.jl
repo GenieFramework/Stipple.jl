@@ -468,7 +468,7 @@ Place the class as second argument instead
 row(@gutter(:md, [
     card("Hello", sm = 2,  md = 8)
     card("World", sm = 10, md = 4)
-], class = "myclass"))
+]), class = "myclass")
 ```
 """
 macro gutter(size, expr)
