@@ -458,10 +458,15 @@ function channeldefault(::Type{M}) where M<:ReactiveModel
 
   model_id = Symbol(Stipple.routename(M))
 
-  use_model_storage() || return nothing
-
-  stored_model = Stipple.ModelStorage.Sessions.GenieSession.get(model_id, nothing)
-  stored_model === nothing ? nothing : getchannel(stored_model)
+  # Look up channel from session - session persistence should work regardless of model storage
+  if use_model_storage()
+    stored_model = Stipple.ModelStorage.Sessions.GenieSession.get(model_id, nothing)
+    stored_model === nothing ? nothing : getchannel(stored_model)
+  else
+    # When model storage is disabled, look up just the channel (not the full model)
+    channel_key = Symbol(string(model_id) * "_channel")
+    Stipple.ModelStorage.Sessions.GenieSession.get(channel_key, nothing)
+  end
 end
 
 @nospecialize
@@ -592,8 +597,16 @@ function init(t::Type{M};
   channel === nothing && (channel = channelfactory())
   setchannel(model, channel)
 
-  # make sure we store the channel name in the model
-  use_model_storage() && Stipple.ModelStorage.Sessions.store(model)
+  # Store model or channel in session based on model storage setting
+  if use_model_storage()
+    # Store full model when model storage is enabled
+    Stipple.ModelStorage.Sessions.store(model)
+  else
+    # When model storage is disabled, only store the channel for session persistence
+    model_id = Symbol(Stipple.routename(M))
+    channel_key = Symbol(string(model_id) * "_channel")
+    Stipple.ModelStorage.Sessions.GenieSession.set!(channel_key, channel)
+  end
 
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
   LAST_ACTIVITY[Symbol(getchannel(model))] = now()
