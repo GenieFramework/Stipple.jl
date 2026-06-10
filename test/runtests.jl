@@ -5,8 +5,18 @@ using Test
 
 version = Genie.Assets.package_version(Stipple)
 
-function string_get(x; kwargs...)
-    String(HTTP.get(x, retries = 0, status_exception = false; kwargs...).body)
+# Cookie jar for managing session cookies across requests
+# Both HTTP v1 and v2 use HTTP.Cookies.CookieJar()
+const COOKIE_JAR = HTTP.Cookies.CookieJar()
+
+function string_get(x; cookies = true, kwargs...)
+    response = if cookies
+        HTTP.get(x; retries = 0, status_exception = false, cookiejar = COOKIE_JAR, kwargs...)
+    else
+        HTTP.get(x; retries = 0, status_exception = false, kwargs...)
+    end
+    # HTTP v2 response body is accessed directly, v1 uses .body field
+    String(isdefined(response, :body) ? response.body : response)
 end
 
 function get_channel(s::String)
@@ -75,6 +85,10 @@ end
 using Stipple.ReactiveTools
 
 @testset "Reactive API (explicit)" begin
+    # Disable model storage to prevent state pollution when TestApp2 is redefined later
+    current_storage = Stipple.use_model_storage()
+    Stipple.enable_model_storage(false)
+
     @app TestApp2 begin
         @in i = 100
         @out s = "Hello"
@@ -96,6 +110,8 @@ using Stipple.ReactiveTools
     # check reactivity
     model.i[] = 20
     @test model.s[] == "20"
+
+    Stipple.enable_model_storage(current_storage)
 end
 
 @testset "Reactive API (explicit) with mixins and handlers" begin
@@ -352,6 +368,9 @@ end
     string_get("http://localhost:$port/debounce2")
     @test get_debounce(port, "main_reactivemodel") == 10
 
+    # Clear cookies before testing session persistence
+    empty!(COOKIE_JAR.entries)
+
     s1 = string_get("http://localhost:$port/")
     s2 = string_get("http://localhost:$port/")
     s3 = string_get("http://localhost:$port/", cookies = false)
@@ -411,6 +430,9 @@ end
     @clear_cache MyApp
     string_get("http://localhost:$port/debounce2")
     @test get_debounce(port, "myapp") == 11
+
+    # Clear cookies before testing session persistence
+    empty!(COOKIE_JAR.entries)
 
     s1 = string_get("http://localhost:$port/")
     s2 = string_get("http://localhost:$port/")
@@ -559,13 +581,15 @@ end
 
     # route function resulting in ParsedHTMLString
     @page("/", ui)
-    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
+    response = HTTP.get("http://127.0.0.1:$port")
+    payload = String(isdefined(response, :body) ? response.body : response)
     @test match(r"<div id=\"test\" .*?div>", payload).match == p1
     @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
 
     # route constant ParsedHTMLString
     @page("/", ui())
-    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
+    response = HTTP.get("http://127.0.0.1:$port")
+    payload = String(isdefined(response, :body) ? response.body : response)
     @test match(r"<div id=\"test\" .*?div>", payload).match == p1
     @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
 
@@ -575,7 +599,8 @@ end
 
     # route function resulting in Vector{ParsedHTMLString}
     @page("/", ui)
-    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
+    response = HTTP.get("http://127.0.0.1:$port")
+    payload = String(isdefined(response, :body) ? response.body : response)
     @test match(r"<div id=\"test\" .*?div>", payload).match == p1
     @test contains(payload, r"<a>test \d+</a>")
 
@@ -583,7 +608,8 @@ end
 
     # route constant Vector{ParsedHTMLString}
     @page("/", ui())
-    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
+    response = HTTP.get("http://127.0.0.1:$port")
+    payload = String(isdefined(response, :body) ? response.body : response)
     @test match(r"<div id=\"test\" .*?div>", payload).match == p1
     @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
 
@@ -596,14 +622,16 @@ end
 
     # route function resulting in String
     @page("/", ui)
-    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
+    response = HTTP.get("http://127.0.0.1:$port")
+    payload = String(isdefined(response, :body) ? response.body : response)
     @test test_fn(match(r"<div id=\"test\" .*?div>", payload).match, p1)
     @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
     @test contains(payload, r"<a>test \d+</a>")
 
     # route constant String
     @page("/", ui())
-    payload = String(HTTP.payload(HTTP.get("http://127.0.0.1:$port")))
+    response = HTTP.get("http://127.0.0.1:$port")
+    payload = String(isdefined(response, :body) ? response.body : response)
     @test test_fn(match(r"<div id=\"test\" .*?div>", payload).match, p1)
     @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
     @test contains(payload, r"<a>test \d+</a>")
@@ -693,6 +721,10 @@ end
 end
 
 @testset "Exporting and loading model field values" begin
+    # Disable model storage to prevent loading stale TestApp2 from previous test
+    current_storage = Stipple.use_model_storage()
+    Stipple.enable_model_storage(false)
+
     @app TestApp2 begin
         @in i = 100
         @out s = "Hello"
@@ -722,6 +754,7 @@ end
     @test model.s[] == "zero"
     @test model.x[] == 50
 
+    Stipple.enable_model_storage(current_storage)
 end
 
 @testset "Finalizers" begin
