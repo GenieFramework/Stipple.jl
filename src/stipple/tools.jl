@@ -205,7 +205,7 @@ macro stipple_precompile(setup, workload)
                 precompile_post(location::String, args...; retry = false, kwargs...) = precompile_request(:POST, location, args...; retry, kwargs...)
 
                 Stipple.Logging.with_logger(Stipple.Logging.SimpleLogger(stdout, Stipple.Logging.Error)) do
-                    Stipple.up(host = "127.0.0.1", port = port, wsport = port)
+                    Stipple.up(host = "127.0.0.1", port = port, ws_port = port)
 
                     $workload
 
@@ -213,6 +213,13 @@ macro stipple_precompile(setup, workload)
                 end
                 # reset secret back to empty string in case that the application sets the token during precompilation
                 Stipple.Genie.Secrets.secret_token!("")
+
+                # Shutdown IOPoll event loop to prevent precompilation from hanging!
+                try
+                    Stipple.Genie.HTTPUtils.HTTP.IOPoll.shutdown!()
+                catch e
+                    # Ignore errors during shutdown
+                end
             end
         end
     end |> esc
@@ -376,7 +383,7 @@ function _ws_client(messages = String[], payloads::Array{<:AbstractDict} = fill(
         push!(payloads, Dict())
     end
 
-    websockets = Channel{HTTP.WebSocket}(1)
+    websockets = Channel{HTTP.WebSockets.WebSocket}(1)
     ws_client = @async HTTP.WebSockets.open("ws://$host:$port") do ws
         put!(websockets, ws)
         messages = Dict.("channel" => channel, "message" .=> messages, "payload" .=> payloads)
@@ -392,6 +399,8 @@ function _ws_client(messages = String[], payloads::Array{<:AbstractDict} = fill(
                 break
             end
         end
+        # Ensure the websockets channel is closed when we're done
+        close(websockets)
     end
     
     if async
@@ -399,7 +408,7 @@ function _ws_client(messages = String[], payloads::Array{<:AbstractDict} = fill(
             @timeout timeout take!(websockets) nothing
         else
             take!(websockets)
-        end::Union{Nothing, HTTP.WebSocket}
+        end::Union{Nothing, HTTP.WebSockets.WebSocket}
         ws === nothing && return nothing
         # make sure no idle tasks are left hanging around
         Genie.Util.isprecompiling || Timer(maximum_async_duration) do timer

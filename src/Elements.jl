@@ -182,18 +182,8 @@ function vue_integration(::Type{M};
       app.updateField('isready', true)
       app.push('isready');
     """,
-    transport == Genie.WebChannels &&
-    """
-      try {
-        if (Genie.Settings.webchannels_keepalive_frequency > 0) {
-          keepaliveTimer(app.WebChannel, 0);
-        }
-      } catch (e) {
-        if (Genie.Settings.env === 'dev') {
-          console.error('Error setting WebSocket keepalive interval: ' + e);
-        }
-      }
-    """,
+    # Keepalive is now handled by Genie.jl's channels.js
+    "",
     """
       if (Genie.Settings.env === 'dev') {
         console.info('App starting');
@@ -315,19 +305,7 @@ function vue2_integration(::Type{M};
       $vue_app_name.channel_ = window.CHANNEL;
       $vue_app_name.isready = true;
       Genie.Revivers.addReviver(window.$(vue_app_name).revive_jsfunction);
-      $(transport == Genie.WebChannels &&
-      "
-      try {
-        if (Genie.Settings.webchannels_keepalive_frequency > 0) {
-          clearInterval($vue_app_name.keepalive_interval);
-          $vue_app_name.keepalive_interval = setInterval(keepalive, Genie.Settings.webchannels_keepalive_frequency);
-        }
-      } catch (e) {
-        if (Genie.Settings.env === 'dev') {
-          console.error('Error setting WebSocket keepalive interval: ' + e);
-        }
-      }
-      ")
+      // Keepalive is now handled by Genie.jl's channels.js
 
       if (Genie.Settings.env === 'dev') {
         console.info('App starting');
