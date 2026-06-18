@@ -209,7 +209,7 @@ macro stipple_precompile(setup, workload)
 
                     $workload
 
-                    Stipple.down()
+                    Stipple.Genie.down!()
                 end
                 # reset secret back to empty string in case that the application sets the token during precompilation
                 Stipple.Genie.Secrets.secret_token!("")

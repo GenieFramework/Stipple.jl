@@ -1548,6 +1548,7 @@ using Stipple.ReactiveTools
   ws_client_send(timeout = 60)
   deps_routes(core_theme = true)
   precompile_get(Genie.Assets.asset_path(assets_config, :js, file = "stipplecore"))
+  delete!(Stipple.DEPS, Stipple.PrecompileApp)
 end
 
 end
