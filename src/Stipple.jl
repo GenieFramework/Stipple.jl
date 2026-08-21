@@ -21,12 +21,24 @@ const ALWAYS_REGISTER_CHANNELS = RefValue(true)
 const USE_MODEL_STORAGE = RefValue(true)
 const PRECOMPILE = RefValue(false)
 const FIXED_TYPES = Dict{Module, Vector{Symbol}}()
+const SHARE_CHANNELS_ACROSS_WINDOWS = RefValue{Union{Bool, Nothing}}(nothing)
 
 import MacroTools
 import Pkg.TOML
 
 function use_model_storage()
   USE_MODEL_STORAGE[]
+end
+
+"""
+Whether windows in the same session should reuse the same channel.
+
+If set to `nothing`, the default follows `use_model_storage()`:
+- `true` => share channels across windows
+- `false` => keep channels isolated unless explicitly enabled
+"""
+function share_channels_across_windows()::Bool
+  SHARE_CHANNELS_ACROSS_WINDOWS[] === nothing ? use_model_storage() : SHARE_CHANNELS_ACROSS_WINDOWS[]
 end
 
 """
@@ -458,7 +470,9 @@ function channeldefault(::Type{M}) where M<:ReactiveModel
 
   model_id = Symbol(Stipple.routename(M))
 
-  # Look up channel from session - session persistence should work regardless of model storage
+  # Default channel sharing follows the model storage policy, but may be overridden explicitly.
+  share_channels_across_windows() || return nothing
+
   if use_model_storage()
     stored_model = Stipple.ModelStorage.Sessions.GenieSession.get(model_id, nothing)
     stored_model === nothing ? nothing : getchannel(stored_model)
@@ -597,12 +611,12 @@ function init(t::Type{M};
   channel === nothing && (channel = channelfactory())
   setchannel(model, channel)
 
-  # Store model or channel in session based on model storage setting
+  # Store model or channel in session based on model storage setting and explicit cross-window sync override.
   if use_model_storage()
-    # Store full model when model storage is enabled
+    # Store full model when model storage is enabled.
     Stipple.ModelStorage.Sessions.store(model)
-  else
-    # When model storage is disabled, only store the channel for session persistence
+  elseif SHARE_CHANNELS_ACROSS_WINDOWS[] === true
+    # When model storage is disabled but cross-window sync is explicitly on, store only the channel.
     model_id = Symbol(Stipple.routename(M))
     channel_key = Symbol(string(model_id) * "_channel")
     Stipple.ModelStorage.Sessions.GenieSession.set!(channel_key, channel)

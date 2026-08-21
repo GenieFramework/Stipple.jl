@@ -383,6 +383,32 @@ end
     @test get_channel(s3) != get_channel(s1)
     @test get_channel(s4) == get_channel(s5) == get_channel(s6)
 
+    current_storage = Stipple.use_model_storage()
+    current_channel_sharing = Stipple.SHARE_CHANNELS_ACROSS_WINDOWS[]
+
+    Stipple.enable_model_storage(false)
+    empty!(COOKIE_JAR.entries)
+
+    s7 = string_get("http://localhost:$port/")
+    s8 = string_get("http://localhost:$port/")
+    s9 = string_get("http://localhost:$port/", cookies = false)
+
+    @test get_channel(s8) != get_channel(s7)
+    @test get_channel(s9) != get_channel(s7)
+
+    Stipple.SHARE_CHANNELS_ACROSS_WINDOWS[] = true
+    empty!(COOKIE_JAR.entries)
+
+    s10 = string_get("http://localhost:$port/")
+    s11 = string_get("http://localhost:$port/")
+    s12 = string_get("http://localhost:$port/", cookies = false)
+
+    @test get_channel(s11) == get_channel(s10)
+    @test get_channel(s12) != get_channel(s10)
+
+    Stipple.enable_model_storage(current_storage)
+    Stipple.SHARE_CHANNELS_ACROSS_WINDOWS[] = current_channel_sharing
+
     @clear_cache
     down()
 end
