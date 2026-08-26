@@ -1,39 +1,88 @@
-using Stipple
-using Stipple.Genie.HTTPUtils.HTTP
+using TestItemRunner
 
-using Test
+@run_package_tests
 
-version = Genie.Assets.package_version(Stipple)
+@testmodule StippleTestSetup begin
+    using Reexport
+    using Sockets
+    using Genie.HTTPUtils.HTTP
 
-# Cookie jar for managing session cookies across requests
-# Both HTTP v1 and v2 use HTTP.Cookies.CookieJar()
-const COOKIE_JAR = HTTP.Cookies.CookieJar()
+    @reexport using Stipple
+    @reexport using Stipple.ReactiveTools
 
-function string_get(x; cookies = true, kwargs...)
-    response = if cookies
-        HTTP.get(x; retries = 0, status_exception = false, cookiejar = COOKIE_JAR, kwargs...)
-    else
-        HTTP.get(x; retries = 0, status_exception = false, kwargs...)
+    # Cookie jar for managing session cookies across requests.
+    const COOKIE_JAR = HTTP.Cookies.CookieJar()
+
+    function unique_test_port()
+        server = Sockets.listen(ip"127.0.0.1", 0)
+        try
+            sockname = Sockets.getsockname(server)
+            return sockname isa Tuple ? Int(last(sockname)) : Int(sockname.port)
+        finally
+            close(server)
+        end
     end
-    # HTTP v2 response body is accessed directly, v1 uses .body field
-    String(isdefined(response, :body) ? response.body : response)
+
+    function string_get(x; cookies = true, kwargs...)
+        response = if cookies
+            HTTP.get(x; retries = 0, status_exception = false, cookiejar = COOKIE_JAR, kwargs...)
+        else
+            HTTP.get(x; retries = 0, status_exception = false, kwargs...)
+        end
+        # HTTP v2 response body is accessed directly, v1 uses .body field.
+        String(isdefined(response, :body) ? response.body : response)
+    end
+
+    function get_channel(s::String)
+        match(r"\(\) => window.create[^']+'([^']+)'", s).captures[1]
+    end
+
+    function get_debounce(port, modelname = nothing; page = "/")
+        html = string_get("http://localhost:$port$page")
+        script_matches = collect(eachmatch(r"/stipple\.jl/[^\"']+/assets/js/[^\"']+\.js", html))
+        isempty(script_matches) && error("Could not find Stipple model JS asset in page HTML.")
+        js_asset_path = script_matches[end].match
+
+        s = string_get("http://localhost:$port$js_asset_path")
+        parse(Int, match(r"_.debounce\(.+?(\d+)\)", s).captures[1])
+    end
+
+    @vars TestMixin begin
+        j = 101
+        t = "World", PRIVATE
+    end
+
+    module App1
+    using Stipple, Stipple.ReactiveTools
+
+    @app begin
+        @in i1 = 101
+    end
+
+    @app MyApp begin
+        @in i1 = 101
+    end
+    end
+
+    module App2
+    using Stipple, Stipple.ReactiveTools
+
+    @app begin
+        @in i2 = 102
+    end
+
+    @app MyApp begin
+        @in i2 = 102
+    end
+    end
+
+    @enum Fruit apple = 1 orange = 2 kiwi = 3
+
+    export COOKIE_JAR, unique_test_port, string_get, get_channel, get_debounce
+    export TestMixin, App1, App2, Fruit, apple, orange, kiwi
 end
 
-function get_channel(s::String)
-    match(r"\(\) => window.create[^']+'([^']+)'", s).captures[1]
-end
-
-function get_debounce(port, modelname)
-    s = string_get("http://localhost:$port/stipple.jl/$(Genie.Assets.package_version("Stipple"))/assets/js/$modelname.js")
-    parse(Int, match(r"_.debounce\(.+?(\d+)\)", s).captures[1])
-end
-
-@vars TestMixin begin
-    j = 101
-    t = "World", PRIVATE
-end
-
-@testset "Classic API" begin
+@testitem "Classic API" setup=[StippleTestSetup] begin
     @vars TestApp begin
         i = 100
         s = "Hello", READONLY
@@ -61,7 +110,7 @@ end
     @test model.s[] == "20"
 end
 
-@testset "Classic API with mixins" begin
+@testitem "Classic API with mixins" setup=[StippleTestSetup] begin
     @vars TestApp begin
         i = 100
         s = "Hello"
@@ -82,9 +131,9 @@ end
     @test propertynames(model) == tuple(Stipple.INTERNALFIELDS..., Stipple.AUTOFIELDS..., :i, :s, :j, :t, :mixin_j, :mixin_t, :pre_j_post, :pre_t_post)
 end
 
-using Stipple.ReactiveTools
-
-@testset "Reactive API (explicit)" begin
+@testitem "Reactive API (explicit)" setup=[StippleTestSetup] begin
+    #using .StippleTestSetup
+    using Stipple.ReactiveTools
     # Disable model storage to prevent state pollution when TestApp2 is redefined later
     current_storage = Stipple.use_model_storage()
     Stipple.enable_model_storage(false)
@@ -114,7 +163,7 @@ using Stipple.ReactiveTools
     Stipple.enable_model_storage(current_storage)
 end
 
-@testset "Reactive API (explicit) with mixins and handlers" begin
+@testitem "Reactive API (explicit) with mixins and handlers" setup=[StippleTestSetup] begin
     @eval @app TestApp begin
         @in i = 100
         @out s = "Hello"
@@ -143,7 +192,7 @@ end
     @test haskey(Stipple.DEBOUNCE, TestApp) == false
 end
 
-@testset "Reactive API (implicit)" begin
+@testitem "Reactive API (implicit)" setup=[StippleTestSetup] begin
     @eval @app begin
         @in i2 = 100
         @out s2 = "Hello"
@@ -175,7 +224,7 @@ end
     @test haskey(Stipple.DEBOUNCE, Stipple.@type()) == false
 end
 
-@testset "Reactive API (implicit) with mixins and handlers" begin
+@testitem "Reactive API (implicit) with mixins and handlers" setup=[StippleTestSetup] begin
     @eval @app begin
         @in i3 = 100
         @out s3 = "Hello"
@@ -196,7 +245,7 @@ end
     @test model.s3[] == "20"
 end
 
-@testset "Reactive API with mixins and handlers" begin
+@testitem "Reactive API with mixins and handlers" setup=[StippleTestSetup] begin
     @eval @app VueCopyButton begin
         @out copied = false
     end
@@ -240,33 +289,7 @@ end
     @test contains(component_str, "<button icon=")
 end
 
-module App1
-
-using Stipple, Stipple.ReactiveTools
-@app begin
-    @in i1 = 101
-end
-
-@app MyApp begin
-    @in i1 = 101
-end
-
-end
-
-module App2
-using Stipple, Stipple.ReactiveTools
-
-@app begin
-    @in i2 = 102
-end
-
-@app MyApp begin
-    @in i2 = 102
-end
-
-end
-
-@testset "Multipage Reactive API (implicit)" begin
+@testitem "Multipage Reactive API (implicit)" setup=[StippleTestSetup] begin
     @eval p1 = @page("/app1", "hello", model = App1)
     @eval p2 = @page("/app2", "world", model = App2)
     channel1a = get_channel(String(p1.route.action().body))
@@ -278,7 +301,7 @@ end
     @test channel1a != channel1b != channel2a != channel2b
 end
 
-@testset "Multipage Reactive API (explicit)" begin
+@testitem "Multipage Reactive API (explicit)" setup=[StippleTestSetup] begin
     @eval p1 = @page("/app1", "hello", model = App1.MyApp)
     @eval p2 = @page("/app2", "world", model = App2.MyApp)
     channel1a = get_channel(String(p1.route.action().body))
@@ -290,8 +313,8 @@ end
     @test channel1a != channel1b != channel2a != channel2b
 end
 
-using DataFrames
-@testset "Extensions" begin
+@testitem "Extensions" setup=[StippleTestSetup] begin
+    using DataFrames
     d1 = Dict(:a => [1, 2, 3], :b => ["a", "b", "c"])
     d2 = Dict(:a => [2, 3, 4], :b => ["b", "c", "d"])
     df1 = DataFrame(d1)
@@ -307,7 +330,8 @@ end
 
 # Basic rendering tests (should be enhanced over time perhaps...)
 # These tests should probably be repeated in StippleUI to make sure rendering is not overwritten
-@testset "Rendering" begin
+@testitem "Rendering" setup=[StippleTestSetup] begin
+    using DataFrames
     using Tables
 
     ds = Dict("hello" => [1, 2, 3, 4], "world" => ["five", "six"])
@@ -325,7 +349,7 @@ end
 
 # Basic server tests (should be enhanced over time perhaps...)
 
-@testset "Serving implicit app" begin
+@testitem "Serving implicit app" tags=[:server] setup=[StippleTestSetup] begin
     @eval begin
         @app begin
             @in i3 = 100
@@ -350,70 +374,74 @@ end
         @page("/static", ui; model)
     end
 
-    port = rand(8001:9000)
-    up(;port, ws_port = port)
-
-    @test occursin(">DEMO UI<", string_get("http://localhost:$port"))
-
-    @test contains(string_get("http://localhost:$port/nolayout"), r"<!DOCTYPE html><html>\n  <body>\s*(<p>)?no layout(</p>)?\s*</body></html>")
-
-    @test get_debounce(port, "main_reactivemodel") == 300
-
-    @clear_cache
-    # first get the main page to trigger init function, which sets up the assets
-    string_get("http://localhost:$port/debounce")
-    @test get_debounce(port, "main_reactivemodel") == 50
-
-    @clear_cache
-    string_get("http://localhost:$port/debounce2")
-    @test get_debounce(port, "main_reactivemodel") == 10
-
-    # Clear cookies before testing session persistence
-    empty!(COOKIE_JAR.entries)
-
-    s1 = string_get("http://localhost:$port/")
-    s2 = string_get("http://localhost:$port/")
-    s3 = string_get("http://localhost:$port/", cookies = false)
-
-    s4 = string_get("http://localhost:$port/static")
-    s5 = string_get("http://localhost:$port/static")
-    s6 = string_get("http://localhost:$port/static", cookies = false)
-
-    @test get_channel(s2) == get_channel(s1)
-    @test get_channel(s3) != get_channel(s1)
-    @test get_channel(s4) == get_channel(s5) == get_channel(s6)
-
+    port = unique_test_port()
     current_storage = Stipple.use_model_storage()
     current_channel_sharing = Stipple.SHARE_CHANNELS_ACROSS_WINDOWS[]
 
-    Stipple.enable_model_storage(false)
-    empty!(COOKIE_JAR.entries)
+    up(; port, ws_port = port)
 
-    s7 = string_get("http://localhost:$port/")
-    s8 = string_get("http://localhost:$port/")
-    s9 = string_get("http://localhost:$port/", cookies = false)
+    try
+        @test occursin(">DEMO UI<", string_get("http://localhost:$port"))
 
-    @test get_channel(s8) != get_channel(s7)
-    @test get_channel(s9) != get_channel(s7)
+        @test contains(string_get("http://localhost:$port/nolayout"), r"<!DOCTYPE html><html>\n  <body>\s*(<p>)?no layout(</p>)?\s*</body></html>")
 
-    Stipple.SHARE_CHANNELS_ACROSS_WINDOWS[] = true
-    empty!(COOKIE_JAR.entries)
+        @test get_debounce(port, "main_reactivemodel") == 300
 
-    s10 = string_get("http://localhost:$port/")
-    s11 = string_get("http://localhost:$port/")
-    s12 = string_get("http://localhost:$port/", cookies = false)
+        @clear_cache
+        # first get the main page to trigger init function, which sets up the assets
+        string_get("http://localhost:$port/debounce")
+        @test get_debounce(port, "main_reactivemodel") == 50
 
-    @test get_channel(s11) == get_channel(s10)
-    @test get_channel(s12) != get_channel(s10)
+        @clear_cache
+        string_get("http://localhost:$port/debounce2")
+        @test get_debounce(port, "main_reactivemodel") == 10
 
-    Stipple.enable_model_storage(current_storage)
-    Stipple.SHARE_CHANNELS_ACROSS_WINDOWS[] = current_channel_sharing
+        # Clear cookies before testing session persistence
+        empty!(COOKIE_JAR.entries)
 
-    @clear_cache
-    down()
+        s1 = string_get("http://localhost:$port/")
+        s2 = string_get("http://localhost:$port/")
+        s3 = string_get("http://localhost:$port/", cookies = false)
+
+        s4 = string_get("http://localhost:$port/static")
+        s5 = string_get("http://localhost:$port/static")
+        s6 = string_get("http://localhost:$port/static", cookies = false)
+
+        @test get_channel(s2) == get_channel(s1)
+        @test get_channel(s3) != get_channel(s1)
+        @test get_channel(s4) == get_channel(s5) == get_channel(s6)
+
+        Stipple.enable_model_storage(false)
+        empty!(COOKIE_JAR.entries)
+
+        s7 = string_get("http://localhost:$port/")
+        s8 = string_get("http://localhost:$port/")
+        s9 = string_get("http://localhost:$port/", cookies = false)
+
+        @test get_channel(s8) != get_channel(s7)
+        @test get_channel(s9) != get_channel(s7)
+
+        Stipple.SHARE_CHANNELS_ACROSS_WINDOWS[] = true
+        empty!(COOKIE_JAR.entries)
+
+        s10 = string_get("http://localhost:$port/")
+        s11 = string_get("http://localhost:$port/")
+        s12 = string_get("http://localhost:$port/", cookies = false)
+
+        @test get_channel(s11) == get_channel(s10)
+        @test get_channel(s12) != get_channel(s10)
+    finally
+        Stipple.enable_model_storage(current_storage)
+        Stipple.SHARE_CHANNELS_ACROSS_WINDOWS[] = current_channel_sharing
+        @clear_cache
+        try
+            down()
+        catch
+        end
+    end
 end
 
-@testset "Serving explicit app" begin
+@testitem "Serving explicit app" tags=[:server] setup=[StippleTestSetup] begin
     @eval begin
         @app MyApp begin
             @in i3 = 100
@@ -438,47 +466,52 @@ end
         @page("/static1", ui; model)
     end
 
-    port = rand(8001:9000)
-    up(;port, ws_port = port)
+    port = unique_test_port()
+    up(; port, ws_port = port)
 
-    @clear_cache MyApp
-    @test occursin(">DEMO UI explicit<", string_get("http://localhost:$port"))
+    try
+        @clear_cache MyApp
+        @test occursin(">DEMO UI explicit<", string_get("http://localhost:$port"))
 
-    @test contains(string_get("http://localhost:$port/nolayout"), r"<!DOCTYPE html><html>\n  <body>\s*(<p>)?no layout \(explicit\)(</p>)?\s*</body></html>")
+        @test contains(string_get("http://localhost:$port/nolayout"), r"<!DOCTYPE html><html>\n  <body>\s*(<p>)?no layout \(explicit\)(</p>)?\s*</body></html>")
 
-    @test get_debounce(port, "myapp") == 300
+        @test get_debounce(port, "myapp") == 300
 
-    @clear_cache MyApp
-    # first get the main page to trigger init function, which sets up the assets
-    string_get("http://localhost:$port/debounce")
-    @test get_debounce(port, "myapp") == 51
+        @clear_cache MyApp
+        # first get the main page to trigger init function, which sets up the assets
+        string_get("http://localhost:$port/debounce")
+        @test get_debounce(port, "myapp") == 51
 
-    @clear_cache MyApp
-    string_get("http://localhost:$port/debounce2")
-    @test get_debounce(port, "myapp") == 11
+        @clear_cache MyApp
+        string_get("http://localhost:$port/debounce2")
+        @test get_debounce(port, "myapp") == 11
 
-    # Clear cookies before testing session persistence
-    empty!(COOKIE_JAR.entries)
+        # Clear cookies before testing session persistence
+        empty!(COOKIE_JAR.entries)
 
-    s1 = string_get("http://localhost:$port/")
-    s2 = string_get("http://localhost:$port/")
-    s3 = string_get("http://localhost:$port/", cookies = false)
+        s1 = string_get("http://localhost:$port/")
+        s2 = string_get("http://localhost:$port/")
+        s3 = string_get("http://localhost:$port/", cookies = false)
 
-    s4 = string_get("http://localhost:$port/static")
-    s5 = string_get("http://localhost:$port/static")
-    s6 = string_get("http://localhost:$port/static", cookies = false)
+        s4 = string_get("http://localhost:$port/static1")
+        s5 = string_get("http://localhost:$port/static1")
+        s6 = string_get("http://localhost:$port/static1", cookies = false)
 
-    @test get_channel(s2) == get_channel(s1)
-    @test get_channel(s3) != get_channel(s1)
-    @test get_channel(s4) == get_channel(s5) == get_channel(s6)
-
-    @clear_cache MyApp
-    down()
+        @test get_channel(s2) == get_channel(s1)
+        @test get_channel(s3) != get_channel(s1)
+        @test get_channel(s4) == get_channel(s5) == get_channel(s6)
+    finally
+        @clear_cache MyApp
+        try
+            down()
+        catch
+        end
+    end
 end
 
 # attribute testing
 
-@testset "Flexgrid attributes for row(), column(), and cell()" begin
+@testitem "Flexgrid attributes for row(), column(), and cell()" setup=[StippleTestSetup] begin
 
     el = column(col = 2, sm = 9, class = "myclass")
     @test contains(el, "class=\"myclass column col-2 col-sm-9")
@@ -531,7 +564,7 @@ end
     "<div class=\"st-col\">Hello</div></div><div class=\"col col-sm-10 col-md-4\"><div class=\"st-col\">World</div></div></div>"
 end
 
-@testset "Vue Conditionals and Iterator" begin
+@testitem "Vue Conditionals and Iterator" setup=[StippleTestSetup] begin
     el = column("Hello", @if(:visible))
     @test contains(el, "v-if=\"visible\"")
 
@@ -569,15 +602,13 @@ end
     el =  row("hello", @showif(:n^2 ∉ 3:2:11))
     @test el == "<div v-show=\"!((n ** 2) in [3,5,7,9,11])\" class=\"row\">hello</div>"
 
-    @enum Fruit apple=1 orange=2 kiwi=3
-
     fruit = apple
 
     el = row(@showif(:fruit == apple), "My fruit is a(n) '{{ fruit }}'")
     @test el == "<div v-show=\"fruit == 'apple'\" class=\"row\">My fruit is a(n) '{{ fruit }}'</div>"
 end
 
-@testset "Javascript expressions: JSExpr" begin
+@testitem "Javascript expressions: JSExpr" setup=[StippleTestSetup] begin
     # note, you cannot compare a JSExpr by `==` directly as `==` is overloaded for JSExpr
     je1 = @jsexpr(:x+1)
     je2 = @jsexpr(:y+2)
@@ -593,79 +624,84 @@ end
     @test Stipple.json(je1 + je2) == "((2 * (xx ** 2)) + 2) + (y + '2')"
 end
 
-@testset "@page macro with ParsedHTMLStrings" begin
+@testitem "@page macro with ParsedHTMLStrings" tags=[:server] setup=[StippleTestSetup] begin
     using Genie.HTTPUtils.HTTP
 
-    port = rand(8001:9000)
-    up(;port, ws_port = port)
+    port = unique_test_port()
+    up(; port, ws_port = port)
 
-    # rand is needed to avoid re-using cached routes
-    view() = [ParsedHTMLString("""<div id="test" @click="i = i+1">Change @click</div>"""), a("test $(rand(1:10^10))")]
-    p1 = view()[1]
+    try
+        # rand is needed to avoid re-using cached routes
+        view() = [ParsedHTMLString("""<div id="test" @click="i = i+1">Change @click</div>"""), a("test $(rand(1:10^10))")]
+        p1 = view()[1]
 
-    ui() = ParsedHTMLString(view())
+        ui() = ParsedHTMLString(view())
 
-    # route function resulting in ParsedHTMLString
-    @page("/", ui)
-    response = HTTP.get("http://127.0.0.1:$port")
-    payload = String(isdefined(response, :body) ? response.body : response)
-    @test match(r"<div id=\"test\" .*?div>", payload).match == p1
-    @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
+        # route function resulting in ParsedHTMLString
+        @page("/", ui)
+        response = HTTP.get("http://127.0.0.1:$port")
+        payload = String(isdefined(response, :body) ? response.body : response)
+        @test match(r"<div id=\"test\" .*?div>", payload).match == p1
+        @test contains(payload, r"<link href=\"/stipple\.jl/[^\"/]+/assets/css/stipplecore\.css\"")
 
-    # route constant ParsedHTMLString
-    @page("/", ui())
-    response = HTTP.get("http://127.0.0.1:$port")
-    payload = String(isdefined(response, :body) ? response.body : response)
-    @test match(r"<div id=\"test\" .*?div>", payload).match == p1
-    @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
+        # route constant ParsedHTMLString
+        @page("/", ui())
+        response = HTTP.get("http://127.0.0.1:$port")
+        payload = String(isdefined(response, :body) ? response.body : response)
+        @test match(r"<div id=\"test\" .*?div>", payload).match == p1
+        @test contains(payload, r"<link href=\"/stipple\.jl/[^\"/]+/assets/css/stipplecore\.css\"")
 
-    # ----------------------------
+        # ----------------------------
 
-    ui() = view()
+        ui() = view()
 
-    # route function resulting in Vector{ParsedHTMLString}
-    @page("/", ui)
-    response = HTTP.get("http://127.0.0.1:$port")
-    payload = String(isdefined(response, :body) ? response.body : response)
-    @test match(r"<div id=\"test\" .*?div>", payload).match == p1
-    @test contains(payload, r"<a>test \d+</a>")
+        # route function resulting in Vector{ParsedHTMLString}
+        @page("/", ui)
+        response = HTTP.get("http://127.0.0.1:$port")
+        payload = String(isdefined(response, :body) ? response.body : response)
+        @test match(r"<div id=\"test\" .*?div>", payload).match == p1
+        @test contains(payload, r"<a>test \d+</a>")
 
-    @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
+        @test contains(payload, r"<link href=\"/stipple\.jl/[^\"/]+/assets/css/stipplecore\.css\"")
 
-    # route constant Vector{ParsedHTMLString}
-    @page("/", ui())
-    response = HTTP.get("http://127.0.0.1:$port")
-    payload = String(isdefined(response, :body) ? response.body : response)
-    @test match(r"<div id=\"test\" .*?div>", payload).match == p1
-    @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
+        # route constant Vector{ParsedHTMLString}
+        @page("/", ui())
+        response = HTTP.get("http://127.0.0.1:$port")
+        payload = String(isdefined(response, :body) ? response.body : response)
+        @test match(r"<div id=\"test\" .*?div>", payload).match == p1
+        @test contains(payload, r"<link href=\"/stipple\.jl/[^\"/]+/assets/css/stipplecore\.css\"")
 
-    # Supply a String instead of a ParsedHTMLString.
-    # As the '@' character is not correctly parsed, the match is expected to differ
-    # Update, since XML2_jll version 2.14.0, the '@' character is correctly parsed, hence we need to differentiate between the two cases
-    
-    test_fn = VersionNumber(Genie.Assets.package_version("XML2_jll")) > v"2.14.0-" ? (==) : (!=)
-    ui() = join(view())
+        # Supply a String instead of a ParsedHTMLString.
+        # As the '@' character is not correctly parsed, the match is expected to differ.
+        # Update, since XML2_jll version 2.14.0, the '@' character is correctly parsed, hence we need to differentiate between the two cases.
+        test_fn = VersionNumber(Genie.Assets.package_version("XML2_jll")) > v"2.14.0-" ? (==) : (!=)
+        ui() = join(view())
 
-    # route function resulting in String
-    @page("/", ui)
-    response = HTTP.get("http://127.0.0.1:$port")
-    payload = String(isdefined(response, :body) ? response.body : response)
-    @test test_fn(match(r"<div id=\"test\" .*?div>", payload).match, p1)
-    @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
-    @test contains(payload, r"<a>test \d+</a>")
+        # route function resulting in String
+        @page("/", ui)
+        response = HTTP.get("http://127.0.0.1:$port")
+        payload = String(isdefined(response, :body) ? response.body : response)
+        @test test_fn(match(r"<div id=\"test\" .*?div>", payload).match, p1)
+        @test contains(payload, r"<link href=\"/stipple\.jl/[^\"/]+/assets/css/stipplecore\.css\"")
+        @test contains(payload, r"<a>test \d+</a>")
 
-    # route constant String
-    @page("/", ui())
-    response = HTTP.get("http://127.0.0.1:$port")
-    payload = String(isdefined(response, :body) ? response.body : response)
-    @test test_fn(match(r"<div id=\"test\" .*?div>", payload).match, p1)
-    @test contains(payload, """<link href="/stipple.jl/$version/assets/css/stipplecore.css""")
-    @test contains(payload, r"<a>test \d+</a>")
-
-    down()
+        # route constant String
+        @page("/", ui())
+        response = HTTP.get("http://127.0.0.1:$port")
+        payload = String(isdefined(response, :body) ? response.body : response)
+        @test test_fn(match(r"<div id=\"test\" .*?div>", payload).match, p1)
+        @test contains(payload, r"<link href=\"/stipple\.jl/[^\"/]+/assets/css/stipplecore\.css\"")
+        @test contains(payload, r"<a>test \d+</a>")
+    finally
+        try
+            down()
+        catch
+        end
+    end
 end
 
-@testset "Indexing with `end`" begin
+@testitem "Indexing with `end`" setup=[StippleTestSetup] begin
+    using DataFrames
     r = R([1, 2, 3])
     on(r) do r
         r[end - 1] += 1
@@ -681,7 +717,7 @@ end
     @test df[:, end] == 12:14
 end
 
-@testset "adding and removing stylesheets" begin
+@testitem "adding and removing stylesheets" setup=[StippleTestSetup] begin
     function my_css()
         [style("""
             .stipple-core .q-table tbody tr { color: inherit; }
@@ -702,7 +738,7 @@ end
     @test findfirst(==(my_css), Stipple.Layout.THEMES[]) === nothing
 end
 
-@testset "parsing" begin
+@testitem "parsing" setup=[StippleTestSetup] begin
     struct T1
         c::Int
         d::Int
@@ -746,7 +782,7 @@ end
     @test Stipple.stipple_parse(Fruit, "apple") == apple
 end
 
-@testset "Exporting and loading model field values" begin
+@testitem "Exporting and loading model field values" setup=[StippleTestSetup] begin
     # Disable model storage to prevent loading stale TestApp2 from previous test
     current_storage = Stipple.use_model_storage()
     Stipple.enable_model_storage(false)
@@ -783,7 +819,7 @@ end
     Stipple.enable_model_storage(current_storage)
 end
 
-@testset "Finalizers" begin
+@testitem "Finalizers" setup=[StippleTestSetup] begin
     current_storage = Stipple.use_model_storage()
     Stipple.enable_model_storage(false)
     @app MyApp begin
@@ -812,7 +848,7 @@ end
     Stipple.enable_model_storage(current_storage)
 end
 
-@testset "Observable synchronization" begin
+@testitem "Observable synchronization" setup=[StippleTestSetup] begin
     o = Observable(0)
     o1 = Observable(1)
     o2 = Observable(2)
@@ -873,7 +909,7 @@ end
     @test length(o.listeners) == 0
 end
 
-@testset "Priority" begin
+@testitem "Priority" setup=[StippleTestSetup] begin
     # test app example from the docstring
     @app begin
         # reactive variables
@@ -906,7 +942,7 @@ end
     @test model.result[] == 100
 end
 
-@testset "New syntax (still in development)" begin
+@testitem "New syntax (still in development)" setup=[StippleTestSetup] begin
     @app MyApp begin
         @in x = 10
         @onchange x begin
@@ -928,7 +964,7 @@ end
     @test model.x[] == 15
 end
 
-@testset "js_str macro with and without interpolation" begin
+@testitem "js_str macro with and without interpolation" setup=[StippleTestSetup] begin
     who = "World"
     @test json(js"console.log('Hello World')") == "console.log('Hello World')"
     @test json(js"""console.log("Hello $who")""") == raw"""console.log("Hello $who")"""
