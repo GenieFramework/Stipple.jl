@@ -199,7 +199,7 @@ function js_mixin(m::Mixin, js_f, delim)
 
   no_modifiers = isempty(prefix) && isempty(postfix) || js_f ∉ (js_methods, js_computed, js_watch)
   add_fixes(s) = Symbol(prefix, s, postfix)
-  add_fixes(s::JSONText) = Symbol(s.s)
+  add_fixes(s::JSONText) = Symbol(json(s))
   xx = collect_js([js_f(M)], delim; pre = strip, key_replacement = no_modifiers ? identity : add_fixes)
   
   isempty(prefix) && isempty(postfix) && return xx

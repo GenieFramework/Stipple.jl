@@ -3,8 +3,9 @@ Utility functions for working with themes.
 """
 module Theme
 
-using Genie
-using Stipple
+import Genie
+import Stipple
+using Stipple.Elements: stylesheet
 
 import Base.RefValue
 
