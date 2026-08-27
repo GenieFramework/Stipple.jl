@@ -116,7 +116,7 @@ export render, htmldiv, js_attr, render_component
 export setchannel, getchannel
 
 # compatibility with Observables 0.3
-isempty(methods(notify, Observables)) && (Base.notify(observable::AbstractObservable) = Observables.notify!(observable))
+isempty(methods(notify, Observables)) && (Base.notify(observable::AbstractObservable) = Observables.notify(observable))
 
 include("TimeOut.jl")
 include("ParsingTools.jl")
