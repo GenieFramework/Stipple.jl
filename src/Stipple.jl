@@ -1551,6 +1551,8 @@ using Stipple.ReactiveTools
 end
 
 using Stipple.ReactiveTools
+using Suppressor
+
 @stipple_precompile begin
   ui() = [cell("hello"), row("world"), htmldiv("Hello World")]
   
@@ -1559,9 +1561,7 @@ using Stipple.ReactiveTools
     page(model, ui) |> html
   end
   precompile_get("/", retry = false)
-  redirect_stdio(stdout=devnull, stderr=devnull) do
-    ws_client_send(timeout = 60)
-  end
+  @suppress ws_client_send(timeout = 60)
   deps_routes(core_theme = true)
   precompile_get(Genie.Assets.asset_path(assets_config, :js, file = "stipplecore"))
   delete!(Stipple.DEPS, Stipple.PrecompileApp)
