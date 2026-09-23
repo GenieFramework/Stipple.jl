@@ -106,10 +106,16 @@ function stipple_parse(::Type{Any}, v::T) where {T}
   v::T
 end
 
+# define an explicit function for Type{Any} to avoid ambiguities between Type{Union{Nothing, T}} and the function above
+function stipple_parse(::Type{Any}, ::Nothing)
+  nothing
+end
+
 # parsing of enum types
 function stipple_parse(::Type{T}, s::String) where T<:Enum
     instances(T)[findfirst(==(Symbol(s)), Symbol.(instances(T)))]
 end
+
 function stipple_parse(::Type{T}, n::Integer) where T<:Enum
   T(n)
 end

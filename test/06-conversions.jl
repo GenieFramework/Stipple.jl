@@ -74,4 +74,6 @@ end
     # defined above
     # @enum Fruit apple=1 orange=2 kiwi=3
     @test Stipple.stipple_parse(Fruit, "apple") == apple
+
+    @test Stipple.stipple_parse(Any, nothing) === nothing
 end
