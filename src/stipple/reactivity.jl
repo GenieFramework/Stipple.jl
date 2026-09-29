@@ -20,15 +20,22 @@ mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   no_backend_watcher::Bool
   no_frontend_watcher::Bool
   __source__::String
+  lock::ReentrantLock
 
-  Reactive{T}() where {T} = new{T}(Observable{T}(), PUBLIC, false, false, "")
-  Reactive{T}(o, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, PUBLIC, no_bw, no_fw, "")
-  Reactive{T}(o, mode::Int, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, mode, no_bw, no_fw, "")
-  Reactive{T}(o, mode::Int, no_bw::Bool, no_fw::Bool, s::AbstractString) where {T} = new{T}(o, mode, no_bw, no_fw, s)
-  Reactive{T}(o, mode::Int, updatemode::Int) where {T} = new{T}(o, mode, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0, "")
+  # Guards `o`'s value and listener list. Every entry point that touches them
+  # (getindex/setindex!/on/off/notify, plus the :val/r[!] "silent set" paths)
+  # acquires this per-instance lock, so concurrent sessions under
+  # `server_ws_handler_mode = :threads` — including ones linked only through
+  # `synchronize!` to a shared hub — can't corrupt Observables.jl's unlocked
+  # internals (a plain Vector of listeners with no thread-safety of its own).
+  Reactive{T}() where {T} = new{T}(Observable{T}(), PUBLIC, false, false, "", ReentrantLock())
+  Reactive{T}(o, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, PUBLIC, no_bw, no_fw, "", ReentrantLock())
+  Reactive{T}(o, mode::Int, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, mode, no_bw, no_fw, "", ReentrantLock())
+  Reactive{T}(o, mode::Int, no_bw::Bool, no_fw::Bool, s::AbstractString) where {T} = new{T}(o, mode, no_bw, no_fw, s, ReentrantLock())
+  Reactive{T}(o, mode::Int, updatemode::Int) where {T} = new{T}(o, mode, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0, "", ReentrantLock())
 
   # Construct an Reactive{Any} without runtime dispatch
-  Reactive{Any}(@nospecialize(o)) = new{Any}(Observable{Any}(o), PUBLIC, false, false, "")
+  Reactive{Any}(@nospecialize(o)) = new{Any}(Observable{Any}(o), PUBLIC, false, false, "", ReentrantLock())
 end
 
 """
@@ -62,29 +69,68 @@ Base.convert(::Type{Reactive{T}}, (r, m, nbw, nfw, s)::Tuple{T, Int, Bool, Bool,
 Base.convert(::Type{Reactive{T}}, (r, m, u)::Tuple{T, Int, Int}) where T = Reactive{T}(Observable(r), m, u)
 Base.convert(::Type{Observable{T}}, r::Reactive{T}) where T = getfield(r, :o)
 
-Base.getindex(r::Reactive{T}) where T = Base.getindex(getfield(r, :o))
-Base.setindex!(r::Reactive{T}) where T = Base.setindex!(getfield(r, :o))
+Base.getindex(r::Reactive{T}) where T = lock(getfield(r, :lock)) do
+  Base.getindex(getfield(r, :o))
+end
+Base.setindex!(r::Reactive{T}) where T = lock(getfield(r, :lock)) do
+  Base.setindex!(getfield(r, :o))
+end
+function Base.setindex!(r::Reactive{T}, val) where T
+  # Mirrors Observables.jl's own setindex!/notify logic, but the lock is only
+  # held for the value-write + listener-snapshot step — never across the
+  # listener calls themselves, which can be arbitrarily slow (a WS send that
+  # blocks on Observables.jl's own delivery confirmation, another
+  # synchronize!-driven cascade, etc). Holding the lock across that would
+  # stall every other thread touching this same Reactive for the full
+  # duration of every listener's work — including, for a `synchronize!`-linked
+  # hub, every other session's own cascaded update.
+  o = getfield(r, :o)
+  ls = lock(getfield(r, :lock)) do
+    if o.ignore_equal_values && isequal(o.val, val)
+      nothing
+    else
+      o.val = val
+      copy(Observables.listeners(o))
+    end
+  end
+  ls === nothing && return false
+  for (_, f) in ls
+    result = Base.invokelatest(f, val)
+    result isa Consume && result.x && return true
+  end
+  return false
+end
 
 # pass indexing and property methods to referenced variable
 function Base.getindex(r::Reactive{T}, arg1, args...) where T
-  getindex(getfield(r, :o).val, arg1, args...)
+  lock(getfield(r, :lock)) do
+    getindex(getfield(r, :o).val, arg1, args...)
+  end
 end
 
 function Base.setindex!(r::Reactive{T}, val, arg1, args...) where T
-  setindex!(getfield(r, :o).val, val, arg1, args...)
-  notify(r)
+  lock(getfield(r, :lock)) do
+    setindex!(getfield(r, :o).val, val, arg1, args...)
+    notify(r)
+  end
 end
 
-Base.setindex!(r::Reactive, val, ::typeof(!)) = getfield(r, :o).val = val
-Base.getindex(r::Reactive, ::typeof(!)) = getfield(r, :o).val
+Base.setindex!(r::Reactive, val, ::typeof(!)) = lock(getfield(r, :lock)) do
+  getfield(r, :o).val = val
+end
+Base.getindex(r::Reactive, ::typeof(!)) = lock(getfield(r, :lock)) do
+  getfield(r, :o).val
+end
 
 function Base.getproperty(r::Reactive{T}, field::Symbol) where T
-  if field in (:o, :r_mode, :no_backend_watcher, :no_frontend_watcher, :__source__) # fieldnames(Reactive)
+  if field in (:o, :r_mode, :no_backend_watcher, :no_frontend_watcher, :__source__, :lock) # fieldnames(Reactive)
     getfield(r, field)
   else
     # forward property :val to respective field of Observable
     if field == :val
-      getfield(r, :o).val
+      lock(getfield(r, :lock)) do
+        getfield(r, :o).val
+      end
     else
       getproperty(getfield(r, :o).val, field)
     end
@@ -97,7 +143,9 @@ function Base.setproperty!(r::Reactive{T}, field::Symbol, val) where T
   else
     # forward property :val to respective field of Observable
     if field == :val
-      getfield(r, :o).val = val
+      lock(getfield(r, :lock)) do
+        getfield(r, :o).val = val
+      end
     else
       setproperty!(getfield(r, :o).val, field, val)
       notify(r)
@@ -106,7 +154,7 @@ function Base.setproperty!(r::Reactive{T}, field::Symbol, val) where T
 end
 
 function Base.hash(r::T) where {T<:Reactive}
-  hash((( getfield(r, f) for f in fieldnames(typeof(r)) ) |> collect |> Tuple))
+  hash((( getfield(r, f) for f in fieldnames(typeof(r)) if f !== :lock ) |> collect |> Tuple))
 end
 
 function Base.:(==)(a::T, b::R) where {T<:Reactive,R<:Reactive}
@@ -115,6 +163,65 @@ end
 
 Observables.observe(r::Reactive{T}, args...; kwargs...) where T = Observables.observe(getfield(r, :o), args...; kwargs...)
 Observables.listeners(r::Reactive{T}, args...; kwargs...) where T = Observables.listeners(getfield(r, :o), args...; kwargs...)
+
+# Reactive-specific overrides of on/off/notify, so ANY caller — Stipple's own
+# watchers/debounce/throttle, synchronize!, or arbitrary user code — gets the
+# lock automatically via normal dispatch, with no changes needed at the call
+# site. Delegates onto the wrapped raw Observable, which is what actually
+# owns the unlocked `.val`/`.listeners` that Observables.jl mutates.
+function Observables.on(f, r::Reactive; weak::Bool = false, priority::Int = 0, update::Bool = false)
+  # `on(...; update=true)` calls `f` immediately with the current value —
+  # replicated here (rather than delegating wholesale to the raw Observable's
+  # `on`) so that immediate call happens AFTER releasing the lock, not nested
+  # inside it: `f` can itself be a synchronize!-installed closure that writes
+  # to and locks a DIFFERENT Reactive, and holding this one's lock across that
+  # is exactly the cross-lock nesting that risks a deadlock.
+  o = getfield(r, :o)
+  val = lock(getfield(r, :lock)) do
+    Observables.register_callback(o, priority, f)
+    for g in Observables.addhandler_callbacks
+      g(f, o)
+    end
+    update ? o[] : nothing
+  end
+  update && f(val)
+  return Observables.ObserverFunction(f, o, weak)
+end
+
+Observables.off(r::Reactive, obsfunc::Observables.ObserverFunction) = lock(getfield(r, :lock)) do
+  Observables.off(getfield(r, :o), obsfunc)
+end
+Observables.off(r::Reactive, f) = lock(getfield(r, :lock)) do
+  Observables.off(getfield(r, :o), f)
+end
+
+function Base.notify(r::Reactive)
+  # Same rationale as setindex! above: snapshot value + listeners under the
+  # lock, then invoke listeners after releasing it, so a slow/cascading
+  # listener never blocks other threads from touching this Reactive.
+  o = getfield(r, :o)
+  val, ls = lock(getfield(r, :lock)) do
+    (o[], copy(Observables.listeners(o)))
+  end
+  for (_, f) in ls
+    result = Base.invokelatest(f, val)
+    result isa Consume && result.x && return true
+  end
+  return false
+end
+
+function Base.notify(r::Reactive, priority::Union{Int, Function, Nothing})
+  o = getfield(r, :o)
+  val, ls = lock(getfield(r, :lock)) do
+    (o[], copy(Observables.listeners(o)))
+  end
+  for (p, f) in ls
+    priority === nothing || (priority isa Int ? p == priority : priority(p)) || continue
+    result = Base.invokelatest(f, val)
+    result isa Consume && result.x && return true
+  end
+  return false
+end
 
 @static if isdefined(Observables, :appendinputs!)
     Observables.appendinputs!(r::Reactive{T}, obsfuncs) where T = Observables.appendinputs!(getfield(r, :o), obsfuncs)
@@ -160,7 +267,7 @@ Base.getindex(model::ReactiveModel, fieldname::Symbol) = getfield(model, fieldna
 function Base.setindex!(model::ReactiveModel, value, fieldname::Symbol)
     field = getfield(model, fieldname)
     if field isa Reactive
-      getfield(field, :o).val = value
+      field.val = value  # locked "silent set" (Base.setproperty!(::Reactive, :val, ...)) — no notify
     else
       field = value
     end
@@ -795,9 +902,21 @@ function Base.notify(@nospecialize(observable::AbstractObservable), priority::Un
   return false
 end
 
+"""
+Locked snapshot of `o`'s listeners, so callers can safely iterate it without
+racing a concurrent `on`/`off` mutating the live vector underneath them. Only
+Reactive has a lock to take; a plain Observable is returned best-effort
+unlocked (see the `synchronize!`/`unsynchronize!` docs on using a `Reactive`
+hub for thread-safety).
+"""
+_snapshot_listeners(o::Reactive) = lock(getfield(o, :lock)) do
+  copy(Observables.listeners(o))
+end
+_snapshot_listeners(o::AbstractObservable) = copy(Observables.listeners(o))
+
 function get_synced_observers(o::AbstractObservable)
   oo = AbstractObservable[]
-  for cb in getindex.(Observables.listeners(o), 2)
+  for cb in getindex.(_snapshot_listeners(o), 2)
       p = propertynames(cb)
       (length(p) == 2 && p[1] == :priority && p[2] ∈ (:o1, :o2)) || continue
       push!(oo, getfield(cb, p[2]))
@@ -807,7 +926,7 @@ end
 
 function get_syncing_listeners(o::AbstractObservable)
   cbs = Function[]
-  for cb in getindex.(Observables.listeners(o), 2)
+  for cb in getindex.(_snapshot_listeners(o), 2)
       p = propertynames(cb)
       (length(p) == 2 && p[1] == :priority && p[2] ∈ (:o1, :o2)) || continue
       push!(cbs, cb)
@@ -961,8 +1080,8 @@ that have been replaced by page reloading or navigation.
 """
 function synchronize!(o1::AbstractObservable, o2::AbstractObservable; priority::Union{Int,Nothing} = nothing, update = true, bidirectional = true)
   if priority === nothing
-    priorities = getindex.(Observables.listeners(o2), 1)
-    bidirectional || union!(priorities, getindex.(Observables.listeners(o1), 1))
+    priorities = getindex.(_snapshot_listeners(o2), 1)
+    bidirectional || union!(priorities, getindex.(_snapshot_listeners(o1), 1))
     setdiff!(priorities, typemin(Int))
     priority = isempty(priorities) ? -1 : minimum(priorities) - 1
   end
