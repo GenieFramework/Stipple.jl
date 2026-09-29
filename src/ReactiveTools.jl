@@ -690,10 +690,15 @@ handlers will be skipped. If a priority > 0 is set, the client will not be updat
 """
 macro app(expr = Expr(:block))
   appname = model_typename(__module__)
-  quote
+  expr = quote
     Stipple.ReactiveTools.@app $appname $expr __GF_AUTO_HANDLERS__
     $appname
-  end |> esc
+  end
+
+  # propagate the source location to the @app macro, so that the correct file and line number is shown in error messages
+  expr.args[2].args[2] isa LineNumberNode && (expr.args[2].args[2] = __source__)
+  
+  expr |> esc
 end
 
 #===#
@@ -788,7 +793,12 @@ function init_model(m::Module, args...; kwargs...)
 end
 
 macro app(typename, expr, handlers_fn_name = Symbol(typename, :_handlers), mixin = false)
-  :(Stipple.ReactiveTools.@handlers $typename $expr $handlers_fn_name $mixin) |> esc
+  expr = :(Stipple.ReactiveTools.@handlers $typename $expr $handlers_fn_name $mixin)
+
+  # propagate the source location to the @app macro, so that the correct file and line number is shown in error messages
+  expr.args[2] isa LineNumberNode && (expr.args[2] = __source__)
+  
+  expr |> esc
 end
 
 macro app_mixin(typename, expr, handlers_fn_name = Symbol(typename, :_handlers))
@@ -839,6 +849,9 @@ macro handlers(typename, expr, handlers_fn_name = Symbol(typename, :_handlers), 
   # if no initcode is provided and typename is already defined, don't overwrite the existing type and just declare the handlers function
   storage = @eval __module__ Stipple.@var_storage($initcode_expr, $handlers_fn_name)
   initcode_final = isempty(initcode) && isdefined(__module__, typename) ? Expr(:block) : :(Stipple.@type($typename, $storage))
+  
+  # propagate the source location to the @app macro, so that the correct file and line number is shown in error messages
+  initcode_final.args[2] isa LineNumberNode && (initcode_final.args[2] = __source__)
   
   handlercode_final = []
   varnames = setdiff(collect(keys(storage)), Stipple.INTERNALFIELDS)

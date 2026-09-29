@@ -689,6 +689,12 @@ macro type(modelname, storage)
   else
     insert!(ex.args, 3, :(Stipple.mixins(::Type{<:$modelname}) = $mixins))
   end
+
+  # propagate the source location to the @app macro, so that the correct file and line number is shown in error messages
+  i1 = findfirst(expr -> (expr isa Expr && findfirst(e -> e isa Expr && (e.head == :struct), expr.args) !== nothing), ex.args)
+  i2 = findfirst(e -> e isa Expr && (e.head == :struct), ex.args[i1].args)
+  ex.args[i1].args[i2].args[3].args[1] isa LineNumberNode && (ex.args[i1].args[i2].args[3].args[1] = __source__)
+  
   ex |> esc
 end
 
