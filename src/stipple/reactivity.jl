@@ -20,23 +20,72 @@ mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   no_backend_watcher::Bool
   no_frontend_watcher::Bool
   __source__::String
-  lock::ReentrantLock
+  lock::Union{Nothing, ReentrantLock}
 
-  # Guards `o`'s value and listener list. Every entry point that touches them
-  # (getindex/setindex!/on/off/notify, plus the :val/r[!] "silent set" paths)
-  # acquires this per-instance lock, so concurrent sessions under
-  # `server_ws_handler_mode = :threads` — including ones linked only through
-  # `synchronize!` to a shared hub — can't corrupt Observables.jl's unlocked
-  # internals (a plain Vector of listeners with no thread-safety of its own).
-  Reactive{T}() where {T} = new{T}(Observable{T}(), PUBLIC, false, false, "", ReentrantLock())
-  Reactive{T}(o, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, PUBLIC, no_bw, no_fw, "", ReentrantLock())
-  Reactive{T}(o, mode::Int, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, mode, no_bw, no_fw, "", ReentrantLock())
-  Reactive{T}(o, mode::Int, no_bw::Bool, no_fw::Bool, s::AbstractString) where {T} = new{T}(o, mode, no_bw, no_fw, s, ReentrantLock())
-  Reactive{T}(o, mode::Int, updatemode::Int) where {T} = new{T}(o, mode, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0, "", ReentrantLock())
+  # Guards `o`'s value and listener list once installed. Every entry point
+  # that touches them (getindex/setindex!/on/off/notify, plus the :val/r[!]
+  # "silent set" paths) acquires this per-instance lock if present, so
+  # concurrent sessions under `server_ws_handler_mode = :threads` — including
+  # ones linked only through `synchronize!` to a shared hub — can't corrupt
+  # Observables.jl's unlocked internals (a plain Vector of listeners with no
+  # thread-safety of its own).
+  #
+  # Starts as `nothing`: a `Reactive` touched only from its own session's
+  # sequential WS message loop is never actually subject to concurrent
+  # access, so most fields never need a lock at all and stay at this type's
+  # pre-lock performance/memory baseline for their entire lifetime.
+  # `synchronize!` is what installs a real lock (see `ensure_lock!` below),
+  # since it's the one documented, built-in mechanism that shares a Reactive
+  # across sessions/threads. Directly using Observables.jl primitives that
+  # dispatch to another thread (e.g. `Observables.throttle`'s internal
+  # `Timer`) on a Reactive that was never `synchronize!`-linked is not
+  # covered by this — see the module docs for `synchronize!`.
+  Reactive{T}() where {T} = new{T}(Observable{T}(), PUBLIC, false, false, "", nothing)
+  Reactive{T}(o, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, PUBLIC, no_bw, no_fw, "", nothing)
+  Reactive{T}(o, mode::Int, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, mode, no_bw, no_fw, "", nothing)
+  Reactive{T}(o, mode::Int, no_bw::Bool, no_fw::Bool, s::AbstractString) where {T} = new{T}(o, mode, no_bw, no_fw, s, nothing)
+  Reactive{T}(o, mode::Int, updatemode::Int) where {T} = new{T}(o, mode, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0, "", nothing)
 
   # Construct an Reactive{Any} without runtime dispatch
-  Reactive{Any}(@nospecialize(o)) = new{Any}(Observable{Any}(o), PUBLIC, false, false, "", ReentrantLock())
+  Reactive{Any}(@nospecialize(o)) = new{Any}(Observable{Any}(o), PUBLIC, false, false, "", nothing)
 end
+
+"""
+    _maybe_lock(f::Function, lock::Union{Nothing, ReentrantLock})
+
+Runs `f()` under `lock` if one is present, otherwise runs it directly. Used
+throughout `Reactive`'s methods so a never-`synchronize!`-linked instance
+(the overwhelming majority) pays no locking cost at all.
+"""
+_maybe_lock(f::Function, ::Nothing) = f()
+_maybe_lock(f::Function, l::ReentrantLock) = lock(f, l)
+
+const REACTIVE_LOCK_INSTALL_LOCK = ReentrantLock()
+
+"""
+    ensure_lock!(r::Reactive) -> ReentrantLock
+
+Installs a real lock on `r` if it doesn't have one yet, and returns it.
+Called by `synchronize!` to upgrade a `Reactive` to thread-safe on demand,
+the first time it's linked to another observable. Guarded by a single small
+global lock, since installing a lock is rare (only at `synchronize!` time),
+not something every field access needs to pay for — two sessions racing to
+`synchronize!` the same not-yet-shared `Reactive` at once could otherwise
+each install their own lock and leave the other's writes unprotected.
+"""
+function ensure_lock!(r::Reactive)
+  l = getfield(r, :lock)
+  l === nothing || return l
+  lock(REACTIVE_LOCK_INSTALL_LOCK) do
+    l2 = getfield(r, :lock)
+    if l2 === nothing
+      l2 = ReentrantLock()
+      setfield!(r, :lock, l2)
+    end
+    l2
+  end
+end
+ensure_lock!(::Observables.AbstractObservable) = nothing
 
 """
         mutable struct Reactive{T} <: Observables.AbstractObservable{T}
@@ -69,10 +118,10 @@ Base.convert(::Type{Reactive{T}}, (r, m, nbw, nfw, s)::Tuple{T, Int, Bool, Bool,
 Base.convert(::Type{Reactive{T}}, (r, m, u)::Tuple{T, Int, Int}) where T = Reactive{T}(Observable(r), m, u)
 Base.convert(::Type{Observable{T}}, r::Reactive{T}) where T = getfield(r, :o)
 
-Base.getindex(r::Reactive{T}) where T = lock(getfield(r, :lock)) do
+Base.getindex(r::Reactive{T}) where T = _maybe_lock(getfield(r, :lock)) do
   Base.getindex(getfield(r, :o))
 end
-Base.setindex!(r::Reactive{T}) where T = lock(getfield(r, :lock)) do
+Base.setindex!(r::Reactive{T}) where T = _maybe_lock(getfield(r, :lock)) do
   Base.setindex!(getfield(r, :o))
 end
 function Base.setindex!(r::Reactive{T}, val) where T
@@ -85,7 +134,7 @@ function Base.setindex!(r::Reactive{T}, val) where T
   # duration of every listener's work — including, for a `synchronize!`-linked
   # hub, every other session's own cascaded update.
   o = getfield(r, :o)
-  ls = lock(getfield(r, :lock)) do
+  ls = _maybe_lock(getfield(r, :lock)) do
     if o.ignore_equal_values && isequal(o.val, val)
       nothing
     else
@@ -103,22 +152,22 @@ end
 
 # pass indexing and property methods to referenced variable
 function Base.getindex(r::Reactive{T}, arg1, args...) where T
-  lock(getfield(r, :lock)) do
+  _maybe_lock(getfield(r, :lock)) do
     getindex(getfield(r, :o).val, arg1, args...)
   end
 end
 
 function Base.setindex!(r::Reactive{T}, val, arg1, args...) where T
-  lock(getfield(r, :lock)) do
+  _maybe_lock(getfield(r, :lock)) do
     setindex!(getfield(r, :o).val, val, arg1, args...)
     notify(r)
   end
 end
 
-Base.setindex!(r::Reactive, val, ::typeof(!)) = lock(getfield(r, :lock)) do
+Base.setindex!(r::Reactive, val, ::typeof(!)) = _maybe_lock(getfield(r, :lock)) do
   getfield(r, :o).val = val
 end
-Base.getindex(r::Reactive, ::typeof(!)) = lock(getfield(r, :lock)) do
+Base.getindex(r::Reactive, ::typeof(!)) = _maybe_lock(getfield(r, :lock)) do
   getfield(r, :o).val
 end
 
@@ -128,7 +177,7 @@ function Base.getproperty(r::Reactive{T}, field::Symbol) where T
   else
     # forward property :val to respective field of Observable
     if field == :val
-      lock(getfield(r, :lock)) do
+      _maybe_lock(getfield(r, :lock)) do
         getfield(r, :o).val
       end
     else
@@ -143,7 +192,7 @@ function Base.setproperty!(r::Reactive{T}, field::Symbol, val) where T
   else
     # forward property :val to respective field of Observable
     if field == :val
-      lock(getfield(r, :lock)) do
+      _maybe_lock(getfield(r, :lock)) do
         getfield(r, :o).val = val
       end
     else
@@ -177,7 +226,7 @@ function Observables.on(f, r::Reactive; weak::Bool = false, priority::Int = 0, u
   # to and locks a DIFFERENT Reactive, and holding this one's lock across that
   # is exactly the cross-lock nesting that risks a deadlock.
   o = getfield(r, :o)
-  val = lock(getfield(r, :lock)) do
+  val = _maybe_lock(getfield(r, :lock)) do
     Observables.register_callback(o, priority, f)
     for g in Observables.addhandler_callbacks
       g(f, o)
@@ -188,10 +237,10 @@ function Observables.on(f, r::Reactive; weak::Bool = false, priority::Int = 0, u
   return Observables.ObserverFunction(f, o, weak)
 end
 
-Observables.off(r::Reactive, obsfunc::Observables.ObserverFunction) = lock(getfield(r, :lock)) do
+Observables.off(r::Reactive, obsfunc::Observables.ObserverFunction) = _maybe_lock(getfield(r, :lock)) do
   Observables.off(getfield(r, :o), obsfunc)
 end
-Observables.off(r::Reactive, f) = lock(getfield(r, :lock)) do
+Observables.off(r::Reactive, f) = _maybe_lock(getfield(r, :lock)) do
   Observables.off(getfield(r, :o), f)
 end
 
@@ -200,7 +249,7 @@ function Base.notify(r::Reactive)
   # lock, then invoke listeners after releasing it, so a slow/cascading
   # listener never blocks other threads from touching this Reactive.
   o = getfield(r, :o)
-  val, ls = lock(getfield(r, :lock)) do
+  val, ls = _maybe_lock(getfield(r, :lock)) do
     (o[], copy(Observables.listeners(o)))
   end
   for (_, f) in ls
@@ -212,7 +261,7 @@ end
 
 function Base.notify(r::Reactive, priority::Union{Int, Function, Nothing})
   o = getfield(r, :o)
-  val, ls = lock(getfield(r, :lock)) do
+  val, ls = _maybe_lock(getfield(r, :lock)) do
     (o[], copy(Observables.listeners(o)))
   end
   for (p, f) in ls
@@ -909,7 +958,7 @@ Reactive has a lock to take; a plain Observable is returned best-effort
 unlocked (see the `synchronize!`/`unsynchronize!` docs on using a `Reactive`
 hub for thread-safety).
 """
-_snapshot_listeners(o::Reactive) = lock(getfield(o, :lock)) do
+_snapshot_listeners(o::Reactive) = _maybe_lock(getfield(o, :lock)) do
   copy(Observables.listeners(o))
 end
 _snapshot_listeners(o::AbstractObservable) = copy(Observables.listeners(o))
@@ -1077,8 +1126,23 @@ For further information see [`@page`](@ref).
 
 Unsynchronization via the event :finalize is important to suppress syncing to models
 that have been replaced by page reloading or navigation.
+
+### Thread-safety
+
+A plain `Observable` (as used for `X`/`XX` above) has no locking of its own and is not
+protected against concurrent access from multiple sessions under
+`server_ws_handler_mode = :threads` — use a `Reactive` for any hub that will be
+`synchronize!`-linked from more than one session. A `Reactive` starts without a lock and
+only gets one installed the first time it's passed to `synchronize!`; fields that are
+never synchronized stay lock-free for their entire lifetime.
 """
 function synchronize!(o1::AbstractObservable, o2::AbstractObservable; priority::Union{Int,Nothing} = nothing, update = true, bidirectional = true)
+  # This is the one documented, built-in mechanism that shares an observable
+  # across sessions/threads, so it's what upgrades a Reactive from lock-free
+  # to thread-safe — see ensure_lock!'s docstring and the Reactive struct docs.
+  ensure_lock!(o1)
+  ensure_lock!(o2)
+
   if priority === nothing
     priorities = getindex.(_snapshot_listeners(o2), 1)
     bidirectional || union!(priorities, getindex.(_snapshot_listeners(o1), 1))
