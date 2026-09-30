@@ -47,7 +47,12 @@ mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   # weight from an abandoned validity-check experiment (see git history),
   # never read anywhere even when it was introduced.
   Reactive{T}(o, mode::Int, no_bw::Bool, no_fw::Bool, s::AbstractString) where {T} = new{T}(o, mode, no_bw, no_fw, nothing)
-  Reactive{T}(o, mode::Int, updatemode::Int) where {T} = new{T}(o, mode, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0, nothing)
+  # `updatemode & LOCKABLE` installs a real lock right at construction — no
+  # need to go through `ensure_lock!`'s bootstrap-race guard here, since a
+  # freshly-constructed object has no other reference that could be racing
+  # to install a lock on it concurrently.
+  Reactive{T}(o, mode::Int, updatemode::Int) where {T} = new{T}(o, mode, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0,
+                                                                 updatemode & LOCKABLE != 0 ? ReentrantLock() : nothing)
 
   # Construct an Reactive{Any} without runtime dispatch
   Reactive{Any}(@nospecialize(o)) = new{Any}(Observable{Any}(o), PUBLIC, false, false, nothing)
@@ -294,6 +299,22 @@ const NO_BACKEND_WATCHER = 16
 const NO_FRONTEND_WATCHER = 32
 const NO_WATCHER = 48
 const NON_REACTIVE = 64
+const LOCKABLE = 128
+
+"""
+    _reactive_flag(flag::QuoteNode) -> Symbol
+
+Translates a `:flagname` passed to `@in`/`@out`/etc. (e.g. `@in :lockable x = 10`)
+into the symbol of the corresponding mode constant, for splicing into the same
+`updatemode`-tuple slot that `no_backend_watcher`/`no_frontend_watcher`/
+`non_reactive` already use. Errors on an unrecognized flag rather than silently
+ignoring a typo.
+"""
+function _reactive_flag(flag::QuoteNode)
+  flag.value === :lockable && return :LOCKABLE
+  flag.value === :non_reactive && return :NON_REACTIVE
+  error("Unknown Reactive flag :$(flag.value). Supported: :lockable, :non_reactive")
+end
 
 """
     type ReactiveModel
@@ -558,15 +579,13 @@ function required_evals!(expr, vars::Set, all_vars::Set)
   return vars
 end
 
-function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = nothing, m::Union{Module, Nothing} = nothing, let_block::Union{Expr, Nothing} = nothing, vars::Set = Set())
+function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = nothing, m::Union{Module, Nothing} = nothing, let_block::Union{Expr, Nothing} = nothing, vars::Set = Set(); lockable::Bool = false)
   expr = find_assignment(expr)
 
   Rtype = isnothing(m) || ! isdefined(m, :R) ? :(Stipple.R) : :R
 
   (isa(expr, Expr) && contains(string(expr.head), "=")) ||
   error("Invalid binding expression -- use it with variables assignment ex `@in a = 2`")
-
-  source = (source !== nothing ? String(strip(string(source), collect("#= "))) : "")
 
   # args[end] instead of args[2] because of potential LineNumberNode
   var = expr.args[1]
@@ -601,7 +620,12 @@ function parse_expression!(expr::Expr, @nospecialize(mode) = nothing, source = n
     end
   end
 
-  is_non_reactive || (expr.args[end] = :($type($(expr.args[end]), $mode, false, false, $source)))
+  # no_backend_watcher/no_frontend_watcher are never set true via this macro
+  # path, so the third constructor argument only ever needs to carry LOCKABLE
+  # -- follows the same context-qualification as `mode` above, in case
+  # LOCKABLE isn't directly accessible (e.g. not `using`-imported) in `m`.
+  updatemode = lockable ? (isdefined(context, :LOCKABLE) ? :LOCKABLE : :(Stipple.LOCKABLE)) : 0
+  is_non_reactive || (expr.args[end] = :($type($(expr.args[end]), $mode, $updatemode)))
   varname, expr
 end
 
@@ -670,6 +694,7 @@ macro var_storage(expr, handler = nothing)
     end
     mode = :PUBLIC
     reactive = true
+    lockable = false
     if e isa Expr && e.head == :(=)
       #check whether flags are set
       if e.args[end] isa Expr && e.args[end].head == :tuple
@@ -678,10 +703,11 @@ macro var_storage(expr, handler = nothing)
           newmode = intersect(setdiff(flags, [:NON_REACTIVE]), [:READONLY, :PRIVATE, :JSFUNCTION])
           length(newmode) > 0 && (mode = newmode[end])
           reactive = :NON_REACTIVE ∉ flags
+          lockable = :LOCKABLE ∈ flags
           e.args[end] = e.args[end].args[1]
         end
       end
-      var, ex = parse_expression!(e, reactive ? mode : nothing, source, m, let_block, required_vars)
+      var, ex = parse_expression!(e, reactive ? mode : nothing, source, m, let_block, required_vars; lockable)
       # prevent overwriting of control fields
       var ∈ [INTERNALFIELDS..., AUTOFIELDS...] && continue
       if reactive == false
