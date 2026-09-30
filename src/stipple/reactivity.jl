@@ -19,7 +19,6 @@ mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   r_mode::Int
   no_backend_watcher::Bool
   no_frontend_watcher::Bool
-  __source__::String
   lock::Union{Nothing, ReentrantLock}
 
   # Guards `o`'s value and listener list once installed. Every entry point
@@ -40,14 +39,18 @@ mutable struct Reactive{T} <: Observables.AbstractObservable{T}
   # dispatch to another thread (e.g. `Observables.throttle`'s internal
   # `Timer`) on a Reactive that was never `synchronize!`-linked is not
   # covered by this — see the module docs for `synchronize!`.
-  Reactive{T}() where {T} = new{T}(Observable{T}(), PUBLIC, false, false, "", nothing)
-  Reactive{T}(o, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, PUBLIC, no_bw, no_fw, "", nothing)
-  Reactive{T}(o, mode::Int, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, mode, no_bw, no_fw, "", nothing)
-  Reactive{T}(o, mode::Int, no_bw::Bool, no_fw::Bool, s::AbstractString) where {T} = new{T}(o, mode, no_bw, no_fw, s, nothing)
-  Reactive{T}(o, mode::Int, updatemode::Int) where {T} = new{T}(o, mode, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0, "", nothing)
+  Reactive{T}() where {T} = new{T}(Observable{T}(), PUBLIC, false, false, nothing)
+  Reactive{T}(o, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, PUBLIC, no_bw, no_fw, nothing)
+  Reactive{T}(o, mode::Int, no_bw::Bool = false, no_fw::Bool = false) where {T} = new{T}(o, mode, no_bw, no_fw, nothing)
+  # `s` (a source-location string) is accepted for backward compatibility with
+  # existing call sites but is no longer stored — it was write-only dead
+  # weight from an abandoned validity-check experiment (see git history),
+  # never read anywhere even when it was introduced.
+  Reactive{T}(o, mode::Int, no_bw::Bool, no_fw::Bool, s::AbstractString) where {T} = new{T}(o, mode, no_bw, no_fw, nothing)
+  Reactive{T}(o, mode::Int, updatemode::Int) where {T} = new{T}(o, mode, updatemode & NO_BACKEND_WATCHER != 0, updatemode & NO_FRONTEND_WATCHER != 0, nothing)
 
   # Construct an Reactive{Any} without runtime dispatch
-  Reactive{Any}(@nospecialize(o)) = new{Any}(Observable{Any}(o), PUBLIC, false, false, "", nothing)
+  Reactive{Any}(@nospecialize(o)) = new{Any}(Observable{Any}(o), PUBLIC, false, false, nothing)
 end
 
 """
@@ -172,7 +175,7 @@ Base.getindex(r::Reactive, ::typeof(!)) = _maybe_lock(getfield(r, :lock)) do
 end
 
 function Base.getproperty(r::Reactive{T}, field::Symbol) where T
-  if field in (:o, :r_mode, :no_backend_watcher, :no_frontend_watcher, :__source__, :lock) # fieldnames(Reactive)
+  if field in (:o, :r_mode, :no_backend_watcher, :no_frontend_watcher, :lock) # fieldnames(Reactive)
     getfield(r, field)
   else
     # forward property :val to respective field of Observable
