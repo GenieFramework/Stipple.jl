@@ -982,6 +982,7 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
 
     if is_channels_webtransport()
       Genie.Assets.channels_route(Genie.Assets.jsliteral(channel))
+      Genie.Assets.keepalive_route()
     else
       Genie.Assets.webthreads_route(Genie.Assets.jsliteral(channel))
     end
@@ -992,12 +993,6 @@ function deps_routes(channel::String = Stipple.channel_js_name; core_theme::Bool
     add_fileroute(assets_config, "stipplecore.js"; basedir)
     add_fileroute(assets_config, "vue_filters.js"; basedir)
     add_fileroute(assets_config, "mixins.js"; basedir)
-
-    if Genie.config.webchannels_keepalive_frequency > 0 && is_channels_webtransport()
-      genie_dir = Base.pkgdir(Genie)
-      add_fileroute(Genie.assets_config, "keepalive.js"; basedir = genie_dir)
-    end
-
     add_fileroute(assets_config, "vue2compat.js"; basedir)
   end
 
@@ -1057,10 +1052,7 @@ function deps(m::M) :: Vector{String} where {M<:ReactiveModel}
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="mixins")),
     Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file="vue2compat")),
 
-    (
-      (Genie.config.webchannels_keepalive_frequency > 0 && is_channels_webtransport()) ?
-        Genie.Renderer.Html.script(src = Genie.Assets.asset_path(Genie.assets_config, :js, file="keepalive"), defer=true) : ""
-    )
+    (is_channels_webtransport() ? Genie.Assets.keepalive_script_tag() : "")
   ]
 
   injectdeps(output, M)
