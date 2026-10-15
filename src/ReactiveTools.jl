@@ -27,6 +27,9 @@ export @page, @init, @handlers, @app, @appname, @app_mixin, @modelstorage, @hand
 export @methods, @watch, @computed, @client_data, @add_client_data
 export @props, @template, @name, @components
 
+# HTTP caching of the generated Vue integration JS
+export @cache
+
 export @before_create, @created, @before_mount, @mounted, @before_update, @updated, @activated, @deactivated, @before_destroy, @destroyed, @error_captured
 
 export @fixtype, @freetype
@@ -1460,6 +1463,70 @@ function vue_options(hook_type, args...)
   else
     error("Invalid number of arguments for vue options")
   end
+end
+
+"""
+    @cache(maxage)
+    @cache(App, maxage)
+
+Opts a model into HTTP caching of its generated Vue integration JS (served from
+`Stipple.stipple_deps`). `maxage` is the `Cache-Control` max-age in seconds; models that
+never call `@cache` default to `(0, "")` -- no caching, i.e. today's always-fresh
+behavior (see `Stipple.js_cache`).
+
+A version is minted from the current time each time this macro itself is (re-)expanded,
+and is appended as a `?v=...` query parameter to the served URL, so that re-evaluating
+this `@cache` call (e.g. after a Revise reload of the line/file it's on) busts any
+previously cached copy. Editing a *different* `@methods`/`@watch`/etc. call elsewhere
+does NOT by itself bump the version -- Revise re-evaluates top-level expressions
+individually, and the served JS is always computed fresh server-side on an actual cache
+miss, so this only controls how often the browser re-fetches it, not what gets served.
+
+If the model's JS route was already registered (e.g. a page was served before `@cache`
+was called, or this is re-expanding an earlier `@cache` with a different `maxage`), this
+also deletes that route and the model's entry in `Stipple.DEPS`, so neither
+`Stipple.stipple_deps`'s `isroute` guard nor `Stipple.setup`'s `haskey(DEPS, ...)` guard
+keep serving/reusing stale state. This relies on `Stipple.init`/`@init` (and hence
+`Stipple.setup`) running again afterward to repopulate `Stipple.DEPS` -- true for the
+common case of a fresh model per route/request, which is also why re-populating this way
+(rather than guessing the original `vue_app_name`/`debounce`/`transport`/etc. here)
+preserves whatever custom kwargs that `init` call actually used. If your app instead
+keeps a single long-lived model instance that's never re-`init`ed, calling `@cache` after
+that model has already served a page will leave its JS route unregistered until the next
+`init`/`setup` call.
+
+### Example
+
+```julia
+@app begin
+  @in n = 10
+end
+
+@cache 3600          # implicit model -- the "current app" in this module
+
+@cache MyApp 3600    # explicit model
+```
+"""
+macro cache(maxage)
+  version = maxage == 0 ? "" : string(round(Int, time()))
+  quote
+    let M = Stipple.@type
+      Stipple.js_cache(::Type{<:M}) = ($maxage, $version)
+      delete!(Stipple.DEPS, M)
+      Stipple.Genie.Router.delete!(Symbol(Stipple.routename(M)))
+      nothing
+    end
+  end |> esc
+end
+
+macro cache(M, maxage)
+  version = maxage == 0 ? "" : string(round(Int, time()))
+  quote
+    Stipple.js_cache(::Type{<:$M}) = ($maxage, $version)
+    delete!(Stipple.DEPS, $M)
+    Stipple.Genie.Router.delete!(Symbol(Stipple.routename($M)))
+    nothing
+  end |> esc
 end
 
 macro event(M, eventname, expr)

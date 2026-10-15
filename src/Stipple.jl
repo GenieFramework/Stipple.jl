@@ -785,6 +785,19 @@ function routename(::Type{M}) where M<:ReactiveModel
   replace(s, r"[^0-9a-zA-Z_]+" => "")
 end
 
+"""
+    js_cache(::Type{<:ReactiveModel}) :: Tuple{Int, String}
+
+Returns `(maxage, version)` controlling HTTP caching of the model's generated Vue
+integration JS (served from [`stipple_deps`](@ref)): `maxage` is the `Cache-Control`
+max-age in seconds, and `version` is appended as a `?v=version` query parameter to the
+served URL so that bumping it busts any previously cached copy.
+
+Defaults to `(0, "")` -- no caching, i.e. today's always-fresh behavior. Overridden per
+model via the [`@cache`](@ref) macro.
+"""
+js_cache(::Type{<:ReactiveModel}) = (0, "")
+
 function gb_stipple_dir()
   gbdir = get(ENV, "GB_DIR", joinpath(Base.DEPOT_PATH[1], "geniebuilder"))
   replace(strip(read(`julia --project=$gbdir -E 'dirname(dirname(Base.locate_package(Base.PkgId(Base.UUID("4acbeb90-81a0-11ea-1966-bdaff8155998"), "Stipple"))))'`, String), ['"', '\n']), "\\\\" =>'/')
@@ -808,10 +821,19 @@ end
 function stipple_deps(::Type{M}, vue_app_name, debounce, throttle, core_theme, endpoint, transport)::Function where {M<:ReactiveModel}
   () -> begin
     context = parentmodule(M)
+    maxage, version = js_cache(M)
+    # Genie's router matches on path only (query strings are stripped before matching), so the
+    # route itself never needs to know about `version` -- only the URL handed to the browser does,
+    # in order to bust any previously cached copy when the developer bumps @cache.
+    query = maxage > 0 ? "?v=$version" : ""
+
     if ! Genie.Assets.external_assets(assets_config)
       if ! Genie.Router.isroute(Symbol(routename(M)))
-        Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file = endpoint), named = Symbol(routename(M))) do 
-          Genie.Renderer.Js.js(Stipple.Elements.vue_integration(M; vue_app_name, debounce, throttle, core_theme, transport); context)
+        headers = maxage > 0 ?
+          Genie.Renderer.HTTPHeaders(["Cache-Control" => "public, max-age=$maxage"]) :
+          Genie.Renderer.HTTPHeaders()
+        Genie.Router.route(Genie.Assets.asset_route(assets_config, :js, file = endpoint), named = Symbol(routename(M))) do
+          Genie.Renderer.Js.js(Stipple.Elements.vue_integration(M; vue_app_name, debounce, throttle, core_theme, transport); context, headers)
         end
       end
     end
@@ -820,7 +842,7 @@ function stipple_deps(::Type{M}, vue_app_name, debounce, throttle, core_theme, e
 
     [
       if ! Genie.Assets.external_assets(assets_config)
-        Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file = vue_app_name), defer = true)
+        Genie.Renderer.Html.script(src = Genie.Assets.asset_path(assets_config, :js, file = vue_app_name, query = query), defer = true)
       else
         Genie.Renderer.Html.script([
           Genie.Renderer.Js.js(Stipple.Elements.vue_integration(M; vue_app_name, debounce, throttle, core_theme, transport); context).body |> String
