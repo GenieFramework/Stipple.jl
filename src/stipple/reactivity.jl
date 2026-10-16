@@ -574,23 +574,52 @@ end
 
 Stipple.Genie.Router.delete!(M::Type{<:ReactiveModel}) = Stipple.Genie.Router.delete!(Symbol(Stipple.routename(M)))
 
+"""
+    clear_route(App)
+
+Unregisters `App`'s page route, so it gets freshly re-registered the next time the app
+is served.
+"""
 function clear_route(M::Type{<:ReactiveModel})
   Stipple.Genie.Router.delete!(M)
   return nothing
 end
 
+"""
+    @clear_route App
+
+Unregisters `App`'s page route. See [`clear_route`](@ref).
+"""
 macro clear_route(App)
   :(Stipple.clear_route($(esc(App))))
 end
 
+"""
+    clear_cache(App)
+
+Clears `App`'s dependencies and route together (see [`clear_deps!`](@ref) and
+[`clear_route`](@ref)), e.g. to force a full refresh after changing how `App` is set up.
+"""
 function clear_cache(M::Type{<:ReactiveModel})
-  delete!.(RefValue(Stipple.DEPS), filter(x -> x isa Type && x <: M, keys(Stipple.DEPS)))
-  Stipple.Genie.Router.delete!(M)
+  Stipple.clear_deps!(M)
+  clear_route(M)
   return nothing
 end
 
+"""
+    @clear_cache App
+
+Clears `App`'s dependencies and route. See [`clear_cache`](@ref).
+"""
 macro clear_cache(App)
   :(Stipple.clear_cache($(esc(App))))
+end
+
+function clear_cache_subtypes(M::Type{<:ReactiveModel})
+  for AM in filter(k -> k isa DataType && k <: M, keys(Stipple.DEPS))
+    clear_cache(AM)
+  end
+  return nothing
 end
 
 function restore_constructor(::Type{T}) where T<:ReactiveModel

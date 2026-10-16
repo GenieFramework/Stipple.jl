@@ -230,11 +230,21 @@ macro type()
 end
 
 import Stipple.@clear_cache
+"""
+    @clear_cache
+
+Like `@clear_cache App`, but for the (implicit) app defined in the current module.
+"""
 macro clear_cache()
   :(Stipple.clear_cache(Stipple.@type)) |> esc
 end
 
 import Stipple.@clear_route
+"""
+    @clear_route
+
+Like `@clear_route App`, but for the (implicit) app defined in the current module.
+"""
 macro clear_route()
   :(Stipple.clear_route(Stipple.@type)) |> esc
 end
@@ -1469,42 +1479,40 @@ end
     @cache(maxage)
     @cache(App, maxage)
 
-Opts a model into HTTP caching of its generated Vue integration JS (served from
-`Stipple.stipple_deps`). `maxage` is the `Cache-Control` max-age in seconds; models that
-never call `@cache` default to `(0, "")` -- no caching, i.e. today's always-fresh
-behavior (see `Stipple.js_cache`).
+Sets, in seconds, how long browsers may cache the JavaScript file that Stipple generates for
+your app. Without `@cache`, that file is served uncached -- the safest default while
+you're still actively changing your app.
 
-A version is minted from the current time each time this macro itself is (re-)expanded,
-and is appended as a `?v=...` query parameter to the served URL, so that re-evaluating
-this `@cache` call (e.g. after a Revise reload of the line/file it's on) busts any
-previously cached copy. Editing a *different* `@methods`/`@watch`/etc. call elsewhere
-does NOT by itself bump the version -- Revise re-evaluates top-level expressions
-individually, and the served JS is always computed fresh server-side on an actual cache
-miss, so this only controls how often the browser re-fetches it, not what gets served.
+Once your app is stable, cache it to speed up page loads for your users:
 
-If the model's JS route was already registered (e.g. a page was served before `@cache`
-was called, or this is re-expanding an earlier `@cache` with a different `maxage`), this
-also deletes that route and the model's entry in `Stipple.DEPS`, so neither
-`Stipple.stipple_deps`'s `isroute` guard nor `Stipple.setup`'s `haskey(DEPS, ...)` guard
-keep serving/reusing stale state. This relies on `Stipple.init`/`@init` (and hence
-`Stipple.setup`) running again afterward to repopulate `Stipple.DEPS` -- true for the
-common case of a fresh model per route/request, which is also why re-populating this way
-(rather than guessing the original `vue_app_name`/`debounce`/`transport`/etc. here)
-preserves whatever custom kwargs that `init` call actually used. If your app instead
-keeps a single long-lived model instance that's never re-`init`ed, calling `@cache` after
-that model has already served a page will leave its JS route unregistered until the next
-`init`/`setup` call.
+```julia
+@cache 3600   # cache for up to 1 hour
+```
+
+With no app name, `@cache` applies to the app defined in the current file/module. Give
+an explicit app name to target a different app, or `ReactiveModel` to set this as the
+default for *every* app in your project -- any app can still override that default with
+its own `@cache` call, regardless of which one you write first:
+
+```julia
+@cache MyApp 3600            # only this app
+@cache ReactiveModel 3600    # every app, unless it sets its own
+```
+
+Whenever you call `@cache` again with a maxage larger 0, Stipple invalidates the old file and makes
+sure browsers fetch the updated file -- you never need to tell your users to clear their cache by hand.
+
+Set `maxage` back to `0` to turn caching off again.
 
 ### Example
 
 ```julia
-@app begin
+@app MyApp begin
   @in n = 10
 end
 
-@cache 3600          # implicit model -- the "current app" in this module
-
-@cache MyApp 3600    # explicit model
+@cache ReactiveModel 3600        # every app, as a global default
+@cache MyApp 7200                # only for the app MyApp (takes precedence over the global setting)
 ```
 """
 macro cache(maxage)
@@ -1512,8 +1520,7 @@ macro cache(maxage)
   quote
     let M = Stipple.@type
       Stipple.js_cache(::Type{<:M}) = ($maxage, $version)
-      delete!(Stipple.DEPS, M)
-      Stipple.Genie.Router.delete!(Symbol(Stipple.routename(M)))
+      Stipple.clear_cache(M)
       nothing
     end
   end |> esc
@@ -1523,12 +1530,7 @@ macro cache(M, maxage)
   version = maxage == 0 ? "" : string(round(Int, time()))
   quote
     Stipple.js_cache(::Type{<:$M}) = ($maxage, $version)
-    # we need to filter, because delete! in a loop over keys of a LittleDict is dangerous
-    for AM in filter(k -> k isa DataType && k <: $M, keys(Stipple.DEPS))
-      delete!(Stipple.DEPS, AM)
-      Stipple.Genie.Router.delete!(Symbol(Stipple.routename(AM)))
-    end
-
+    Stipple.clear_cache_subtypes($M)
     nothing
   end |> esc
 end

@@ -1100,9 +1100,16 @@ deps!(m::Any, v::Vector{Union{Function, Module}}) = deps!.(RefValue(m), v)
 deps!(m::Any, t::Tuple) = [deps!(m, f) for f in t]
 deps!(m, args...) = [deps!(m, f) for f in args]
 
+"""
+    clear_deps!(App)
+
+Removes `App`'s registered dependencies (as added via `@deps`/`deps!`), so the next
+`@init`/`setup` call starts from a clean slate.
+"""
 function clear_deps!(M::Type{<:ReactiveModel})
-  delete!(DEPS, M)
-  model_prefix = "_$(vm(M))_"
+  AM = get_abstract_type(M)
+  delete!(DEPS, AM)
+  model_prefix = "_$(vm(AM))_"
   # we need to filter, because delete! in a loop over keys of a LittleDict is dangerous
   for k in filter(k -> k isa Symbol && startswith("$k", model_prefix), keys(Stipple.DEPS))
     delete!(DEPS, k)
