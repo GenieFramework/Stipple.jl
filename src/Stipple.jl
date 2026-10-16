@@ -796,7 +796,7 @@ served URL so that bumping it busts any previously cached copy.
 Defaults to `(0, "")` -- no caching, i.e. today's always-fresh behavior. Overridden per
 model via the [`@cache`](@ref) macro.
 """
-js_cache(::Type{<:ReactiveModel}) = (0, "")
+js_cache(::Any) = (0, "")
 
 function gb_stipple_dir()
   gbdir = get(ENV, "GB_DIR", joinpath(Base.DEPOT_PATH[1], "geniebuilder"))
@@ -1103,8 +1103,9 @@ deps!(m, args...) = [deps!(m, f) for f in args]
 function clear_deps!(M::Type{<:ReactiveModel})
   delete!(DEPS, M)
   model_prefix = "_$(vm(M))_"
-  for k in keys(Stipple.DEPS)
-    k isa Symbol && startswith("$k", model_prefix) && delete!(DEPS, k)
+  # we need to filter, because delete! in a loop over keys of a LittleDict is dangerous
+  for k in filter(k -> k isa Symbol && startswith("$k", model_prefix), keys(Stipple.DEPS))
+    delete!(DEPS, k)
   end
 end
 

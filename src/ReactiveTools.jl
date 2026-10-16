@@ -1523,8 +1523,12 @@ macro cache(M, maxage)
   version = maxage == 0 ? "" : string(round(Int, time()))
   quote
     Stipple.js_cache(::Type{<:$M}) = ($maxage, $version)
-    delete!(Stipple.DEPS, $M)
-    Stipple.Genie.Router.delete!(Symbol(Stipple.routename($M)))
+    # we need to filter, because delete! in a loop over keys of a LittleDict is dangerous
+    for AM in filter(k -> k isa DataType && k <: $M, keys(Stipple.DEPS))
+      delete!(Stipple.DEPS, AM)
+      Stipple.Genie.Router.delete!(Symbol(Stipple.routename(AM)))
+    end
+
     nothing
   end |> esc
 end
