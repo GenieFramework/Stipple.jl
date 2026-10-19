@@ -70,4 +70,29 @@ end
     @test json(js"""console.log("Hello $who")""") == raw"""console.log("Hello $who")"""
     @test json(js"console.log('Hello $who')"i) == "console.log('Hello World')"
     @test json(js"""console.log("Hello $who")"""i) == """console.log("Hello World")"""
+
+    # \n and \t are unescaped regardless of the `i` flag
+    @test json(js"line1\nline2\ttab") == "line1\nline2\ttab"
+    @test json(js"line1\nline2\ttab"i) == "line1\nline2\ttab"
+
+    # \$ yields a literal '$', even with interpolation enabled (escapes it from parsing)
+    @test json(js"price: \$5"i) == raw"price: $5"
+    @test json(js"price: \$5") == raw"price: $5"
+
+    # consecutive backslashes are halved, regardless of the `i` flag
+    @test json(js"a\\b") == raw"a\b"
+    @test json(js"a\\b"i) == raw"a\b"
+    @test json(js"""a\\\\b""") == raw"a\\b"
+
+    # an unsupported flag warns but still constructs a JSONText
+    @test_logs (:warn, r"Only 'i' flag") eval(Meta.parse(raw"""js"text"x"""))
+
+    # an invalid escape character throws instead of being silently passed through
+    threw = try
+        eval(Meta.parse(raw"""js"bad \x escape" """))
+        false
+    catch e
+        e isa LoadError && e.error isa ArgumentError && occursin("invalid escape character", e.error.msg)
+    end
+    @test threw
 end
