@@ -627,7 +627,7 @@ end
 """
 macro private end
 
-for (fn, mode) in [(:in, :PUBLIC), (:out, :READONLY), (:jsnfn, :JSFUNCTION), (:private, :PRIVATE), (:readonly, :READONLY), (:public, :PUBLIC)]
+for (fn, mode) in [(:in, :PUBLIC), (:out, :READONLY), (:jsfn, :JSFUNCTION), (:private, :PRIVATE), (:readonly, :READONLY), (:public, :PUBLIC)]
   Core.eval(@__MODULE__, quote
     macro $fn(expr)
       expr.args[end] = Expr(:tuple, expr.args[end], $(QuoteNode(mode)))
@@ -644,7 +644,7 @@ for (fn, mode) in [(:in, :PUBLIC), (:out, :READONLY), (:jsnfn, :JSFUNCTION), (:p
   end)
 end
 
-export @in, @out, @jsnfn, @private, @readonly, @public
+export @in, @out, @jsfn, @private, @readonly, @public
 
 """
 ```julia
