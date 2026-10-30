@@ -640,17 +640,24 @@ end
 """
 macro private end
 
-for (fn, mode) in [(:in, :PUBLIC), (:out, :READONLY), (:jsnfn, :JSFUNCTION), (:private, :PRIVATE), (:readonly, :READONLY), (:public, :PUBLIC)]
+for (fn, mode) in [(:in, :PUBLIC), (:out, :READONLY), (:jsfn, :JSFUNCTION), (:private, :PRIVATE), (:readonly, :READONLY), (:public, :PUBLIC)]
   Core.eval(@__MODULE__, quote
     macro $fn(expr)
       expr.args[end] = Expr(:tuple, expr.args[end], $(QuoteNode(mode)))
       expr |> esc
     end
 
+    # e.g. `@in :lockable x = 10` — a leading flag ahead of the usual assignment,
+    # for modifiers that don't warrant their own macro name (see `_reactive_flag`).
+    macro $fn(flag::QuoteNode, expr::Expr)
+      expr.args[end] = Expr(:tuple, expr.args[end], $(QuoteNode(mode)), Stipple._reactive_flag(flag))
+      expr |> esc
+    end
+
   end)
 end
 
-export @in, @out, @jsnfn, @private, @readonly, @public
+export @in, @out, @jsfn, @private, @readonly, @public
 
 """
 ```julia
