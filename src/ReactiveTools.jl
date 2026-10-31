@@ -1687,6 +1687,15 @@ function Base.notify(model::ReactiveModel, field::Symbol, priorities = nothing)
     notify(getfield(model, field), priorities)
 end
 
+"""
+    use_frontend(app) -> Bool
+
+Used by `@get` and `@set` for `App`-like objects (e.g. `GenieTest.App`) to decide whether a nested access
+goes to the frontend (as `app["js.path"]`) or to the backend model. The default uses the frontend only
+if there is no model; packages that define such apps can extend it, e.g. to respect a priority.
+"""
+use_frontend(app) = getfield(app, :__model__) === nothing
+
 function app_type(M::Module, expr)
   expr == :__model__ && return :ReactiveModel
   try
@@ -1894,15 +1903,14 @@ macro set(arg, priorities = nothing, force_js = false)
     elseif M == :ReactiveModel
       model_expr(args, model, field, level, priorities) |> esc
     elseif M == :App
-      ex1 = window_expr(args, :($model.__window__), js_index)
+      ex1 = window_expr(args, model, js_index)
       # a refers to the array in args that contains the model as a.args[1],
       # so we need the original args to rename it
       a.args[1] = :($(a.args[1]).__model__)
       ex2 = model_expr(args, :($model.__model__), field, level, priorities)
-      :($model.__model__ === nothing ? $ex1 : $ex2) |> esc
+      :(Stipple.ReactiveTools.use_frontend($model) ? $ex1 : $ex2) |> esc
     else
       ex1 = window_expr(args, model, js_index)
-      ex1b = window_expr(args, :($model.__window__), js_index)
 
       ex2 = model_expr(deepcopy(args), model, field, level, priorities)
 
@@ -1910,12 +1918,12 @@ macro set(arg, priorities = nothing, force_js = false)
       ex2b = model_expr(args, :($model.__model__), field, level, priorities)
 
       window_qn = QuoteNode(:Window)
-      :(if $model isa App
-          $model.__model__ === nothing ? $ex1b : $ex2b
+      :(if $model isa ReactiveModel
+          $ex2
         elseif typeof($model).name.name == $window_qn # as we don't Electron in Stipple, we check for the name
           $ex1
-        elseif $model isa ReactiveModel
-          $ex2
+        elseif hasfield(typeof($model), :__model__) # App-like
+          Stipple.ReactiveTools.use_frontend($model) ? $ex1 : $ex2b
         else
           error("App type not supported")
         end
@@ -1958,32 +1966,29 @@ macro get(arg, force_js = false)
       if force_js
         ex1 |> esc
       else
-        :($model.__model__ === nothing ? $ex1 : $ex2) |> esc
+        :(Stipple.ReactiveTools.use_frontend($model) ? $ex1 : $ex2) |> esc
       end
     else
       ex1 = :($model[$js_index])
-      ex1b = :($model.__window__[$js_index])
 
       ex2 = args[1]
       window_qn = QuoteNode(:Window)
       if force_js
-          :(if $model isa App
-            ex1b |> esc
-          elseif typeof($model).name.name == $window_qn # as we don't Electron in Stipple, we check for the name
-            $ex1
-          elseif $model isa ReactiveModel
+          :(if $model isa ReactiveModel
             $ex2
+          elseif typeof($model).name.name == $window_qn || hasfield(typeof($model), :__model__)
+            $ex1
           else
             error("App type not supported")
           end
         ) |> esc
       else
-        :(if $model isa App
-            $model.__model__ === nothing ? $ex1b : $ex2
+        :(if $model isa ReactiveModel
+            $ex2
           elseif typeof($model).name.name == $window_qn # as we don't Electron in Stipple, we check for the name
             $ex1
-          elseif $model isa ReactiveModel
-            $ex2
+          elseif hasfield(typeof($model), :__model__) # App-like
+            Stipple.ReactiveTools.use_frontend($model) ? $ex1 : $ex2
           else
             error("App type not supported")
           end
