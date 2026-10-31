@@ -75,6 +75,10 @@ function flatten(arr)
   rst
 end
 
+# `x` is untyped inside `collect_js`, so an inline `isa` against this Union is evaluated by the generic
+# runtime subtype check (~1.4 μs per element). Behind a function call it is resolved once per concrete type.
+is_dictlike(x) = x isa Union{AbstractDict, Pair, Base.Iterators.Pairs, Vector{<:Pair}}
+
 function collect_js(xx::Union{Tuple, AbstractArray}, delim = "";
   skip_empty::Bool = true,
   pre::Function = identity,
@@ -91,7 +95,7 @@ function collect_js(xx::Union{Tuple, AbstractArray}, delim = "";
   for x_raw in xx
     x = x_raw isa Base.Callable ? x_raw() : x_raw
     io2 = IOBuffer()
-    if x isa Union{AbstractDict, Pair, Base.Iterators.Pairs, Vector{<:Pair}}
+    if is_dictlike(x)
       s = json(Dict(key_replacement(k) => v isa AbstractString ? JSONText(string(v)) : v for (k, v) in (x isa Pair ? [x] : x)))[2:end - 1]
       print(io2, s)
     elseif x isa JSONText
