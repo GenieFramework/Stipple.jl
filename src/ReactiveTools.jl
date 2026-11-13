@@ -1516,21 +1516,23 @@ end
 ```
 """
 macro cache(maxage)
-  version = maxage == 0 ? "" : string(round(Int, time()))
   quote
-    let M = Stipple.@type
-      Stipple.js_cache(::Type{<:M}) = ($maxage, $version)
-      Stipple.clear_cache(M)
+    let M = Stipple.@type, maxage = $(esc(maxage))
+      version = maxage == 0 ? "" : string(round(Int, time()))
+      Stipple.js_cache(::Type{<:M}) = (maxage, version)
+      Stipple.clear_cache_subtypes(M)
       nothing
     end
   end |> esc
 end
 
 macro cache(M, maxage)
-  version = maxage == 0 ? "" : string(round(Int, time()))
   quote
-    Stipple.js_cache(::Type{<:$M}) = ($maxage, $version)
-    Stipple.clear_cache_subtypes($M)
+    let maxage = $(esc(maxage))
+      version = maxage == 0 ? "" : string(round(Int, time()))
+      Stipple.js_cache(::Type{<:$M}) = (maxage, version)
+      Stipple.clear_cache_subtypes($M)
+    end
     nothing
   end |> esc
 end
