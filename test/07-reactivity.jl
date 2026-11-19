@@ -90,3 +90,66 @@ end
     @test length(o.listeners) == 0
 end
 
+
+@testitem "Headless init" setup=[StippleTestSetup] begin
+    @eval begin
+        @app HeadlessApp begin
+            @in hx = 1
+            @out hy = 0
+
+            @onchange hx begin
+                hy = 2 * hx
+            end
+        end
+    end
+
+    # observers that Stipple.setup attaches to every field to send changes to the clients have priority 1, @onchange handlers 0
+    count_priority(m, p) = sum(count(l -> first(l) == p, getfield(m, f).o.listeners) for f in fieldnames(typeof(m)) if getfield(m, f) isa Reactive)
+
+    normal = @eval @init(HeadlessApp)
+    @test haskey(Stipple.LAST_ACTIVITY, Symbol(getchannel(normal)))
+    @test count_priority(normal, 1) > 0
+
+    headless = @eval @init(HeadlessApp, headless = true)
+    @test headless isa typeof(normal)
+    # no purge timer registration and no sending of changes ...
+    @test !haskey(Stipple.LAST_ACTIVITY, Symbol(getchannel(headless)))
+    @test count_priority(headless, 1) == 0
+    # ... but the handlers of the model are attached and work
+    @test count_priority(normal, 0) > 0
+    @test count_priority(headless, 0) == count_priority(normal, 0)
+    headless.hx[] = 21
+    @test headless.hy[] == 42
+    # the channel marks the model as having no clients, and push! returns without trying to send
+    @test getchannel(headless) == Stipple.HEADLESS_CHANNEL
+    @test getchannel(normal) != Stipple.HEADLESS_CHANNEL
+    @test push!(headless, :hx => headless.hx) === false
+
+    # a model without a browser has no client to wait for: it is ready, and not ready only if asked for
+    @test headless.isready[]
+    @test !normal.isready[]
+    not_ready = @eval @init(HeadlessApp, headless = true, isready = nothing)
+    @test !not_ready.isready[]
+end
+
+@testitem "isready keyword of init_model runs the handlers" setup=[StippleTestSetup] begin
+    @eval begin
+        @app ReadyApp begin
+            @in rx = 0
+            @out ry = 0
+
+            @onchange isready begin
+                isready || return
+                ry = 7
+            end
+        end
+    end
+
+    m = @eval @init(ReadyApp)
+    @test !m.isready[] && m.ry[] == 0
+    m = @eval @init(ReadyApp, isready = m -> true)
+    @test m.isready[] && m.ry[] == 7
+    # a headless model is ready by default, and its handlers have run
+    m = @eval @init(ReadyApp, headless = true)
+    @test m.isready[] && m.ry[] == 7
+end

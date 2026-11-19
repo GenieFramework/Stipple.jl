@@ -436,6 +436,14 @@ include("stipple/parsers.jl")
 
 #===#
 
+"""
+    HEADLESS_CHANNEL
+
+The channel name of a model created with `init(...; headless = true)`. Such a model has no clients, so `push!` returns without sending.
+`channelfactory` creates names of 32 random uppercase letters, which cannot be equal to it.
+"""
+const HEADLESS_CHANNEL = "HEADLESS"
+
 function channelfactory(length::Int = 32)
   randstring('A':'Z', length)
 end
@@ -579,10 +587,17 @@ end
                     debounce::Int = JS_DEBOUNCE_TIME,
                     throttle::Int = JS_THROTTLE_TIME,
                     transport::Module = Genie.WebChannels,
-                    core_theme::Bool = true)::M where {M<:ReactiveModel, S<:AbstractString}
+                    core_theme::Bool = true,
+                    always_register_channels::Bool = ALWAYS_REGISTER_CHANNELS[],
+                    headless::Bool = false)::M where {M<:ReactiveModel, S<:AbstractString}
 
 Initializes the reactivity of the model `M` by setting up the custom JavaScript for integrating with the Vue.js
 frontend and perform the 2-way backend-frontend data sync. Returns the instance of the model.
+
+With `headless = true` the model is created for use without a browser, for example for calculations on a copy of a model:
+the observers that send every change to the clients are not attached (`setup`), no channels and routes are registered, no purge
+timer is started and the model is not entered into `LAST_ACTIVITY`. Its channel is `Stipple.HEADLESS_CHANNEL`, and `push!` returns
+`false` without trying to send. The `@onchange` handlers are not affected.
 
 ### Example
 
@@ -598,7 +613,8 @@ function init(t::Type{M};
               throttle::Int = JS_THROTTLE_TIME,
               transport::Module = Genie.WebChannels,
               core_theme::Bool = true,
-              always_register_channels::Bool = ALWAYS_REGISTER_CHANNELS[])::M where {M<:ReactiveModel, S<:AbstractString}
+              always_register_channels::Bool = ALWAYS_REGISTER_CHANNELS[],
+              headless::Bool = false)::M where {M<:ReactiveModel, S<:AbstractString}
 
   webtransport!(transport)
   AM = get_abstract_type(M)
@@ -608,6 +624,7 @@ function init(t::Type{M};
   transport == Genie.WebChannels || (Genie.config.websockets_server = false)
   ok_response = "OK"
 
+  headless && (channel = HEADLESS_CHANNEL)
   channel === nothing && (channel = channelfactory())
   setchannel(model, channel)
 
@@ -623,12 +640,12 @@ function init(t::Type{M};
   end
 
   # add a timer that checks if the model is outdated and if so prepare the model to be garbage collected
-  LAST_ACTIVITY[Symbol(getchannel(model))] = now()
+  headless || (LAST_ACTIVITY[Symbol(getchannel(model))] = now())
 
-  Genie.Util.isprecompiling() || Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
+  headless || Genie.Util.isprecompiling() || Timer(setup_purge_checker(model), PURGE_CHECK_DELAY[], interval = PURGE_CHECK_DELAY[])
 
   # register channels and routes only if within a request
-  if haskey(Genie.Router.params(), :CHANNEL) || haskey(Genie.Router.params(), :ROUTE) || always_register_channels
+  if !headless && (haskey(Genie.Router.params(), :CHANNEL) || haskey(Genie.Router.params(), :ROUTE) || always_register_channels)
     if is_channels_webtransport()
       Genie.Assets.channels_subscribe(channel)
     else
@@ -776,7 +793,7 @@ function init(t::Type{M};
 
   haskey(DEPS, AM) || (DEPS[AM] = stipple_deps(AM, vue_app_name, debounce, throttle, core_theme, endpoint, transport))
 
-  setup(model, channel)
+  headless ? model : setup(model, channel)
 end
 
 function routename(::Type{M}) where M<:ReactiveModel
@@ -899,6 +916,8 @@ function Base.push!(app::M, vals::Pair{Symbol,T};
                     channel::String = getchannel(app),
                     except::Union{Nothing,UInt,Vector{UInt}} = nothing,
                     restrict::Union{Nothing,UInt,Vector{UInt}} = nothing)::Bool where {T,M<:ReactiveModel}
+  channel == HEADLESS_CHANNEL && return false   # no clients
+
   try
     use_model_storage() && Stipple.ModelStorage.Sessions.store(app)
   catch ex

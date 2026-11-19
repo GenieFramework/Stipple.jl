@@ -767,7 +767,8 @@ macro init(args...)
   end |> esc
 end
 
-function init_model(M::Type{<:ReactiveModel}, args...; kwargs...)
+function init_model(M::Type{<:ReactiveModel}, args...; headless::Bool = false,
+                    isready::Union{Nothing, Function} = headless ? Returns(true) : nothing, kwargs...)
   m = __module__ = parentmodule(M)
 
   initfn = begin
@@ -785,10 +786,15 @@ function init_model(M::Type{<:ReactiveModel}, args...; kwargs...)
     end
   end
 
-  model = initfn(M, args...; kwargs...)
+  model = initfn(M, args...; (headless ? (; headless) : (;))..., kwargs...)
   for h in model.handlers__
     model |> h
   end
+
+  # A model without a browser (`headless = true`) has no client to wait for, so it is ready at once: `isready` defaults to `m -> true`
+  # for it, `isready = nothing` leaves it not ready. The function is evaluated after the handlers have been attached, so that
+  # `@onchange isready` runs, as it does when a connected browser reports that it is ready.
+  isready === nothing || (model.isready[] = isready(model))
 
   # store model if parameter 'debug_id' is set to a valid uuid
   Stipple.store_debug_model(model)
