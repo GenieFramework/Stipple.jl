@@ -1522,25 +1522,26 @@ end
 ```
 """
 macro cache(maxage)
+  M = model_typename(__module__)
   quote
-    let M = Stipple.@type, maxage = $(esc(maxage))
+    let maxage = $(esc(maxage))
       version = maxage == 0 ? "" : string(round(Int, time()))
-      Stipple.js_cache(::Type{<:M}) = (maxage, version)
-      Stipple.clear_cache_subtypes(M)
+      Stipple.js_cache(::Type{<:$(esc(M))}) = (maxage, version)
+      Stipple.clear_cache_subtypes($(esc(M)))
       nothing
     end
-  end |> esc
+  end
 end
 
 macro cache(M, maxage)
   quote
     let maxage = $(esc(maxage))
       version = maxage == 0 ? "" : string(round(Int, time()))
-      Stipple.js_cache(::Type{<:$M}) = (maxage, version)
-      Stipple.clear_cache_subtypes($M)
+      Stipple.js_cache(::Type{<:$(esc(M))}) = (maxage, version)
+      Stipple.clear_cache_subtypes($(esc(M)))
     end
     nothing
-  end |> esc
+  end
 end
 
 macro event(M, eventname, expr)
